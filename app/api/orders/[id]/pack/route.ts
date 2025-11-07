@@ -1,0 +1,84 @@
+import { NextRequest, NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth-middleware";
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = await requireAuth(req);
+  if ("error" in auth) {
+    return NextResponse.json({ message: `Error occurred while fetching user authentication` }, { status: 400 });
+  }
+
+  try {
+    const { id } = await params;
+    const body = await req.json();
+    const { itemIds } = body;
+
+    if (!itemIds || !Array.isArray(itemIds)) {
+      return NextResponse.json(
+        { error: "Item IDs array is required" },
+        { status: 400 }
+      );
+    }
+
+    // Update items to packed
+    await prisma.orderItem.updateMany({
+      where: {
+        id: { in: itemIds },
+        orderId: id,
+      },
+      data: {
+        status: "PACKED",
+        packedBy: auth.userId as string,
+        packedAt: new Date(),
+      },
+    });
+
+    // Check if all items are packed
+    const order = await prisma.order.findUnique({
+      where: { id: id },
+      include: { items: true },
+    });
+
+    if (!order) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
+
+    const allPacked = order.items.every((item) => item.status === "PACKED");
+
+    // Update order status if all items packed
+    if (allPacked) {
+      await prisma.order.update({
+        where: { id: id },
+        data: {
+          status: "PACKED",
+          fulfillmentStatus: "FULFILLED",
+        },
+      });
+
+      await prisma.orderStatusHistory.create({
+        data: {
+          orderId: id,
+          oldStatus: order.status,
+          newStatus: "PACKED",
+          changedBy: auth.userId as string,
+          notes: "All items packed and ready for shipment",
+        },
+      });
+    }
+
+    return NextResponse.json({
+      message: "Items marked as packed successfully",
+      packedCount: itemIds.length,
+      allPacked,
+    });
+  } catch (error) {
+    console.error("Pack order items error:", error);
+    return NextResponse.json(
+      { error: "Failed to pack order items" },
+      { status: 500 }
+    );
+  }
+}

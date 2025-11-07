@@ -1,0 +1,310 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+
+export default function ResetPasswordPage() {
+  const [passwords, setPasswords] = useState({
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [showPasswords, setShowPasswords] = useState({
+    newPassword: false,
+    confirmPassword: false,
+  });
+  const [token, setToken] = useState("");
+  
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const tokenParam = searchParams.get("token");
+    if (!tokenParam) {
+      setError("Invalid or missing reset token. Please request a new password reset.");
+      return;
+    }
+    setToken(tokenParam);
+  }, [searchParams]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setPasswords(prev => ({
+      ...prev,
+      [name]: value,
+    }));
+    
+    // Clear error when user starts typing
+    if (error) setError("");
+  };
+
+  const togglePasswordVisibility = (field: "newPassword" | "confirmPassword") => {
+    setShowPasswords(prev => ({
+      ...prev,
+      [field]: !prev[field],
+    }));
+  };
+
+  const validatePasswords = () => {
+    if (!passwords.newPassword) {
+      setError("Password is required");
+      return false;
+    }
+    
+    if (passwords.newPassword.length < 8) {
+      setError("Password must be at least 8 characters long");
+      return false;
+    }
+    
+    if (passwords.newPassword !== passwords.confirmPassword) {
+      setError("Passwords do not match");
+      return false;
+    }
+    
+    return true;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validatePasswords()) return;
+    if (!token) {
+      setError("Invalid reset token");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          token,
+          newPassword: passwords.newPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to reset password");
+      }
+
+      setMessage("Your password has been reset successfully. You can now log in with your new password.");
+      setPasswords({ newPassword: "", confirmPassword: "" });
+      
+      // Redirect to login after 3 seconds
+      setTimeout(() => {
+        router.push("/login");
+      }, 3000);
+      
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const isFormValid = passwords.newPassword && passwords.confirmPassword && token;
+
+  return (
+    <div className="min-h-screen bg-gray-900 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        {/* Header */}
+        <div className="text-center">
+          <Link href="/login">
+            <img
+              className="mx-auto h-16 w-auto cursor-pointer hover:opacity-80 transition-opacity"
+              src="/sjf.png"
+              alt="SJFulfillment"
+            />
+          </Link>
+          <h2 className="mt-6 text-3xl font-extrabold text-white">
+            Reset your password
+          </h2>
+          <p className="mt-2 text-sm text-gray-400">
+            Enter your new password below.
+          </p>
+        </div>
+
+        {/* Form */}
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          <div className="space-y-4">
+            {/* New Password */}
+            <div>
+              <label htmlFor="newPassword" className="block text-sm font-medium text-gray-300 mb-2">
+                New Password
+              </label>
+              <div className="relative">
+                <input
+                  id="newPassword"
+                  name="newPassword"
+                  type={showPasswords.newPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  required
+                  className="block w-full px-3 py-3 pr-10 border border-gray-600 placeholder-gray-400 text-white bg-black rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f08c17] focus:border-[#f08c17] sm:text-sm"
+                  placeholder="Enter your new password"
+                  value={passwords.newPassword}
+                  onChange={handleInputChange}
+                  disabled={isSubmitting || !token}
+                />
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  onClick={() => togglePasswordVisibility("newPassword")}
+                  disabled={isSubmitting || !token}
+                >
+                  <svg
+                    className="h-5 w-5 text-gray-400 hover:text-gray-300"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    {showPasswords.newPassword ? (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                    ) : (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    )}
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Confirm Password */}
+            <div>
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300 mb-2">
+                Confirm New Password
+              </label>
+              <div className="relative">
+                <input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type={showPasswords.confirmPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  required
+                  className="block w-full px-3 py-3 pr-10 border border-gray-600 placeholder-gray-400 text-white bg-black rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f08c17] focus:border-[#f08c17] sm:text-sm"
+                  placeholder="Confirm your new password"
+                  value={passwords.confirmPassword}
+                  onChange={handleInputChange}
+                  disabled={isSubmitting || !token}
+                />
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  onClick={() => togglePasswordVisibility("confirmPassword")}
+                  disabled={isSubmitting || !token}
+                >
+                  <svg
+                    className="h-5 w-5 text-gray-400 hover:text-gray-300"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    {showPasswords.confirmPassword ? (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                    ) : (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    )}
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Password Requirements */}
+          <div className="text-sm text-gray-400">
+            <p>Password must be at least 8 characters long.</p>
+          </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="rounded-md bg-red-900/50 border border-red-700 p-4">
+              <div className="flex">
+                <div className="shrink-0">
+                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-red-400">Error</h3>
+                  <div className="mt-2 text-sm text-red-300">
+                    <p>{error}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Success Message */}
+          {message && (
+            <div className="rounded-md bg-green-900/50 border border-green-700 p-4">
+              <div className="flex">
+                <div className="shrink-0">
+                  <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-green-400">Success</h3>
+                  <div className="mt-2 text-sm text-green-300">
+                    <p>{message}</p>
+                    <p className="mt-1 text-xs">Redirecting to login page...</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <button
+              type="submit"
+              disabled={isSubmitting || !isFormValid}
+              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-black bg-[#f08c17] hover:bg-orange-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#f08c17] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+            >
+              {isSubmitting ? (
+                <div className="flex items-center">
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Resetting Password...
+                </div>
+              ) : (
+                "Reset Password"
+              )}
+            </button>
+          </div>
+
+          {/* Navigation Links */}
+          <div className="flex items-center justify-center text-sm">
+            <Link
+              href="/login"
+              className="font-medium text-[#f08c17] hover:text-orange-500 transition-colors"
+            >
+              ← Back to Login
+            </Link>
+          </div>
+
+          {/* Additional Info */}
+          <div className="mt-6 p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+            <h3 className="text-sm font-medium text-gray-300 mb-2">Security Tips</h3>
+            <ul className="text-xs text-gray-400 space-y-1">
+              <li>• Use a strong, unique password for your account</li>
+              <li>• Include a mix of letters, numbers, and symbols</li>
+              <li>• Avoid using personal information in passwords</li>
+              <li>• Consider using a password manager</li>
+            </ul>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

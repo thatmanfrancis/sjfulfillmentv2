@@ -1,0 +1,56 @@
+import { NextRequest, NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth-middleware";
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = await requireAuth(req);
+  if ("error" in auth) {
+    return NextResponse.json({ message: `Error occured while fetching customer invoices` }, { status: 400 });
+  }
+
+  try {
+    const { id } = await params;
+    const { searchParams } = new URL(req.url);
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "20");
+
+    const skip = (page - 1) * limit;
+
+    const [invoices, total] = await Promise.all([
+      prisma.invoice.findMany({
+        where: { customerId: id },
+        skip,
+        take: limit,
+        orderBy: { createdAt: "desc" },
+        include: {
+          currency: {
+            select: {
+              code: true,
+              symbol: true,
+            },
+          },
+        },
+      }),
+      prisma.invoice.count({ where: { customerId: id } }),
+    ]);
+
+    return NextResponse.json({
+      invoices,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    console.error("Get customer invoices error:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch customer invoices" },
+      { status: 500 }
+    );
+  }
+}
