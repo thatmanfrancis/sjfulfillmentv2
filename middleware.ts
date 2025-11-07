@@ -62,6 +62,8 @@ const publicRoutes = [
   "/forgot-password",
   "/reset-password",
   "/verify-email",
+  // "/auth/verify-email",
+  "/auth/resend-verification",
   "/api/auth/login",
   "/api/auth/register",
   "/api/auth/forgot-password",

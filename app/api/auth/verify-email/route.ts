@@ -4,11 +4,16 @@ import prisma from "@/lib/prisma";
 import { verifyJwt } from "@/lib/jose";
 
 export async function POST(req: NextRequest) {
+  console.log("=== EMAIL VERIFICATION START ===");
+  
   try {
     const body = await req.json();
     const { token } = body;
 
+    console.log("Received token:", token ? token.substring(0, 50) + "..." : "NO TOKEN");
+
     if (!token) {
+      console.log("No token provided");
       return NextResponse.json(
         { message: "Verification token is required" },
         { status: 400 }
@@ -16,11 +21,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Verify token
+    console.log("Verifying JWT token...");
     const payload = await verifyJwt(token);
 
     console.log("Decoded payload:", payload); // Debug log
 
     if (!payload || payload.type !== "email_verification") {
+      console.log("Invalid token or wrong type:", payload?.type);
       return NextResponse.json(
         { message: "Invalid or expired verification token" },
         { status: 401 }
@@ -36,6 +43,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    console.log("Updating user with ID:", payload.userId);
+
     // Update user
     const updatedUser = await prisma.user.update({
       where: { id: payload.userId as string },
@@ -44,18 +53,23 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    console.log("User updated successfully:", updatedUser.id, "emailVerifiedAt:", updatedUser.emailVerifiedAt);
+
     return NextResponse.json({
       message: "Email verified successfully. You can now login.",
       user: {
         id: updatedUser.id,
         email: updatedUser.email,
+        emailVerifiedAt: updatedUser.emailVerifiedAt,
       },
     });
   } catch (error: any) {
     console.error("Error verifying email:", error);
+    console.error("Error details:", error.message, error.code);
 
     // Handle Prisma errors
     if (error.code === "P2025") {
+      console.log("User not found error");
       return NextResponse.json({ message: "User not found" }, { status: 404 });
     }
 

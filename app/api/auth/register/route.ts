@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
       "1d"
     );
 
-    const verificationUrl: string = `${process.env.NEXT_PUBLIC_BASE_URL}/auth/verify-email?token=${verificationToken}`;
+    const verificationUrl: string = `${process.env.NEXT_PUBLIC_BASE_URL}/verify-email?token=${verificationToken}`;
 
     await sendMail({
       to: user.email,
