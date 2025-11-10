@@ -52,14 +52,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (currentUser) {
           setUser(currentUser);
         } else {
-          // Token invalid or expired, clear storage and redirect to login
+          // Token invalid or expired, clear storage but don't redirect here
+          // Let the RouteGuard handle the redirect
           console.log("Token invalid or expired, clearing auth state");
           authClient.clearTokens();
           setUser(null);
-          // Redirect to login if not already there
-          if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-            window.location.href = '/login';
-          }
         }
       }
     } catch (error) {
@@ -152,14 +149,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (currentUser) {
         setUser(currentUser);
       } else {
-        // Token expired or invalid
+        // Token expired or invalid, clear but don't redirect
+        // Let RouteGuard handle the redirect
         console.log("Unable to refresh user, clearing auth state");
         authClient.clearTokens();
         setUser(null);
-        // Redirect to login if not already there
-        if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-          window.location.href = '/login';
-        }
       }
     } catch (error) {
       console.warn("Failed to refresh user:", error);
@@ -202,12 +196,8 @@ export function useAuth() {
 export function useRequireAuth() {
   const { user, isLoading } = useAuth();
   
-  useEffect(() => {
-    if (!isLoading && !user) {
-      // Redirect to login page
-      window.location.href = "/login";
-    }
-  }, [user, isLoading]);
-
+  // Note: RouteGuard already handles redirects to login
+  // No need to redirect here to avoid conflicts
+  
   return { user, isLoading };
 }

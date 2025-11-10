@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { checkRouteAccess } from '@/lib/rbac';
@@ -13,10 +13,11 @@ export default function RouteGuard({ children }: RouteGuardProps) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const isRedirecting = useRef(false);
 
   useEffect(() => {
-    // Don't check access during loading
-    if (loading) return;
+    // Don't check access during loading or if already redirecting
+    if (loading || isRedirecting.current) return;
     
     // Public routes that don't require authentication
     const publicRoutes = [
@@ -33,6 +34,7 @@ export default function RouteGuard({ children }: RouteGuardProps) {
     
     // If user is authenticated and trying to access login/register, redirect to dashboard
     if (user && (pathname === '/login' || pathname === '/register')) {
+      isRedirecting.current = true;
       router.push('/dashboard');
       return;
     }
@@ -44,6 +46,7 @@ export default function RouteGuard({ children }: RouteGuardProps) {
     
     // If not authenticated and not on a public route, redirect to login
     if (!user && !isPublicRoute) {
+      isRedirecting.current = true;
       router.push('/login');
       return;
     }
@@ -54,11 +57,15 @@ export default function RouteGuard({ children }: RouteGuardProps) {
       
       if (!hasAccess) {
         console.log(`Access denied for role ${user.role} to path ${pathname}`);
+        isRedirecting.current = true;
         // Redirect to unauthorized page
         router.push('/unauthorized');
         return;
       }
     }
+    
+    // Reset redirect flag if we're not redirecting
+    isRedirecting.current = false;
     
   }, [user, loading, pathname, router]);
 

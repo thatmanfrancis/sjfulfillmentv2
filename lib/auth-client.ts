@@ -209,6 +209,8 @@ class AuthClient {
     this.clearTokens();
   }
 
+  private isRefreshing = false;
+
   /**
    * Get current user info
    */
@@ -228,16 +230,25 @@ class AuthClient {
 
       if (!response.ok) {
         if (response.status === 401) {
-          // Token expired, try to refresh
+          // Token expired, try to refresh (but only once at a time)
+          if (this.isRefreshing) {
+            console.log("Token refresh already in progress, skipping");
+            return null;
+          }
+          
           const refreshToken = this.getRefreshToken();
           if (refreshToken) {
             try {
+              this.isRefreshing = true;
               const refreshResult = await this.refreshToken(refreshToken);
-              this.setTokens(refreshResult.accessToken!, refreshResult.refreshToken!);
+              this.setTokensWithCookies(refreshResult.accessToken!, refreshResult.refreshToken!);
               return refreshResult.user || null;
-            } catch {
+            } catch (error) {
+              console.warn("Token refresh failed:", error);
               this.clearTokens();
               return null;
+            } finally {
+              this.isRefreshing = false;
             }
           }
         }
