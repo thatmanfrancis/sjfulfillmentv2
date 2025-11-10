@@ -1,69 +1,128 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { api } from "@/lib/api";
 
 interface Invoice {
   id: string;
   invoiceNumber: string;
-  customerName: string;
-  amount: number;
+  customer: {
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+  totalAmount: number;
+  amountPaid: number;
+  amountDue: number;
   status: string;
   dueDate: string;
   issueDate: string;
-  paymentMethod: string;
+  currency: {
+    code: string;
+    symbol: string;
+  };
+  order?: {
+    orderNumber: string;
+  };
+}
+
+interface InvoiceResponse {
+  invoices: Invoice[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
 }
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
     fetchInvoices();
-  }, []);
+  }, [statusFilter, currentPage]);
 
   const fetchInvoices = async () => {
     try {
-      const response = await fetch("/api/invoices");
-      if (response.ok) {
-        const data = await response.json();
-        setInvoices(data.invoices || []);
+      setLoading(true);
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: "20",
+      });
+
+      if (statusFilter !== "all") {
+        params.append("status", statusFilter);
       }
-    } catch (error) {
-      console.error("Failed to fetch invoices:", error);
+
+      const response = await api.get(`/api/invoices?${params}`);
+      if (!response.ok) {
+        throw new Error(response.error || "Failed to fetch invoices");
+      }
+
+      const data: InvoiceResponse = response.data;
+      setInvoices(data.invoices);
+      setTotalPages(data.pagination.totalPages);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load invoices");
+      setInvoices([]);
     } finally {
       setLoading(false);
     }
   };
 
   const filteredInvoices = invoices.filter(invoice => {
+    const customerName = `${invoice.customer.firstName} ${invoice.customer.lastName}`;
     const matchesSearch = invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         invoice.customerName.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "all" || invoice.status === statusFilter;
-    return matchesSearch && matchesStatus;
+                         customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         invoice.customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         invoice.order?.orderNumber.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesSearch;
   });
 
   const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "paid": return "bg-green-100 text-green-800";
-      case "pending": return "bg-yellow-100 text-yellow-800";
-      case "overdue": return "bg-red-100 text-red-800";
-      case "cancelled": return "bg-gray-100 text-gray-800";
-      default: return "bg-gray-100 text-gray-800";
+    switch (status) {
+      case "PAID": return "bg-green-900 text-green-300";
+      case "SENT": return "bg-blue-900 text-blue-300";
+      case "DRAFT": return "bg-gray-900 text-gray-300";
+      case "OVERDUE": return "bg-red-900 text-red-300";
+      case "CANCELLED": return "bg-gray-900 text-gray-400";
+      case "PARTIAL": return "bg-yellow-900 text-yellow-300";
+      default: return "bg-gray-900 text-gray-300";
     }
+  };
+
+  const formatAmount = (amount: number, currency: { symbol: string; code: string }) => {
+    return `${currency.symbol}${amount.toLocaleString()}`;
   };
 
   if (loading) {
     return (
       <div className="p-6">
         <div className="animate-pulse">
-          <div className="h-8 bg-gray-300 rounded w-1/4 mb-6"></div>
+          <div className="h-8 bg-gray-700 rounded w-1/4 mb-6"></div>
           <div className="space-y-4">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-16 bg-gray-300 rounded"></div>
+              <div key={i} className="h-16 bg-gray-700 rounded"></div>
             ))}
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-900/20 border border-red-700 text-red-300 px-4 py-3 rounded">
+          {error}
         </div>
       </div>
     );
@@ -104,10 +163,12 @@ export default function InvoicesPage() {
           className="px-4 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]"
         >
           <option value="all">All Status</option>
-          <option value="paid">Paid</option>
-          <option value="pending">Pending</option>
-          <option value="overdue">Overdue</option>
-          <option value="cancelled">Cancelled</option>
+          <option value="DRAFT">Draft</option>
+          <option value="SENT">Sent</option>
+          <option value="PAID">Paid</option>
+          <option value="PARTIAL">Partial</option>
+          <option value="OVERDUE">Overdue</option>
+          <option value="CANCELLED">Cancelled</option>
         </select>
       </div>
 
@@ -152,12 +213,23 @@ export default function InvoicesPage() {
                   <tr key={invoice.id} className="hover:bg-gray-800 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-white">{invoice.invoiceNumber}</div>
+                      {invoice.order && (
+                        <div className="text-xs text-gray-400">Order: {invoice.order.orderNumber}</div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-white">{invoice.customerName}</div>
+                      <div className="text-sm text-white">
+                        {invoice.customer.firstName} {invoice.customer.lastName}
+                      </div>
+                      <div className="text-xs text-gray-400">{invoice.customer.email}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
-                      ${invoice.amount.toFixed(2)}
+                      {formatAmount(invoice.totalAmount, invoice.currency)}
+                      {invoice.amountPaid > 0 && (
+                        <div className="text-xs text-green-400">
+                          Paid: {formatAmount(invoice.amountPaid, invoice.currency)}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                       {new Date(invoice.issueDate).toLocaleDateString()}
@@ -188,6 +260,31 @@ export default function InvoicesPage() {
         </div>
       </div>
 
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <div className="text-gray-400">
+            Page {currentPage} of {totalPages}
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage <= 1}
+              className="px-3 py-1 bg-gray-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600"
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages}
+              className="px-3 py-1 bg-gray-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-black border border-gray-700 rounded-lg p-4">
@@ -196,19 +293,19 @@ export default function InvoicesPage() {
         </div>
         <div className="bg-black border border-gray-700 rounded-lg p-4">
           <div className="text-2xl font-bold text-green-400">
-            {invoices.filter(i => i.status === "paid").length}
+            {invoices.filter(i => i.status === "PAID").length}
           </div>
           <div className="text-sm text-gray-400">Paid</div>
         </div>
         <div className="bg-black border border-gray-700 rounded-lg p-4">
-          <div className="text-2xl font-bold text-yellow-400">
-            {invoices.filter(i => i.status === "pending").length}
+          <div className="text-2xl font-bold text-blue-400">
+            {invoices.filter(i => i.status === "SENT").length}
           </div>
-          <div className="text-sm text-gray-400">Pending</div>
+          <div className="text-sm text-gray-400">Sent</div>
         </div>
         <div className="bg-black border border-gray-700 rounded-lg p-4">
           <div className="text-2xl font-bold text-red-400">
-            {invoices.filter(i => i.status === "overdue").length}
+            {invoices.filter(i => i.status === "OVERDUE").length}
           </div>
           <div className="text-sm text-gray-400">Overdue</div>
         </div>

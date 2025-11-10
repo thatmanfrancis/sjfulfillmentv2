@@ -1,9 +1,36 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { api } from "@/lib/api";
 import Pagination from "@/components/Pagination";
 import CreateOrderModal from "@/components/CreateOrderModal";
+
+interface Customer {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+}
+
+interface Currency {
+  code: string;
+  symbol: string;
+}
+
+interface OrderFromAPI {
+  id: string;
+  orderNumber: string;
+  customer: Customer;
+  status: string;
+  totalAmount: number;
+  createdAt: string;
+  _count: {
+    items: number;
+  };
+  currency: Currency;
+}
 
 interface Order {
   id: string;
@@ -15,15 +42,8 @@ interface Order {
   items: number;
 }
 
-interface OrdersResponse {
-  orders: Order[];
-  totalCount: number;
-  currentPage: number;
-  totalPages: number;
-  itemsPerPage: number;
-}
-
 export default function OrdersPage() {
+  const router = useRouter();
   const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,6 +54,7 @@ export default function OrdersPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [itemsPerPage] = useState(20); // 20 items per page
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [copiedOrderNumber, setCopiedOrderNumber] = useState<string | null>(null);
 
   useEffect(() => {
     fetchOrders();
@@ -49,12 +70,26 @@ export default function OrdersPage() {
         status: statusFilter,
       });
 
-      const response = await fetch(`/api/orders?${params}`);
+      const response = await api.get(`/api/orders?${params}`);
       if (response.ok) {
-        const data: OrdersResponse = await response.json();
-        setOrders(data.orders || []);
-        setTotalCount(data.totalCount || 0);
-        setTotalPages(data.totalPages || 1);
+        const ordersFromAPI: OrderFromAPI[] = response.data.orders || [];
+        
+        // Transform API data to match our Order interface
+        const transformedOrders: Order[] = ordersFromAPI.map(order => ({
+          id: order.id,
+          orderNumber: order.orderNumber,
+          customerName: `${order.customer.firstName} ${order.customer.lastName}`,
+          status: order.status,
+          total: order.totalAmount,
+          createdAt: order.createdAt,
+          items: order._count.items,
+        }));
+        
+        setOrders(transformedOrders);
+        setTotalCount(response.data.pagination?.total || 0);
+        setTotalPages(response.data.pagination?.totalPages || 1);
+      } else {
+        console.error("Failed to fetch orders:", response.error);
       }
     } catch (error) {
       console.error("Failed to fetch orders:", error);
@@ -75,6 +110,16 @@ export default function OrdersPage() {
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
+  };
+
+  const copyToClipboard = async (orderNumber: string) => {
+    try {
+      await navigator.clipboard.writeText(orderNumber);
+      setCopiedOrderNumber(orderNumber);
+      setTimeout(() => setCopiedOrderNumber(null), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -153,7 +198,7 @@ export default function OrdersPage() {
             <thead className="bg-gray-800">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                  Order
+                  Tracking Number
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                   Customer
@@ -186,7 +231,29 @@ export default function OrdersPage() {
                 orders.map((order) => (
                   <tr key={order.id} className="hover:bg-gray-800 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-white">{order.orderNumber}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-white font-mono">
+                          {order.orderNumber}
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyToClipboard(order.orderNumber);
+                          }}
+                          className="text-gray-400 hover:text-[#f08c17] transition-colors"
+                          title="Copy tracking number"
+                        >
+                          {copiedOrderNumber === order.orderNumber ? (
+                            <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-white">{order.customerName}</div>
@@ -206,7 +273,10 @@ export default function OrdersPage() {
                       {new Date(order.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button className="text-[#f08c17] hover:text-orange-500 transition-colors">
+                      <button 
+                        onClick={() => router.push(`/orders/${order.id}`)}
+                        className="text-[#f08c17] hover:text-orange-500 transition-colors"
+                      >
                         View
                       </button>
                     </td>

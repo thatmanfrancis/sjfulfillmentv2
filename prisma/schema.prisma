@@ -617,13 +617,13 @@ model Product {
 
 model ProductCategory {
   id               String   @id @default(uuid())
-  merchantId       String   @map("merchant_id")
+  merchantId       String?  @map("merchant_id")
   name             String
   parentCategoryId String?  @map("parent_category_id")
   createdAt        DateTime @default(now()) @map("created_at")
 
   // Relations
-  merchant        Merchant          @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchant        Merchant?         @relation(fields: [merchantId], references: [id])
   parentCategory  ProductCategory?  @relation("CategoryHierarchy", fields: [parentCategoryId], references: [id])
   childCategories ProductCategory[] @relation("CategoryHierarchy")
   products        Product[]
@@ -661,6 +661,8 @@ model Inventory {
   quantityAvailable Int       @default(0) @map("quantity_available")
   quantityReserved  Int       @default(0) @map("quantity_reserved")
   quantityIncoming  Int       @default(0) @map("quantity_incoming")
+  pickedQuantity    Int       @default(0) @map("picked_quantity")
+  packedQuantity    Int       @default(0) @map("packed_quantity")
   reorderPoint      Int?      @map("reorder_point")
   reorderQuantity   Int?      @map("reorder_quantity")
   binLocation       String?   @map("bin_location")

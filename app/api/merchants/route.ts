@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-middleware";
 import { getUserMerchantContext } from "@/lib/merchant-context";
+import { sendMail } from "@/lib/nodemailer";
+import { signJwt } from "@/lib/jose";
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
@@ -119,6 +121,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Only admins can create merchants
+  const userContext = await getUserMerchantContext(auth.userId as string);
+  if (!userContext.isAdmin) {
+    return NextResponse.json({ error: "Only admin users can create merchants" }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const {
@@ -132,6 +140,7 @@ export async function POST(req: NextRequest) {
       websiteUrl,
       taxId,
       subscriptionPlanId,
+      subscriptionPrice,
     } = body;
 
     if (!businessName || !businessEmail || !ownerUserId || !currencyId) {
@@ -168,21 +177,28 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const merchant = await prisma.merchant.create({
-      data: {
-        businessName,
-        businessEmail,
-        businessPhone,
-        ownerUserId,
-        currencyId,
-        timezone: timezone || "UTC",
-        logoUrl,
-        websiteUrl,
-        taxId,
-        subscriptionPlanId,
-        createdBy: auth.userId as string,
-        status: "TRIAL",
-      },
+    const merchantData: any = {
+      businessName,
+      businessEmail,
+      businessPhone,
+      ownerUserId,
+      currencyId,
+      timezone: timezone || "UTC",
+      logoUrl,
+      websiteUrl,
+      taxId,
+      subscriptionPlanId,
+      createdBy: auth.userId as string,
+      status: "",
+    };
+
+    // If a subscriptionPrice is provided, persist it into the merchant.settings JSON
+    if (subscriptionPrice !== undefined && subscriptionPrice !== null) {
+      merchantData.settings = { ...(merchantData.settings || {}), subscriptionPrice };
+    }
+
+    const merchant: any = await prisma.merchant.create({
+      data: merchantData,
       include: {
         owner: {
           select: {
@@ -195,6 +211,68 @@ export async function POST(req: NextRequest) {
         currency: true,
       },
     });
+
+    // Send welcome email to the owner (best-effort)
+    (async () => {
+      try {
+        if (merchant?.owner?.email) {
+
+          const ownerEmail = merchant.owner.email;
+          const subject = `Your merchant account "${merchant.businessName}" was created`;
+
+          // If owner's email is not verified, generate a verification token and include a link
+          let verificationUrlPart = "";
+          try {
+            const ownerRecord = await prisma.user.findUnique({ where: { id: merchant.owner.id } });
+            if (ownerRecord && !ownerRecord.emailVerifiedAt) {
+              const verificationToken = await signJwt({ userId: ownerRecord.id, type: "email_verification" }, "1d");
+              verificationUrlPart = `<p>Please verify your email by clicking <a href="${process.env.NEXT_PUBLIC_BASE_URL ?? process.env.APP_URL ?? "#"}/verify-email?token=${verificationToken}">here</a>. This link expires in 24 hours.</p>`;
+            }
+          } catch (e) {
+            console.warn("Failed to generate verification token:", e);
+          }
+
+          const html = `<p>Hi ${merchant.owner.firstName || ""},</p>
+            <p>A merchant account <strong>${merchant.businessName}</strong> has been created and associated with your user account.</p>
+            ${verificationUrlPart}
+            <p>You can sign in to manage the merchant here: <a href="${process.env.NEXT_PUBLIC_BASE_URL ?? process.env.APP_URL ?? "#"}/merchant">Open Dashboard</a></p>
+            <p>Subscription price: ${merchant.settings?.subscriptionPrice ?? "N/A"} ${merchant.currency?.code ?? ""}</p>
+          `;
+
+          await sendMail({ to: ownerEmail, subject, html });
+
+          // Log email into email_logs table
+          await prisma.emailLog.create({
+            data: {
+              merchantId: merchant.id,
+              toEmail: ownerEmail,
+              fromEmail: process.env.SMTP_USER || process.env.SMTP_FROM || "",
+              subject,
+              status: "SENT",
+              sentAt: new Date(),
+            },
+          });
+        }
+      } catch (err) {
+        console.error("Failed to send merchant welcome email:", err);
+        try {
+          if (merchant?.owner?.email) {
+            await prisma.emailLog.create({
+              data: {
+                merchantId: merchant.id,
+                toEmail: merchant.owner.email,
+                fromEmail: process.env.SMTP_USER || process.env.SMTP_FROM || "",
+                subject: `Failed to send: Merchant created: ${merchant.businessName}`,
+                status: "FAILED",
+                sentAt: new Date(),
+              },
+            });
+          }
+        } catch (e) {
+          console.error("Failed to log failed email attempt:", e);
+        }
+      }
+    })();
 
     return NextResponse.json(
       {

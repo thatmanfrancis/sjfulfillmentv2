@@ -327,6 +327,71 @@ class AuthClient {
   isAuthenticated(): boolean {
     return !!this.getAccessToken();
   }
+
+  /**
+   * Decode JWT token and extract expiry time
+   */
+  private decodeToken(token: string): { exp?: number } | null {
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      return JSON.parse(jsonPayload);
+    } catch (error) {
+      console.warn("Failed to decode token:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Check if access token is expired or will expire soon (within 5 minutes)
+   */
+  isTokenExpiringSoon(): boolean {
+    const token = this.getAccessToken();
+    if (!token) return true;
+
+    const payload = this.decodeToken(token);
+    if (!payload || !payload.exp) return true;
+
+    const expiryTime = payload.exp * 1000; // Convert to milliseconds
+    const now = Date.now();
+    const fiveMinutes = 5 * 60 * 1000;
+
+    return expiryTime - now < fiveMinutes;
+  }
+
+  /**
+   * Proactively refresh token if it's expiring soon
+   */
+  async ensureValidToken(): Promise<boolean> {
+    if (!this.isTokenExpiringSoon()) {
+      return true; // Token is still valid
+    }
+
+    const refreshToken = this.getRefreshToken();
+    if (!refreshToken) {
+      this.clearTokens();
+      return false;
+    }
+
+    try {
+      const result = await this.refreshToken(refreshToken);
+      if (result.accessToken && result.refreshToken) {
+        this.setTokens(result.accessToken, result.refreshToken);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.warn("Proactive token refresh failed:", error);
+      this.clearTokens();
+      return false;
+    }
+  }
 }
 
 // Export singleton instance

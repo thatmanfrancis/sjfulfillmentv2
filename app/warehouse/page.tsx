@@ -1,512 +1,365 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import Pagination from "@/components/Pagination";
+import { authClient } from "@/lib/auth-client";
 
-interface InventoryItem {
+type Wh = {
   id: string;
-  productName: string;
-  sku: string;
-  location: string;
-  zone: string;
-  currentStock: number;
-  reservedStock: number;
-  availableStock: number;
-  reorderPoint: number;
-  lastRestocked: string;
-  status: string;
-  pickingPriority: string;
-}
-
-interface PickingTask {
-  id: string;
-  orderNumber: string;
-  priority: string;
-  items: {
-    sku: string;
-    productName: string;
-    quantity: number;
-    location: string;
-    picked: boolean;
-  }[];
-  assignedTo: string;
-  status: string;
-  createdAt: string;
-}
+  name: string;
+  code: string;
+  isShared?: boolean;
+  merchant?: { businessName?: string } | null;
+  address?: { line1?: string; city?: string } | null;
+  status?: string;
+};
 
 export default function WarehousePage() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState("inventory");
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
-  const [pickingTasks, setPickingTasks] = useState<PickingTask[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
-  const [itemsPerPage] = useState(20);
 
+
+
+  type Warehouse = {
+    id: string;
+    name: string;
+    code: string;
+    isShared?: boolean;
+    status?: string;
+    merchant?: { id: string; businessName?: string } | null;
+    address?: { line1?: string; city?: string } | null;
+    capacity?: number | null;
+    stats?: {
+      totalUnits?: number;
+      availableUnits?: number;
+      reservedUnits?: number;
+      capacity?: number;
+      utilizationPercentage?: number;
+    } | null;
+  };
+
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [total, setTotal] = useState<number>(0);
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [debouncedSearch, setDebouncedSearch] = useState<string>("");
+
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [loadingCreate, setLoadingCreate] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Warehouse | null>(null);
+
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [capacity, setCapacity] = useState<number | null>(null);
+  const [isShared, setIsShared] = useState(false);
+
+  const [msg, setMsg] = useState<string | null>(null);
+  const [msgType, setMsgType] = useState<"success" | "error" | null>(null);
+
+  const resetForm = () => {
+    setName("");
+    setCode("");
+    setCapacity(null);
+    setIsShared(false);
+    setMsg(null);
+    setMsgType(null);
+  };
+
+  // load when page / pageSize / debounced search changes
+  useEffect(() => { loadWarehouses(); }, [page, pageSize, debouncedSearch]);
+
+  // debounce searchTerm -> debouncedSearch
   useEffect(() => {
-    if (activeTab === "inventory") {
-      fetchInventory();
-    } else if (activeTab === "picking") {
-      fetchPickingTasks();
-    }
-  }, [activeTab, currentPage, searchTerm, statusFilter]);
+    const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 400);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
 
-  const fetchInventory = async () => {
+  async function loadWarehouses() {
     setLoading(true);
     try {
-      // Mock data for demonstration
-      const mockInventory: InventoryItem[] = [
-        {
-          id: "1",
-          productName: "Wireless Headphones",
-          sku: "WHD-001",
-          location: "A1-B2-C3",
-          zone: "Electronics",
-          currentStock: 45,
-          reservedStock: 5,
-          availableStock: 40,
-          reorderPoint: 10,
-          lastRestocked: "2024-01-10",
-          status: "in_stock",
-          pickingPriority: "high"
-        },
-        {
-          id: "2",
-          productName: "Bluetooth Speaker",
-          sku: "BTS-002",
-          location: "A2-B1-C1",
-          zone: "Electronics",
-          currentStock: 8,
-          reservedStock: 3,
-          availableStock: 5,
-          reorderPoint: 15,
-          lastRestocked: "2024-01-08",
-          status: "low_stock",
-          pickingPriority: "medium"
-        },
-        {
-          id: "3",
-          productName: "USB Cable",
-          sku: "USB-003",
-          location: "B1-A3-C2",
-          zone: "Accessories",
-          currentStock: 0,
-          reservedStock: 0,
-          availableStock: 0,
-          reorderPoint: 25,
-          lastRestocked: "2024-01-05",
-          status: "out_of_stock",
-          pickingPriority: "urgent"
-        }
-      ];
+      const token = authClient.getAccessToken();
+      const params = new URLSearchParams();
+      if (debouncedSearch) params.set('q', debouncedSearch);
+      if (page) params.set('page', String(page));
+      if (pageSize) params.set('pageSize', String(pageSize));
 
-      // Filter based on search and status
-      const filtered = mockInventory.filter(item => {
-        const matchesSearch = searchTerm === "" || 
-          item.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          item.sku.toLowerCase().includes(searchTerm.toLowerCase());
-        
-        const matchesStatus = statusFilter === "all" || item.status === statusFilter;
-        
-        return matchesSearch && matchesStatus;
+      const url = `/api/warehouse?${params.toString()}`;
+      const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
+      if (!res.ok) throw new Error("fetch failed");
+      const data = await res.json();
+      const list: Warehouse[] = data.warehouses || data || [];
+      const totalCount = typeof data.total === 'number' ? data.total : (list.length || 0);
+      setTotal(totalCount);
+
+      // fetch stats for each warehouse in parallel and merge
+      const statsPromises = list.map(async (w) => {
+        try {
+          const sRes = await fetch(`/api/warehouse/${w.id}/stats`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined
+          });
+          if (!sRes.ok) return { id: w.id, stats: null };
+          const sJson = await sRes.json();
+          return { id: w.id, stats: sJson.stats || null };
+        } catch (err) {
+          return { id: w.id, stats: null };
+        }
       });
 
-      setInventory(filtered);
-      setTotalCount(filtered.length);
-      setTotalPages(Math.ceil(filtered.length / itemsPerPage));
+      const statsResults = await Promise.all(statsPromises);
+
+      const merged = list.map((w) => {
+        const s = statsResults.find((r) => r.id === w.id);
+        return {
+          ...w,
+          capacity: s?.stats?.capacity ?? (w as any).capacity ?? null,
+          stats: s?.stats ?? null,
+        } as Warehouse;
+      });
+
+      setWarehouses(merged);
     } catch (error) {
-      console.error("Failed to fetch inventory:", error);
+      console.error(error);
+      setMsg("Failed to load warehouses");
+      setMsgType("error");
     } finally {
       setLoading(false);
     }
-  };
-
-  const fetchPickingTasks = async () => {
-    setLoading(true);
-    try {
-      // Mock data for demonstration
-      const mockTasks: PickingTask[] = [
-        {
-          id: "1",
-          orderNumber: "ORD-001",
-          priority: "urgent",
-          items: [
-            { sku: "WHD-001", productName: "Wireless Headphones", quantity: 2, location: "A1-B2-C3", picked: false },
-            { sku: "USB-003", productName: "USB Cable", quantity: 1, location: "B1-A3-C2", picked: true }
-          ],
-          assignedTo: user?.id || "",
-          status: "in_progress",
-          createdAt: "2024-01-15T10:00:00Z"
-        },
-        {
-          id: "2",
-          orderNumber: "ORD-002",
-          priority: "normal",
-          items: [
-            { sku: "BTS-002", productName: "Bluetooth Speaker", quantity: 1, location: "A2-B1-C1", picked: false }
-          ],
-          assignedTo: user?.id || "",
-          status: "pending",
-          createdAt: "2024-01-15T11:00:00Z"
-        }
-      ];
-
-      setPickingTasks(mockTasks);
-      setTotalCount(mockTasks.length);
-      setTotalPages(Math.ceil(mockTasks.length / itemsPerPage));
-    } catch (error) {
-      console.error("Failed to fetch picking tasks:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getStockStatus = (item: InventoryItem) => {
-    if (item.availableStock === 0) return { label: "Out of Stock", color: "bg-red-100 text-red-800" };
-    if (item.availableStock <= item.reorderPoint) return { label: "Low Stock", color: "bg-yellow-100 text-yellow-800" };
-    return { label: "In Stock", color: "bg-green-100 text-green-800" };
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority.toLowerCase()) {
-      case "urgent": return "text-red-500";
-      case "high": return "text-orange-500";
-      case "normal": return "text-blue-500";
-      case "low": return "text-gray-500";
-      default: return "text-gray-500";
-    }
-  };
-
-  const toggleItemPicked = (taskId: string, itemSku: string) => {
-    setPickingTasks(prev => prev.map(task => 
-      task.id === taskId 
-        ? {
-            ...task,
-            items: task.items.map(item => 
-              item.sku === itemSku ? { ...item, picked: !item.picked } : item
-            )
-          }
-        : task
-    ));
-  };
-
-  const renderInventoryTab = () => (
-    <div className="space-y-6">
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="flex-1">
-          <input
-            type="text"
-            placeholder="Search inventory..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-4 py-2 bg-black border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#f08c17]"
-          />
-        </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]"
-        >
-          <option value="all">All Items</option>
-          <option value="in_stock">In Stock</option>
-          <option value="low_stock">Low Stock</option>
-          <option value="out_of_stock">Out of Stock</option>
-        </select>
-      </div>
-
-      {/* Inventory Table */}
-      <div className="bg-black border border-gray-700 rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-800">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                  Product
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                  Location
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                  Current
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                  Reserved
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                  Available
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-700">
-              {inventory.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-gray-400">
-                    {loading ? "Loading inventory..." : "No inventory items found"}
-                  </td>
-                </tr>
-              ) : (
-                inventory.map((item) => {
-                  const stockStatus = getStockStatus(item);
-                  return (
-                    <tr key={item.id} className="hover:bg-gray-800 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-white">{item.productName}</div>
-                        <div className="text-xs text-gray-400">{item.sku} • {item.zone}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-300 font-mono">{item.location}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
-                        {item.currentStock}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                        {item.reservedStock}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
-                        {item.availableStock}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${stockStatus.color}`}>
-                          {stockStatus.label}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
-                          <button className="text-[#f08c17] hover:text-orange-500 transition-colors">
-                            📦 Adjust
-                          </button>
-                          <button className="text-blue-400 hover:text-blue-300 transition-colors">
-                            📍 Move
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderPickingTab = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-black border border-gray-700 rounded-lg p-4">
-          <div className="text-2xl font-bold text-yellow-400">
-            {pickingTasks.filter(t => t.status === "pending").length}
-          </div>
-          <div className="text-sm text-gray-400">Pending Tasks</div>
-        </div>
-        <div className="bg-black border border-gray-700 rounded-lg p-4">
-          <div className="text-2xl font-bold text-blue-400">
-            {pickingTasks.filter(t => t.status === "in_progress").length}
-          </div>
-          <div className="text-sm text-gray-400">In Progress</div>
-        </div>
-        <div className="bg-black border border-gray-700 rounded-lg p-4">
-          <div className="text-2xl font-bold text-green-400">
-            {pickingTasks.filter(t => t.status === "completed").length}
-          </div>
-          <div className="text-sm text-gray-400">Completed</div>
-        </div>
-      </div>
-
-      {/* Picking Tasks */}
-      <div className="space-y-4">
-        {pickingTasks.map((task) => (
-          <div key={task.id} className="bg-black border border-gray-700 rounded-lg p-6">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-white">{task.orderNumber}</h3>
-                <div className="flex items-center gap-4 mt-1">
-                  <span className={`text-sm font-semibold ${getPriorityColor(task.priority)}`}>
-                    {task.priority.toUpperCase()} PRIORITY
-                  </span>
-                  <span className="text-sm text-gray-400">
-                    Created: {new Date(task.createdAt).toLocaleString()}
-                  </span>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 transition-colors">
-                  📋 Start Picking
-                </button>
-                <button className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors">
-                  📍 Show Route
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <h4 className="text-sm font-medium text-gray-300 mb-2">Items to Pick:</h4>
-              {task.items.map((item, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-gray-800 rounded">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={item.picked}
-                      onChange={() => toggleItemPicked(task.id, item.sku)}
-                      className="rounded text-[#f08c17]"
-                    />
-                    <div>
-                      <div className={`text-sm ${item.picked ? 'line-through text-gray-400' : 'text-white'}`}>
-                        {item.productName} (x{item.quantity})
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {item.sku} • Location: {item.location}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-xs text-gray-400">
-                    {item.picked ? '✅ Picked' : '📦 To Pick'}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-4 flex justify-between items-center">
-              <div className="text-sm text-gray-400">
-                Progress: {task.items.filter(i => i.picked).length} / {task.items.length} items
-              </div>
-              <button className="bg-[#f08c17] text-black px-4 py-2 rounded font-medium hover:bg-orange-500 transition-colors">
-                Complete Task
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
-  if (loading && activeTab === "inventory" && inventory.length === 0) {
-    return (
-      <div className="p-6">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-300 rounded w-1/4 mb-6"></div>
-          <div className="space-y-4">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-16 bg-gray-300 rounded"></div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
   }
+
+  const createWarehouse = async (evt: React.FormEvent) => {
+    evt.preventDefault();
+    if (!name || !code) {
+      setMsg("Name and code are required");
+      setMsgType("error");
+      return;
+    }
+
+    setLoadingCreate(true);
+    try {
+      const token = authClient.getAccessToken();
+      const url = editingId ? `/api/warehouse/${editingId}` : "/api/warehouse";
+      const method = editingId ? "PUT" : "POST";
+      const res = await fetch(url, { method, headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ name, code, capacity, isShared }) });
+      const data = await res.json();
+      if (!res.ok) { setMsg(data.error || "Create failed"); setMsgType("error"); return; }
+      setMsg(editingId ? "Warehouse updated" : "Warehouse created");
+      setMsgType("success");
+      setShowCreateModal(false);
+      setEditingId(null);
+      resetForm();
+      await loadWarehouses();
+    } catch (error) {
+      console.error(error);
+      setMsg("Create failed");
+      setMsgType("error");
+    } finally { setLoadingCreate(false); }
+  };
+
+  function openEdit(w: Warehouse) {
+    setEditingId(w.id);
+    setName(w.name || "");
+    setCode(w.code || "");
+    // preserve existing capacity when editing
+    setCapacity(typeof w.capacity === 'number' ? w.capacity : (w.stats?.capacity ?? null));
+    setIsShared(!!w.isShared);
+    setMsg(null);
+    setMsgType(null);
+    setShowCreateModal(true);
+  }
+
+  function beginDelete(w: Warehouse) { setDeleteTarget(w); setShowDeleteModal(true); setMsg(null); setMsgType(null); }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return; setLoading(true);
+    try {
+      const token = authClient.getAccessToken();
+      const res = await fetch(`/api/warehouse/${deleteTarget.id}`, { method: 'DELETE', headers: token ? { Authorization: `Bearer ${token}` } : undefined });
+      const data = await res.json();
+      if (!res.ok) { setMsg(data?.error || 'Failed to delete warehouse'); setMsgType('error'); return; }
+      setShowDeleteModal(false); setDeleteTarget(null); await loadWarehouses(); setMsg('Warehouse deleted'); setMsgType('success');
+    } catch (err) { console.error(err); setMsg('Failed to delete warehouse'); setMsgType('error'); } finally { setLoading(false); }
+  }
+
+  const msgCls = msgType === "success" ? "bg-emerald-600 text-black" : "bg-red-700 text-white";
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-white">Warehouse Management</h1>
-          <p className="text-gray-400">Manage inventory, picking, and warehouse operations</p>
+          <p className="text-gray-400">Create and manage warehouses</p>
         </div>
-        <div className="flex gap-2">
-          <button className="bg-gray-700 text-white px-4 py-2 rounded-lg font-medium hover:bg-gray-600 transition-colors">
-            📊 Export Report
-          </button>
-          <button className="bg-[#f08c17] text-black px-4 py-2 rounded-lg font-medium hover:bg-orange-500 transition-colors">
-            📦 New Stock Adjustment
-          </button>
+        <div className="flex gap-2 items-center">
+          <input
+            value={searchTerm}
+            onChange={(e) => { setPage(1); setSearchTerm(e.target.value); }}
+            placeholder="Search warehouses..."
+            className="bg-black border border-gray-700 rounded px-3 py-2 text-white placeholder-gray-400"
+          />
+          <select value={pageSize} onChange={(e) => { setPage(1); setPageSize(parseInt(e.target.value, 10)); }} className="bg-black border border-gray-700 rounded px-2 py-2 text-white">
+            <option value={5}>5 / page</option>
+            <option value={10}>10 / page</option>
+            <option value={20}>20 / page</option>
+            <option value={50}>50 / page</option>
+          </select>
+          <button onClick={() => loadWarehouses()} className="bg-gray-700 text-white px-4 py-2 rounded-lg">Refresh</button>
+          <button onClick={() => { resetForm(); setShowCreateModal(true); }} className="bg-[#f08c17] text-black px-4 py-2 rounded-lg">+ New Warehouse</button>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-gray-700">
-        <nav className="-mb-px flex space-x-8">
-          <button
-            onClick={() => setActiveTab("inventory")}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
-              activeTab === "inventory"
-                ? "border-[#f08c17] text-[#f08c17]"
-                : "border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300"
-            }`}
-          >
-            📦 Inventory
-          </button>
-          <button
-            onClick={() => setActiveTab("picking")}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
-              activeTab === "picking"
-                ? "border-[#f08c17] text-[#f08c17]"
-                : "border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300"
-            }`}
-          >
-            📋 Picking Lists
-          </button>
-          <button
-            onClick={() => setActiveTab("locations")}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
-              activeTab === "locations"
-                ? "border-[#f08c17] text-[#f08c17]"
-                : "border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300"
-            }`}
-          >
-            📍 Locations
-          </button>
-        </nav>
+      {/* pagination controls */}
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-gray-400">
+          {total > 0 ? (
+            <>Showing {(page - 1) * pageSize + 1} - {Math.min(page * pageSize, total)} of {total}</>
+          ) : (
+            <span>No results</span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1} className="px-3 py-1 rounded bg-gray-800 text-white disabled:opacity-50">Prev</button>
+          <div className="text-sm text-gray-300">Page {page} / {Math.max(1, Math.ceil(total / pageSize))}</div>
+          <button onClick={() => setPage(p => p + 1)} disabled={page * pageSize >= total} className="px-3 py-1 rounded bg-gray-800 text-white disabled:opacity-50">Next</button>
+        </div>
       </div>
 
-      {/* Tab Content */}
-      {activeTab === "inventory" && renderInventoryTab()}
-      {activeTab === "picking" && renderPickingTab()}
-      {activeTab === "locations" && (
-        <div className="text-center py-12">
-          <div className="text-gray-400 mb-4">🚧 Location Management</div>
-          <p className="text-gray-500">Location mapping and zone management coming soon</p>
+      {msg && <div className={`p-3 rounded ${msgCls}`}>{msg}</div>}
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {loading ? (
+          <>
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="bg-black border border-gray-700 rounded-lg p-4 animate-pulse">
+                <div className="h-4 bg-gray-700 rounded w-3/4 mb-3" />
+                <div className="h-3 bg-gray-700 rounded w-1/2 mb-2" />
+                <div className="h-3 bg-gray-700 rounded w-full mt-2" />
+                <div className="mt-3 flex gap-2">
+                  <div className="h-6 w-16 bg-gray-700 rounded" />
+                  <div className="h-6 w-16 bg-gray-700 rounded" />
+                </div>
+              </div>
+            ))}
+          </>
+        ) : warehouses.length === 0 ? (
+          <div className="col-span-2 p-6 bg-black border border-gray-700 rounded-lg text-gray-400">No warehouses found</div>
+        ) : (
+          warehouses.map((w) => (
+            <div key={w.id} className="bg-black border border-gray-700 rounded-lg p-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="text-white font-semibold">{w.name}</div>
+                  <div className="text-sm text-gray-400">Code: {w.code}</div>
+                  <div className="text-sm text-gray-400">{w.isShared ? 'Shared' : w.merchant?.businessName || 'Private'}</div>
+                </div>
+                <div className="text-sm text-gray-400">{w.status || 'ACTIVE'}</div>
+              </div>
+              {w.address && (<div className="mt-2 text-sm text-gray-400">{w.address.line1 || ''}{w.address.city ? `, ${w.address.city}` : ''}</div>)}
+              {/* Capacity and utilization with visual progress bar */}
+              {(() => {
+                const cap = (w.capacity ?? w.stats?.capacity) ?? null;
+                const occupied = w.stats?.totalUnits ?? 0;
+                const spaceLeft = cap !== null ? cap - occupied : null;
+                const utilization = cap && cap > 0 ? Math.round((occupied / cap) * 100) : null;
+                
+                // Determine color based on utilization
+                const getUtilizationColor = (util: number) => {
+                  if (util >= 90) return "bg-red-500";
+                  if (util >= 75) return "bg-orange-500";
+                  if (util >= 50) return "bg-yellow-500";
+                  return "bg-green-500";
+                };
+
+                return (
+                  <div className="mt-3 text-sm text-gray-300">
+                    {cap !== null ? (
+                      <div className="mb-2 space-y-2">
+                        <div className="flex justify-between">
+                          <span>Capacity: <span className="font-medium text-white">{cap}</span></span>
+                          <span className="font-medium text-white">{utilization}%</span>
+                        </div>
+                        {/* Progress bar */}
+                        <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
+                          <div
+                            className={`h-full ${getUtilizationColor(utilization || 0)} transition-all duration-300`}
+                            style={{ width: `${Math.min(utilization || 0, 100)}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span>Used: <span className="font-medium text-white">{occupied}</span></span>
+                          <span>Available: <span className="font-medium text-white">{spaceLeft}</span></span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mb-2 text-gray-500">Capacity: not set</div>
+                    )}
+                  </div>
+                );
+              })()}
+              <div className="mt-3 flex gap-2">
+                <button onClick={() => openEdit(w)} className="px-2 py-1 bg-gray-800 rounded text-sm text-white">Edit</button>
+                <button onClick={() => beginDelete(w)} className="px-2 py-1 bg-red-700 rounded text-sm text-white">Delete</button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60" onClick={() => { setShowCreateModal(false); setEditingId(null); }} />
+          <div className="bg-black border border-gray-700 rounded-lg p-4 w-11/12 max-w-md z-10">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-white font-semibold">{editingId ? 'Edit Warehouse' : 'Create Warehouse'}</h4>
+              <button className="text-gray-400" onClick={() => { setShowCreateModal(false); setEditingId(null); }}>Close</button>
+            </div>
+            <form onSubmit={createWarehouse} className="space-y-3">
+              <div>
+                <label className="text-sm text-gray-300">Name</label>
+                <input value={name} onChange={(e) => setName(e.target.value)} className="w-full px-3 py-2 bg-black border border-gray-600 rounded text-white" />
+              </div>
+              <div>
+                <label className="text-sm text-gray-300">Code</label>
+                <input value={code} onChange={(e) => setCode(e.target.value)} className="w-full px-3 py-2 bg-black border border-gray-600 rounded text-white" />
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="text-sm text-gray-300">Capacity</label>
+                  <input type="number" value={capacity ?? ''} onChange={(e) => setCapacity(e.target.value ? parseInt(e.target.value) : null)} className="w-full px-3 py-2 bg-black border border-gray-600 rounded text-white" />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-300">Shared</label>
+                  <div>
+                    <label className="inline-flex items-center text-sm text-gray-300">
+                      <input type="checkbox" checked={isShared} onChange={(e) => setIsShared(e.target.checked)} className="mr-2" /> Shared
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button type="submit" disabled={loadingCreate} className="bg-[#f08c17] px-3 py-2 rounded text-black font-medium">{loadingCreate ? (editingId ? 'Saving...' : 'Creating...') : (editingId ? 'Save' : 'Create')}</button>
+                <button type="button" onClick={() => { resetForm(); setShowCreateModal(false); setEditingId(null); }} className="px-3 py-2 rounded border border-gray-700 text-gray-300">Cancel</button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
-      {/* Pagination */}
-      {activeTab === "inventory" && (
-        <Pagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          itemsPerPage={itemsPerPage}
-          totalItems={totalCount}
-          onPageChange={setCurrentPage}
-        />
-      )}
-
-      {/* Quick Stats */}
-      {activeTab === "inventory" && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-black border border-gray-700 rounded-lg p-4">
-            <div className="text-2xl font-bold text-[#f08c17]">{inventory.length}</div>
-            <div className="text-sm text-gray-400">Total Items</div>
-          </div>
-          <div className="bg-black border border-gray-700 rounded-lg p-4">
-            <div className="text-2xl font-bold text-green-400">
-              {inventory.filter(item => getStockStatus(item).label === "In Stock").length}
+      {showDeleteModal && deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowDeleteModal(false)} />
+          <div className="bg-black border border-gray-700 rounded-lg p-4 w-11/12 max-w-md z-10">
+            <h4 className="text-white font-semibold mb-2">Delete Warehouse</h4>
+            <p className="text-gray-300 mb-4">Are you sure you want to delete "{deleteTarget.name}"? This action cannot be undone.</p>
+            <div className="flex gap-2">
+              <button onClick={confirmDelete} className="bg-red-700 px-3 py-2 rounded text-white">Yes, delete</button>
+              <button onClick={() => setShowDeleteModal(false)} className="px-3 py-2 rounded border border-gray-700 text-gray-300">Cancel</button>
             </div>
-            <div className="text-sm text-gray-400">In Stock</div>
-          </div>
-          <div className="bg-black border border-gray-700 rounded-lg p-4">
-            <div className="text-2xl font-bold text-yellow-400">
-              {inventory.filter(item => getStockStatus(item).label === "Low Stock").length}
-            </div>
-            <div className="text-sm text-gray-400">Low Stock</div>
-          </div>
-          <div className="bg-black border border-gray-700 rounded-lg p-4">
-            <div className="text-2xl font-bold text-red-400">
-              {inventory.filter(item => getStockStatus(item).label === "Out of Stock").length}
-            </div>
-            <div className="text-sm text-gray-400">Out of Stock</div>
           </div>
         </div>
       )}

@@ -211,13 +211,36 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Generate order number
-    const orderCount = await prisma.order.count({
-      where: { merchantId },
+    // Generate order number (format: NG-4R07)
+    const generateOrderNumber = () => {
+      const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      const digits = '0123456789';
+      const alphanumeric = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      
+      // 2 letters + hyphen + 1 alphanumeric + 1 letter + 2 digits
+      const part1 = letters.charAt(Math.floor(Math.random() * letters.length)) +
+                    letters.charAt(Math.floor(Math.random() * letters.length));
+      const part2 = alphanumeric.charAt(Math.floor(Math.random() * alphanumeric.length)) +
+                    letters.charAt(Math.floor(Math.random() * letters.length)) +
+                    digits.charAt(Math.floor(Math.random() * digits.length)) +
+                    digits.charAt(Math.floor(Math.random() * digits.length));
+      
+      return `${part1}-${part2}`;
+    };
+
+    // Ensure unique order number
+    let orderNumber = generateOrderNumber();
+    let existing = await prisma.order.findUnique({
+      where: { merchantId_orderNumber: { merchantId, orderNumber } },
     });
-    const orderNumber = `ORD-${merchantId.slice(0, 8).toUpperCase()}-${String(
-      orderCount + 1
-    ).padStart(6, "0")}`;
+    
+    // Retry if collision (very rare)
+    while (existing) {
+      orderNumber = generateOrderNumber();
+      existing = await prisma.order.findUnique({
+        where: { merchantId_orderNumber: { merchantId, orderNumber } },
+      });
+    }
 
     // Calculate totals
     let subtotal = 0;
@@ -227,6 +250,10 @@ export async function POST(req: NextRequest) {
 
     const totalAmount =
       subtotal + (shippingCost || 0) + (taxAmount || 0) - (discountAmount || 0);
+
+    // Check if user is admin - admins auto-approve orders
+    const { isAdmin } = await getUserMerchantContext(auth.userId as string);
+    const initialStatus = isAdmin ? "PROCESSING" : "PENDING";
 
     // Create order
     const order = await prisma.order.create({
@@ -252,7 +279,7 @@ export async function POST(req: NextRequest) {
         warehouseId,
         expectedShipDate,
         customFields,
-        status: "PENDING",
+        status: initialStatus,
         paymentStatus: "PENDING",
         fulfillmentStatus: "UNFULFILLED",
         items: {
@@ -280,9 +307,9 @@ export async function POST(req: NextRequest) {
     await prisma.orderStatusHistory.create({
       data: {
         orderId: order.id,
-        newStatus: "PENDING",
+        newStatus: initialStatus,
         changedBy: auth.userId as string,
-        notes: "Order created",
+        notes: isAdmin ? "Order created and auto-approved by admin" : "Order created - pending admin approval",
       },
     });
 

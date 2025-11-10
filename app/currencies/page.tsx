@@ -141,7 +141,7 @@ export default function CurrenciesPage() {
   const handleEditCurrency = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCurrency) return;
-    
+
     try {
       const response = await api.put(`/api/currencies/${selectedCurrency.id}`, editForm);
 
@@ -160,7 +160,7 @@ export default function CurrenciesPage() {
 
   const handleCreateRate = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validate that rate is not NaN and is positive
     if (isNaN(rateForm.rate) || rateForm.rate <= 0) {
       setError("Please enter a valid positive exchange rate");
@@ -219,7 +219,7 @@ export default function CurrenciesPage() {
   const handleEditRate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRate) return;
-    
+
     // Validate that rate is not NaN and is positive
     if (isNaN(editRateForm.rate) || editRateForm.rate <= 0) {
       setError("Please enter a valid positive exchange rate");
@@ -338,21 +338,19 @@ export default function CurrenciesPage() {
         <div className="flex gap-4 mb-4">
           <button
             onClick={() => setActiveTab('currencies')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              activeTab === 'currencies'
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === 'currencies'
                 ? 'bg-[#f08c17] text-black'
                 : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-            }`}
+              }`}
           >
             Currencies
           </button>
           <button
             onClick={() => setActiveTab('rates')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              activeTab === 'rates'
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === 'rates'
                 ? 'bg-[#f08c17] text-black'
                 : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-            }`}
+              }`}
           >
             Exchange Rates
           </button>
@@ -378,9 +376,8 @@ export default function CurrenciesPage() {
                   <h3 className="text-lg font-semibold text-white">{currency.code}</h3>
                   <p className="text-gray-400">{currency.name}</p>
                 </div>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  currency.isActive ? "bg-green-900/20 text-green-300" : "bg-red-900/20 text-red-300"
-                }`}>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${currency.isActive ? "bg-green-900/20 text-green-300" : "bg-red-900/20 text-red-300"
+                  }`}>
                   {currency.isActive ? "Active" : "Inactive"}
                 </span>
               </div>
@@ -394,15 +391,12 @@ export default function CurrenciesPage() {
                   <span className="text-gray-400">Decimal Places:</span>
                   <span className="text-white">{currency.decimalPlaces}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Created:</span>
-                  <span className="text-white">{new Date(currency.createdAt).toLocaleDateString()}</span>
-                </div>
+
               </div>
 
               {user?.role === "ADMIN" && (
                 <div className="mt-4 pt-4 border-t border-gray-700">
-                  <button 
+                  <button
                     onClick={() => openEditModal(currency)}
                     className="text-blue-400 hover:text-blue-300 text-sm"
                   >
@@ -465,13 +459,13 @@ export default function CurrenciesPage() {
                     {user?.role === "ADMIN" && (
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex space-x-2">
-                          <button 
+                          <button
                             onClick={() => openEditRateModal(rate)}
                             className="text-blue-400 hover:text-blue-300 text-sm"
                           >
                             Edit
                           </button>
-                          <button 
+                          <button
                             onClick={() => handleDeleteRate(rate.id)}
                             className="text-red-400 hover:text-red-300 text-sm"
                           >
@@ -515,7 +509,7 @@ export default function CurrenciesPage() {
                   placeholder="e.g., USD"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-gray-300 text-sm font-medium mb-1">
                   Currency Name
@@ -599,7 +593,7 @@ export default function CurrenciesPage() {
                   className="w-full bg-black border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:ring-2 focus:ring-[#f08c17] focus:border-transparent"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-gray-300 text-sm font-medium mb-1">
                   Currency Name
@@ -667,13 +661,13 @@ export default function CurrenciesPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md">
             <h2 className="text-xl font-bold text-white mb-4">Add Exchange Rate</h2>
-            
+
             {error && (
               <div className="bg-red-900/20 border border-red-700 text-red-300 px-4 py-3 rounded mb-4">
                 {error}
               </div>
             )}
-            
+
             <form onSubmit={handleCreateRate} className="space-y-4">
               <div>
                 <label className="block text-gray-300 text-sm font-medium mb-1">
@@ -693,7 +687,7 @@ export default function CurrenciesPage() {
                   ))}
                 </select>
               </div>
-              
+
               <div>
                 <label className="block text-gray-300 text-sm font-medium mb-1">
                   To Currency
@@ -768,13 +762,13 @@ export default function CurrenciesPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md">
             <h2 className="text-xl font-bold text-white mb-4">Edit Exchange Rate</h2>
-            
+
             {error && (
               <div className="bg-red-900/20 border border-red-700 text-red-300 px-4 py-3 rounded mb-4">
                 {error}
               </div>
             )}
-            
+
             <form onSubmit={handleEditRate} className="space-y-4">
               <div>
                 <label className="block text-gray-300 text-sm font-medium mb-1">
@@ -784,7 +778,7 @@ export default function CurrenciesPage() {
                   {selectedRate.fromCurrency.code} - {selectedRate.fromCurrency.name}
                 </div>
               </div>
-              
+
               <div>
                 <label className="block text-gray-300 text-sm font-medium mb-1">
                   To Currency

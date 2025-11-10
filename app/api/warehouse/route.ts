@@ -10,10 +10,13 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const { searchParams } = new URL(req.url);
-    const status = searchParams.get("status");
-    const merchantId = searchParams.get("merchantId");
-    const isShared = searchParams.get("isShared");
+  const { searchParams } = new URL(req.url);
+  const status = searchParams.get("status");
+  const merchantId = searchParams.get("merchantId");
+  const isShared = searchParams.get("isShared");
+  const q = searchParams.get("q") || undefined;
+  const page = parseInt(searchParams.get("page") || "1", 10) || 1;
+  const pageSize = Math.min(parseInt(searchParams.get("pageSize") || "10", 10) || 10, 100);
 
     const { isAdmin, merchantIds } = await getUserMerchantContext(
       auth.userId as string
@@ -36,9 +39,16 @@ export async function GET(req: NextRequest) {
       where.OR = [{ merchantId: { in: merchantIds } }, { isShared: true }];
     }
 
+    // apply text search if present
+    if (q) {
+      where.name = { contains: q, mode: 'insensitive' };
+    }
+
     const warehouses = await prisma.warehouse.findMany({
       where,
       orderBy: { name: "asc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
       include: {
         merchant: {
           select: {
@@ -64,7 +74,9 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ warehouses });
+    const total = await prisma.warehouse.count({ where });
+
+    return NextResponse.json({ warehouses, total, page, pageSize });
   } catch (error) {
     console.error("Get warehouses error:", error);
     return NextResponse.json(
@@ -79,6 +91,17 @@ export async function POST(req: NextRequest) {
   const auth = await requireAuth(req);
   if ("error" in auth) {
     return NextResponse.json({ message: `Error occurred while creating warehouse` }, { status: 401 });
+  }
+
+  // Only admins may create warehouses
+  try {
+    const { isAdmin } = await getUserMerchantContext(auth.userId as string);
+    if (!isAdmin) {
+      return NextResponse.json({ error: "Forbidden - admin only" }, { status: 403 });
+    }
+  } catch (err) {
+    console.error("Failed to determine user merchant context", err);
+    return NextResponse.json({ error: "Failed to verify permissions" }, { status: 500 });
   }
 
   try {

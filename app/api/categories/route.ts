@@ -12,23 +12,12 @@ export async function GET(req: NextRequest) {
 
   try {
     const { searchParams } = new URL(req.url);
-    const merchantId = searchParams.get("merchantId");
     const parentId = searchParams.get("parentId");
 
-    const { isAdmin, merchantIds } = await getUserMerchantContext(
-      auth.userId as string
-    );
-
+    // We no longer tie categories to merchants. Return categories optionally
+    // filtered by parentCategoryId. Authentication is still required.
     const where: any = {};
 
-    // Filter by merchant
-    if (merchantId) {
-      where.merchantId = merchantId;
-    } else if (!isAdmin) {
-      where.merchantId = { in: merchantIds };
-    }
-
-    // Filter by parent
     if (parentId === "null") {
       where.parentCategoryId = null;
     } else if (parentId) {
@@ -77,8 +66,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = await req.json();
-    const { merchantId, name, parentCategoryId } = body;
+  const body = await req.json();
+  const { name, parentCategoryId } = body;
 
     if (!name) {
       return NextResponse.json(
@@ -87,33 +76,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { isAdmin, merchantIds } = await getUserMerchantContext(
-      auth.userId as string
-    );
-
-    // For non-admins, require merchantId and validate access
+    // Only admins are allowed to create global categories
+    const { isAdmin } = await getUserMerchantContext(auth.userId as string);
     if (!isAdmin) {
-      if (!merchantId) {
-        return NextResponse.json(
-          { error: "Merchant ID is required" },
-          { status: 400 }
-        );
-      }
-      // Check if user has access to this merchant
-      if (merchantIds.length > 0 && !merchantIds.some(id => id === merchantId)) {
-        return NextResponse.json(
-          { error: "Access denied to this merchant" },
-          { status: 403 }
-        );
-      }
-    } else {
-      // For admins, merchantId is still required but they can use any valid merchant
-      if (!merchantId) {
-        return NextResponse.json(
-          { error: "Please select a merchant for this category" },
-          { status: 400 }
-        );
-      }
+      return NextResponse.json({ error: "Only admins can create categories" }, { status: 403 });
     }
 
     // Check if parent category exists
@@ -132,7 +98,6 @@ export async function POST(req: NextRequest) {
 
     const category = await prisma.productCategory.create({
       data: {
-        merchantId,
         name,
         parentCategoryId,
       },

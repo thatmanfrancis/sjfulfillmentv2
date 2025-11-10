@@ -28,6 +28,20 @@ export async function apiCall<T = any>(
 
   // Add authorization header if required
   if (requireAuth) {
+    // Proactively refresh token if it's expiring soon
+    const tokenValid = await authClient.ensureValidToken();
+    if (!tokenValid) {
+      // Token refresh failed, redirect to login
+      if (typeof window !== "undefined") {
+        window.location.href = "/login";
+      }
+      return {
+        ok: false,
+        status: 401,
+        error: "Authentication required",
+      };
+    }
+
     const accessToken = authClient.getAccessToken();
     if (accessToken) {
       requestHeaders["Authorization"] = `Bearer ${accessToken}`;

@@ -1,74 +1,137 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { api } from "@/lib/api";
 
 interface Shipment {
   id: string;
-  trackingNumber: string;
-  orderNumber: string;
-  customerName: string;
-  destination: string;
-  carrier: string;
+  trackingNumber: string | null;
+  carrier: string | null;
+  serviceLevel: string | null;
   status: string;
-  shippedDate: string;
-  estimatedDelivery: string;
-  actualDelivery?: string;
+  shippedAt: string | null;
+  deliveredAt: string | null;
+  estimatedDeliveryDate: string | null;
+  actualDeliveryDate: string | null;
+  shippingCost: number | null;
+  order: {
+    orderNumber: string;
+    customer: {
+      firstName: string;
+      lastName: string;
+      email: string;
+    };
+    shippingAddress?: {
+      line1?: string;
+      city?: string;
+      state?: string;
+      postalCode?: string;
+      country?: string;
+    };
+  };
+}
+
+interface ShipmentResponse {
+  shipments: Shipment[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
 }
 
 export default function ShipmentsPage() {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
     fetchShipments();
-  }, []);
+  }, [statusFilter, currentPage]);
 
   const fetchShipments = async () => {
     try {
-      const response = await fetch("/api/shipments");
-      if (response.ok) {
-        const data = await response.json();
-        setShipments(data.shipments || []);
+      setLoading(true);
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: "20",
+      });
+
+      if (statusFilter !== "all") {
+        params.append("status", statusFilter);
       }
-    } catch (error) {
-      console.error("Failed to fetch shipments:", error);
+
+      const response = await api.get(`/api/shipments?${params}`);
+      if (!response.ok) {
+        throw new Error(response.error || "Failed to fetch shipments");
+      }
+
+      const data: ShipmentResponse = response.data;
+      setShipments(data.shipments);
+      setTotalPages(data.pagination.totalPages);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load shipments");
+      setShipments([]);
     } finally {
       setLoading(false);
     }
   };
 
   const filteredShipments = shipments.filter(shipment => {
-    const matchesSearch = shipment.trackingNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         shipment.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         shipment.customerName.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "all" || shipment.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const customerName = `${shipment.order.customer.firstName} ${shipment.order.customer.lastName}`;
+    const matchesSearch = 
+      shipment.trackingNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      shipment.order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      shipment.order.customer.email.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesSearch;
   });
 
   const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "pending": return "bg-yellow-100 text-yellow-800";
-      case "in_transit": return "bg-blue-100 text-blue-800";
-      case "out_for_delivery": return "bg-purple-100 text-purple-800";
-      case "delivered": return "bg-green-100 text-green-800";
-      case "failed_delivery": return "bg-red-100 text-red-800";
-      case "returned": return "bg-gray-100 text-gray-800";
-      default: return "bg-gray-100 text-gray-800";
+    switch (status) {
+      case "LABEL_CREATED": return "bg-gray-900 text-gray-300";
+      case "PICKED_UP": return "bg-blue-900 text-blue-300";
+      case "IN_TRANSIT": return "bg-blue-900 text-blue-300";
+      case "OUT_FOR_DELIVERY": return "bg-purple-900 text-purple-300";
+      case "DELIVERED": return "bg-green-900 text-green-300";
+      case "FAILED_DELIVERY": return "bg-red-900 text-red-300";
+      case "RETURNED_TO_SENDER": return "bg-orange-900 text-orange-300";
+      case "EXCEPTION": return "bg-red-900 text-red-300";
+      default: return "bg-gray-900 text-gray-300";
     }
+  };
+
+  const formatDestination = (address: Shipment["order"]["shippingAddress"]) => {
+    if (!address) return "N/A";
+    return `${address.city || ""}, ${address.state || ""} ${address.postalCode || ""}`.trim();
   };
 
   if (loading) {
     return (
       <div className="p-6">
         <div className="animate-pulse">
-          <div className="h-8 bg-gray-300 rounded w-1/4 mb-6"></div>
+          <div className="h-8 bg-gray-700 rounded w-1/4 mb-6"></div>
           <div className="space-y-4">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-16 bg-gray-300 rounded"></div>
+              <div key={i} className="h-16 bg-gray-700 rounded"></div>
             ))}
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-900/20 border border-red-700 text-red-300 px-4 py-3 rounded">
+          {error}
         </div>
       </div>
     );
@@ -109,12 +172,14 @@ export default function ShipmentsPage() {
           className="px-4 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]"
         >
           <option value="all">All Status</option>
-          <option value="pending">Pending</option>
-          <option value="in_transit">In Transit</option>
-          <option value="out_for_delivery">Out for Delivery</option>
-          <option value="delivered">Delivered</option>
-          <option value="failed_delivery">Failed Delivery</option>
-          <option value="returned">Returned</option>
+          <option value="LABEL_CREATED">Label Created</option>
+          <option value="PICKED_UP">Picked Up</option>
+          <option value="IN_TRANSIT">In Transit</option>
+          <option value="OUT_FOR_DELIVERY">Out for Delivery</option>
+          <option value="DELIVERED">Delivered</option>
+          <option value="FAILED_DELIVERY">Failed Delivery</option>
+          <option value="RETURNED_TO_SENDER">Returned</option>
+          <option value="EXCEPTION">Exception</option>
         </select>
       </div>
 
@@ -161,27 +226,49 @@ export default function ShipmentsPage() {
                 filteredShipments.map((shipment) => (
                   <tr key={shipment.id} className="hover:bg-gray-800 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-white">{shipment.trackingNumber}</div>
+                      <div className="text-sm font-medium text-white">
+                        {shipment.trackingNumber || "N/A"}
+                      </div>
+                      {shipment.shippingCost && (
+                        <div className="text-xs text-gray-400">
+                          ${shipment.shippingCost.toFixed(2)}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-300">{shipment.orderNumber}</div>
+                      <div className="text-sm text-gray-300">{shipment.order.orderNumber}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-white">{shipment.customerName}</div>
+                      <div className="text-sm text-white">
+                        {shipment.order.customer.firstName} {shipment.order.customer.lastName}
+                      </div>
+                      <div className="text-xs text-gray-400">{shipment.order.customer.email}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-300">{shipment.destination}</div>
+                      <div className="text-sm text-gray-300">
+                        {formatDestination(shipment.order.shippingAddress)}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-300">{shipment.carrier}</div>
+                      <div className="text-sm text-gray-300">{shipment.carrier || "N/A"}</div>
+                      {shipment.serviceLevel && (
+                        <div className="text-xs text-gray-400">{shipment.serviceLevel}</div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(shipment.status)}`}>
-                        {shipment.status.replace('_', ' ')}
+                        {shipment.status.replace(/_/g, ' ')}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                      {new Date(shipment.estimatedDelivery).toLocaleDateString()}
+                      {shipment.estimatedDeliveryDate 
+                        ? new Date(shipment.estimatedDeliveryDate).toLocaleDateString()
+                        : "N/A"}
+                      {shipment.actualDeliveryDate && (
+                        <div className="text-xs text-green-400">
+                          Delivered: {new Date(shipment.actualDeliveryDate).toLocaleDateString()}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
@@ -201,6 +288,31 @@ export default function ShipmentsPage() {
         </div>
       </div>
 
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <div className="text-gray-400">
+            Page {currentPage} of {totalPages}
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage <= 1}
+              className="px-3 py-1 bg-gray-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600"
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages}
+              className="px-3 py-1 bg-gray-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-black border border-gray-700 rounded-lg p-4">
@@ -209,21 +321,21 @@ export default function ShipmentsPage() {
         </div>
         <div className="bg-black border border-gray-700 rounded-lg p-4">
           <div className="text-2xl font-bold text-blue-400">
-            {shipments.filter(s => s.status === "in_transit").length}
+            {shipments.filter(s => s.status === "IN_TRANSIT").length}
           </div>
           <div className="text-sm text-gray-400">In Transit</div>
         </div>
         <div className="bg-black border border-gray-700 rounded-lg p-4">
           <div className="text-2xl font-bold text-green-400">
-            {shipments.filter(s => s.status === "delivered").length}
+            {shipments.filter(s => s.status === "DELIVERED").length}
           </div>
           <div className="text-sm text-gray-400">Delivered</div>
         </div>
         <div className="bg-black border border-gray-700 rounded-lg p-4">
-          <div className="text-2xl font-bold text-yellow-400">
-            {shipments.filter(s => s.status === "pending").length}
+          <div className="text-2xl font-bold text-gray-400">
+            {shipments.filter(s => s.status === "LABEL_CREATED").length}
           </div>
-          <div className="text-sm text-gray-400">Pending</div>
+          <div className="text-sm text-gray-400">Label Created</div>
         </div>
       </div>
     </div>

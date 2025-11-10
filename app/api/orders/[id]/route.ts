@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-middleware";
+import { getUserMerchantContext } from "@/lib/merchant-context";
 
 export async function GET(
   req: NextRequest,
@@ -113,6 +114,9 @@ export async function PUT(
     const { id } = await params;
     const body = await req.json();
     const {
+      status,
+      paymentStatus,
+      fulfillmentStatus,
       shippingAddressId,
       billingAddressId,
       shippingCost,
@@ -125,7 +129,12 @@ export async function PUT(
       warehouseId,
       expectedShipDate,
       customFields,
+      statusNote,
     } = body;
+
+    const { isAdmin, merchantIds } = await getUserMerchantContext(
+      auth.userId as string
+    );
 
     const order = await prisma.order.findUnique({
       where: { id: id },
@@ -134,6 +143,19 @@ export async function PUT(
 
     if (!order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
+
+    // Check access permissions
+    if (!isAdmin && !merchantIds.includes(order.merchantId)) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    }
+
+    // Only admins can update status fields
+    if (!isAdmin && (status || paymentStatus || fulfillmentStatus)) {
+      return NextResponse.json(
+        { error: "Only administrators can update order status" },
+        { status: 403 }
+      );
     }
 
     // Recalculate total if costs changed
@@ -150,29 +172,51 @@ export async function PUT(
         (discountAmount ?? order.discountAmount);
     }
 
+    const updateData: any = {
+      updatedAt: new Date(),
+    };
+
+    if (status !== undefined) updateData.status = status;
+    if (paymentStatus !== undefined) updateData.paymentStatus = paymentStatus;
+    if (fulfillmentStatus !== undefined) updateData.fulfillmentStatus = fulfillmentStatus;
+    if (shippingAddressId) updateData.shippingAddressId = shippingAddressId;
+    if (billingAddressId) updateData.billingAddressId = billingAddressId;
+    if (shippingCost !== undefined) updateData.shippingCost = shippingCost;
+    if (discountAmount !== undefined) updateData.discountAmount = discountAmount;
+    if (taxAmount !== undefined) updateData.taxAmount = taxAmount;
+    if (notes !== undefined) updateData.notes = notes;
+    if (internalNotes !== undefined) updateData.internalNotes = internalNotes;
+    if (tags !== undefined) updateData.tags = tags;
+    if (priority) updateData.priority = priority;
+    if (warehouseId !== undefined) updateData.warehouseId = warehouseId;
+    if (expectedShipDate !== undefined) updateData.expectedShipDate = expectedShipDate;
+    if (customFields !== undefined) updateData.customFields = customFields;
+    updateData.totalAmount = totalAmount;
+
     const updated = await prisma.order.update({
       where: { id: id },
-      data: {
-        ...(shippingAddressId && { shippingAddressId }),
-        ...(billingAddressId && { billingAddressId }),
-        ...(shippingCost !== undefined && { shippingCost }),
-        ...(discountAmount !== undefined && { discountAmount }),
-        ...(taxAmount !== undefined && { taxAmount }),
-        ...(notes !== undefined && { notes }),
-        ...(internalNotes !== undefined && { internalNotes }),
-        ...(tags !== undefined && { tags }),
-        ...(priority && { priority }),
-        ...(warehouseId !== undefined && { warehouseId }),
-        ...(expectedShipDate !== undefined && { expectedShipDate }),
-        ...(customFields !== undefined && { customFields }),
-        totalAmount,
-      },
+      data: updateData,
       include: {
         customer: true,
         items: true,
         currency: true,
+        shippingAddress: true,
+        billingAddress: true,
       },
     });
+
+    // Create status history entry if status changed
+    if (status && status !== order.status) {
+      await prisma.orderStatusHistory.create({
+        data: {
+          orderId: id,
+          oldStatus: order.status,
+          newStatus: status,
+          changedBy: auth.userId as string,
+          notes: statusNote || `Status updated to ${status}`,
+        },
+      });
+    }
 
     return NextResponse.json({
       message: "Order updated successfully",

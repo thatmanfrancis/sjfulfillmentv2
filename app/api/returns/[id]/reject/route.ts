@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-middleware";
+import { getUserMerchantContext } from "@/lib/merchant-context";
 
 export async function POST(
   req: NextRequest,
@@ -12,6 +13,16 @@ export async function POST(
   }
 
   try {
+    // Check if user is admin
+    const { isAdmin } = await getUserMerchantContext(auth.userId as string);
+
+    if (!isAdmin) {
+      return NextResponse.json(
+        { error: "Only admins can reject returns" },
+        { status: 403 }
+      );
+    }
+
     const { id } = await params;
     const body = await req.json();
     const { reason } = body;

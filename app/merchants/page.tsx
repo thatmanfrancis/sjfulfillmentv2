@@ -1,6 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import api from "@/lib/api";
+import CreateMerchantModal from "@/components/CreateMerchantModal";
+import ConfirmModal from "@/components/ConfirmModal";
+import EditMerchantModal from "@/components/EditMerchantModal";
 
 interface Merchant {
   id: string;
@@ -14,6 +19,10 @@ interface Merchant {
   totalRevenue: number;
   joinedDate: string;
   lastActive: string;
+  currency?: {
+    code: string;
+    symbol: string;
+  };
 }
 
 export default function MerchantsPage() {
@@ -24,14 +33,19 @@ export default function MerchantsPage() {
 
   useEffect(() => {
     fetchMerchants();
+    (async ()=>{
+      const me = await api.get("/api/users/me");
+      if (me.ok && me.data?.user) {
+        setCurrentUser(me.data.user);
+      }
+    })();
   }, []);
 
   const fetchMerchants = async () => {
     try {
-      const response = await fetch("/api/merchants");
-      if (response.ok) {
-        const data = await response.json();
-        setMerchants(data.merchants || []);
+      const response = await api.get("/api/merchants");
+      if (response.ok && response.data) {
+        setMerchants(response.data.merchants || []);
       }
     } catch (error) {
       console.error("Failed to fetch merchants:", error);
@@ -39,6 +53,12 @@ export default function MerchantsPage() {
       setLoading(false);
     }
   };
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any | null>(null);
+  const router = useRouter();
+  const [confirmMerchantId, setConfirmMerchantId] = useState<string | null>(null);
+  const [editingMerchantId, setEditingMerchantId] = useState<string | null>(null);
 
   const filteredMerchants = merchants.filter(merchant => {
     const matchesSearch = merchant.businessName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -55,6 +75,22 @@ export default function MerchantsPage() {
       case "suspended": return "bg-red-100 text-red-800";
       case "inactive": return "bg-gray-100 text-gray-800";
       default: return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const deleteMerchant = async (id: string) => {
+    try {
+      const res = await api.delete(`/api/merchants/${id}`);
+      if (res.ok) {
+        // refresh list
+        fetchMerchants();
+        setConfirmMerchantId(null);
+      } else {
+        alert(res.error || 'Failed to delete merchant');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to delete merchant');
     }
   };
 
@@ -85,9 +121,16 @@ export default function MerchantsPage() {
           <button className="bg-gray-700 text-white px-4 py-2 rounded-lg font-medium hover:bg-gray-600 transition-colors">
             Export
           </button>
-          <button className="bg-[#f08c17] text-black px-4 py-2 rounded-lg font-medium hover:bg-orange-500 transition-colors">
-            Add Merchant
-          </button>
+          {currentUser?.role === "ADMIN" ? (
+            <>
+              <button onClick={()=>setModalOpen(true)} className="bg-[#f08c17] text-black px-4 py-2 rounded-lg font-medium hover:bg-orange-500 transition-colors">
+                Add Merchant
+              </button>
+              <CreateMerchantModal open={modalOpen} onClose={()=>setModalOpen(false)} onCreated={(m)=>{ fetchMerchants(); }} />
+            </>
+          ) : (
+            <button disabled className="bg-gray-800 text-gray-400 px-4 py-2 rounded-lg font-medium">Add Merchant</button>
+          )}
         </div>
       </div>
 
@@ -140,6 +183,9 @@ export default function MerchantsPage() {
                   Revenue
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                  Currency
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
@@ -150,7 +196,7 @@ export default function MerchantsPage() {
             <tbody className="divide-y divide-gray-700">
               {filteredMerchants.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-gray-400">
+                  <td colSpan={9} className="px-6 py-12 text-center text-gray-400">
                     No merchants found
                   </td>
                 </tr>
@@ -171,13 +217,18 @@ export default function MerchantsPage() {
                       <div className="text-sm text-gray-400">{merchant.phone}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                      {merchant.totalProducts}
+                                      {merchant.totalProducts ?? 0}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                       {merchant.totalOrders}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
-                      ${merchant.totalRevenue.toFixed(2)}
+                      ${((merchant.totalRevenue ?? 0)).toFixed(2)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-300">
+                        {merchant.currency?.code || 'USD'} {merchant.currency?.symbol || '$'}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(merchant.status)}`}>
@@ -186,12 +237,13 @@ export default function MerchantsPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
-                        <button className="text-[#f08c17] hover:text-orange-500 transition-colors">
+                        <button onClick={() => router.push(`/merchants/${merchant.id}`)} className="text-[#f08c17] hover:text-orange-500 transition-colors">
                           View
                         </button>
-                        <button className="text-blue-400 hover:text-blue-300 transition-colors">
+                        <button onClick={() => setEditingMerchantId(merchant.id)} className="text-blue-400 hover:text-blue-300 transition-colors">
                           Edit
                         </button>
+                        <button onClick={() => setConfirmMerchantId(merchant.id)} className="text-red-500 hover:text-red-400 transition-colors">Delete</button>
                       </div>
                     </td>
                   </tr>
@@ -216,17 +268,20 @@ export default function MerchantsPage() {
         </div>
         <div className="bg-black border border-gray-700 rounded-lg p-4">
           <div className="text-2xl font-bold text-blue-400">
-            {merchants.reduce((sum, m) => sum + m.totalProducts, 0)}
+            {merchants.reduce((sum, m) => sum + (m.totalProducts ?? 0), 0)}
           </div>
           <div className="text-sm text-gray-400">Total Products</div>
         </div>
         <div className="bg-black border border-gray-700 rounded-lg p-4">
           <div className="text-2xl font-bold text-yellow-400">
-            ${merchants.reduce((sum, m) => sum + m.totalRevenue, 0).toFixed(0)}
+            ${merchants.reduce((sum, m) => sum + (m.totalRevenue ?? 0), 0).toFixed(0)}
           </div>
           <div className="text-sm text-gray-400">Total Revenue</div>
         </div>
       </div>
+      {/* Confirmation and edit modals */}
+      <ConfirmModal open={!!confirmMerchantId} title="Delete merchant" message={confirmMerchantId ? `Are you sure you want to delete this merchant?` : undefined} onCancel={()=>setConfirmMerchantId(null)} onConfirm={()=> confirmMerchantId && deleteMerchant(confirmMerchantId)} />
+      <EditMerchantModal open={!!editingMerchantId} merchantId={editingMerchantId} onClose={()=>setEditingMerchantId(null)} onSaved={(m)=>{ fetchMerchants(); setEditingMerchantId(null); }} />
     </div>
   );
 }

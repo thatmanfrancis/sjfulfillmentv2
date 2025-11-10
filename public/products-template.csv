@@ -1,0 +1,6 @@
+name,sku,description,categoryId,costPrice,sellingPrice,weight,weightUnit,warehouseId,quantity,status
+Premium Wireless Headphones,WH-001,High-quality noise-canceling headphones with 30-hour battery life,,75.00,149.99,0.5,kg,,50,ACTIVE
+Ergonomic Office Chair,,Adjustable lumbar support with breathable mesh back,,120.00,299.99,15.0,kg,,25,ACTIVE
+Stainless Steel Water Bottle,WB-750,750ml insulated bottle keeps drinks cold for 24 hours,,8.00,24.99,0.3,kg,,200,ACTIVE
+Laptop Backpack Pro,BP-PRO,Water-resistant backpack with padded laptop compartment,,25.00,59.99,1.2,kg,,75,ACTIVE
+Bluetooth Speaker Mini,BS-MINI,Portable wireless speaker with 10-hour playback,,15.00,39.99,0.4,kg,,150,ACTIVE

@@ -21,8 +21,8 @@ const adminRoutes = [
   "/admin",
   "/admin/users",
   "/admin/commissions",
-  "/admin/commision",
   "/admin/audit-logs",
+  "/admin/settings",
 ];
 
 // Define role-based route access

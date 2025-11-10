@@ -117,6 +117,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
+    // Check if the user is an admin
+    const { isAdmin } = await getUserMerchantContext(auth.userId as string);
+
     // Generate return number
     const returnCount = await prisma.return.count({
       where: {
@@ -127,6 +130,11 @@ export async function POST(req: NextRequest) {
       .slice(0, 8)
       .toUpperCase()}-${String(returnCount + 1).padStart(6, "0")}`;
 
+    // Auto-approve if admin, otherwise set to REQUESTED
+    const initialStatus = isAdmin ? "APPROVED" : "REQUESTED";
+    const approvedAt = isAdmin ? new Date() : null;
+    const processedBy = isAdmin ? auth.userId as string : null;
+
     const returnRecord = await prisma.return.create({
       data: {
         orderId,
@@ -135,12 +143,20 @@ export async function POST(req: NextRequest) {
         customerNotes,
         returnItems,
         trackingNumber,
-        status: "REQUESTED",
+        status: initialStatus,
+        approvedAt,
+        processedBy,
       },
       include: {
         order: {
           include: {
             customer: true,
+          },
+        },
+        processor: {
+          select: {
+            firstName: true,
+            lastName: true,
           },
         },
       },
@@ -154,7 +170,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(
       {
-        message: "Return requested successfully",
+        message: isAdmin
+          ? "Return created and auto-approved"
+          : "Return requested successfully",
         return: returnRecord,
       },
       { status: 201 }

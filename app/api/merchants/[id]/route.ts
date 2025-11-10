@@ -16,15 +16,31 @@ export async function GET(
 
   try {
     const { id } = await params;
-    // Check access
-    const userRoles = await prisma.role.findMany({
+    
+    // Check if user is admin or has access to this merchant
+    const user = await prisma.user.findUnique({
       where: { id: auth.userId as string },
-      select: { name: true },
+      select: {
+        id: true,
+        role: true,
+        merchantStaff: {
+          select: {
+            merchantId: true,
+          },
+        },
+      },
     });
 
-    const isAdmin = userRoles.some((ur) => ur.name === "ADMIN");
-    const hasAccessToMerchant = userRoles.some(
-      (ur: any) => ur.merchantId === id
+    if (!user) {
+      return NextResponse.json(
+        { error: "User not found" },
+        { status: 404 }
+      );
+    }
+
+    const isAdmin = user.role === "ADMIN";
+    const hasAccessToMerchant = user.merchantStaff?.some(
+      (staff) => staff.merchantId === id
     );
 
     if (!isAdmin && !hasAccessToMerchant) {
@@ -103,12 +119,22 @@ export async function PUT(
     } = body;
 
     // Check access (Admin or Owner)
-    const userRoles = await prisma.role.findMany({
+    const user = await prisma.user.findUnique({
       where: { id: auth.userId as string },
-      select: { name: true },
+      select: {
+        id: true,
+        role: true,
+      },
     });
 
-    const isAdmin = userRoles.some((ur: any) => ur.name === "ADMIN");
+    if (!user) {
+      return NextResponse.json(
+        { error: "User not found" },
+        { status: 404 }
+      );
+    }
+
+    const isAdmin = user.role === "ADMIN";
 
     const merchant = await prisma.merchant.findUnique({
       where: { id: id },
@@ -179,12 +205,22 @@ export async function DELETE(
   try {
     const { id } = await params;
     // Admin only
-    const userRoles = await prisma.role.findMany({
+    const user = await prisma.user.findUnique({
       where: { id: auth.userId as string },
-      select: { name: true },
+      select: {
+        id: true,
+        role: true,
+      },
     });
 
-    const isAdmin = userRoles.some((ur) => ur.name === "ADMIN");
+    if (!user) {
+      return NextResponse.json(
+        { error: "User not found" },
+        { status: 404 }
+      );
+    }
+
+    const isAdmin = user.role === "ADMIN";
 
     if (!isAdmin) {
       return NextResponse.json(
