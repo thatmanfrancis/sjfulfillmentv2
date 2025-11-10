@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-middleware";
 import { getUserMerchantContext } from "@/lib/merchant-context";
+import { sendMail } from "@/lib/nodemailer";
+import { signJwt } from "@/lib/jose";
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
@@ -147,6 +149,7 @@ export async function POST(req: NextRequest) {
         passwordHash: hashedPassword,
         status: "ACTIVE",
         emailVerifiedAt: null,
+        preferredAuthMethod: password ? "PASSWORD" : "OTP",
       },
       select: {
         id: true,
@@ -164,9 +167,41 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Send verification email to the newly created staff member
+    try {
+      const verificationToken = await signJwt(
+        { userId: user.id, type: "email_verification" },
+        "7d" // 7 days expiry for staff
+      );
+
+      const verificationUrl = `${process.env.NEXT_PUBLIC_BASE_URL || process.env.APP_URL || ""}/verify-email?token=${verificationToken}`;
+
+      await sendMail({
+        to: user.email,
+        subject: "Verify your email - Staff Account Created",
+        html: `
+          <h1>Welcome to the Team!</h1>
+          <p>Hi ${user.firstName},</p>
+          <p>A staff account has been created for you with the role: <strong>${user.role}</strong>.</p>
+          <p>Please verify your email by clicking the link below:</p>
+          <a href="${verificationUrl}" style="display: inline-block; padding: 10px 20px; background-color: #f08c17; color: #000; text-decoration: none; border-radius: 5px; font-weight: bold;">Verify Email</a>
+          <p>Or copy and paste this link into your browser:</p>
+          <p>${verificationUrl}</p>
+          <p>This link expires in 7 days.</p>
+          ${password ? `<p><strong>Note:</strong> Your temporary password was provided separately by your administrator. Please change it after your first login.</p>` : `<p>You will receive a one-time password (OTP) via email when you log in.</p>`}
+        `,
+      });
+
+      console.log(`Verification email sent to staff member: ${user.email}`);
+    } catch (emailError) {
+      console.error("Failed to send verification email to staff member:", emailError);
+      // Don't fail the request, but log the error
+      // The admin can resend verification email later if needed
+    }
+
     return NextResponse.json(
       {
-        message: "Staff member created successfully",
+        message: "Staff member created successfully. A verification email has been sent.",
         user,
       },
       { status: 201 }

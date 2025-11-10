@@ -404,12 +404,13 @@ export default function MerchantDetailPage({ params }: PageProps) {
                     <p className="text-white text-lg font-medium">{merchant.subscriptionPlan.billingCycle}</p>
                   </div>
                 </div>
-                {merchant.settings?.subscriptionPrice && (
+                {merchant.settings?.subscriptionPrice !== undefined && merchant.settings?.subscriptionPrice !== null && (
                   <div className="bg-gray-900 p-4 rounded-lg">
                     <label className="text-sm text-gray-400">Price</label>
                     <p className="text-white text-lg font-medium">
-                      {merchant.currency.symbol}
-                      {merchant.settings.subscriptionPrice}
+                      {merchant.currency.symbol}{typeof merchant.settings.subscriptionPrice === 'number' 
+                        ? merchant.settings.subscriptionPrice.toFixed(2) 
+                        : merchant.settings.subscriptionPrice}
                     </p>
                   </div>
                 )}

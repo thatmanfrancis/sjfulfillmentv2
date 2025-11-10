@@ -189,7 +189,7 @@ export async function POST(req: NextRequest) {
       taxId,
       subscriptionPlanId,
       createdBy: auth.userId as string,
-      status: "",
+      status: "TRIAL", // Default status for new merchants
     };
 
     // If a subscriptionPrice is provided, persist it into the merchant.settings JSON
@@ -212,36 +212,61 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Send welcome email to the owner (best-effort)
-    (async () => {
-      try {
-        if (merchant?.owner?.email) {
+    // Send welcome email to the owner with verification link if needed
+    let emailSent = false;
+    let emailError = null;
+    
+    console.log('[MERCHANT EMAIL] Starting email process for merchant:', merchant.businessName);
+    console.log('[MERCHANT EMAIL] Owner email:', merchant?.owner?.email);
+    
+    try {
+      if (merchant?.owner?.email) {
+        const ownerEmail = merchant.owner.email;
+        
+        // Check if owner's email is verified
+        const ownerRecord = await prisma.user.findUnique({ 
+          where: { id: merchant.owner.id },
+          select: { emailVerifiedAt: true }
+        });
 
-          const ownerEmail = merchant.owner.email;
-          const subject = `Your merchant account "${merchant.businessName}" was created`;
+        console.log('[MERCHANT EMAIL] Owner email verified:', !!ownerRecord?.emailVerifiedAt);
 
-          // If owner's email is not verified, generate a verification token and include a link
-          let verificationUrlPart = "";
-          try {
-            const ownerRecord = await prisma.user.findUnique({ where: { id: merchant.owner.id } });
-            if (ownerRecord && !ownerRecord.emailVerifiedAt) {
-              const verificationToken = await signJwt({ userId: ownerRecord.id, type: "email_verification" }, "1d");
-              verificationUrlPart = `<p>Please verify your email by clicking <a href="${process.env.NEXT_PUBLIC_BASE_URL ?? process.env.APP_URL ?? "#"}/verify-email?token=${verificationToken}">here</a>. This link expires in 24 hours.</p>`;
-            }
-          } catch (e) {
-            console.warn("Failed to generate verification token:", e);
-          }
+        if (ownerRecord && !ownerRecord.emailVerifiedAt) {
+          // Send verification email
+          console.log('[MERCHANT EMAIL] Generating verification token...');
+          const verificationToken = await signJwt(
+            { userId: merchant.owner.id, type: "email_verification" }, 
+            "7d" // 7 days for merchant owners
+          );
+          
+          const verificationUrl = `${process.env.NEXT_PUBLIC_BASE_URL ?? process.env.APP_URL ?? ""}/verify-email?token=${verificationToken}`;
+          const subject = `Verify your email - Merchant Account Created`;
 
-          const html = `<p>Hi ${merchant.owner.firstName || ""},</p>
+          console.log('[MERCHANT EMAIL] Verification URL:', verificationUrl);
+
+          const html = `
+            <h1>Welcome to Our Platform!</h1>
+            <p>Hi ${merchant.owner.firstName || ""},</p>
             <p>A merchant account <strong>${merchant.businessName}</strong> has been created and associated with your user account.</p>
-            ${verificationUrlPart}
-            <p>You can sign in to manage the merchant here: <a href="${process.env.NEXT_PUBLIC_BASE_URL ?? process.env.APP_URL ?? "#"}/merchant">Open Dashboard</a></p>
-            <p>Subscription price: ${merchant.settings?.subscriptionPrice ?? "N/A"} ${merchant.currency?.code ?? ""}</p>
+            <p><strong>Important:</strong> Please verify your email address to access your merchant dashboard.</p>
+            <a href="${verificationUrl}" style="display: inline-block; padding: 10px 20px; background-color: #f08c17; color: #000; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 15px 0;">Verify Email</a>
+            <p>Or copy and paste this link into your browser:</p>
+            <p style="background-color: #f5f5f5; padding: 10px; border-radius: 5px; word-break: break-all;">${verificationUrl}</p>
+            <p>This link expires in 7 days.</p>
+            <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;" />
+            <p><strong>Merchant Details:</strong></p>
+            <ul>
+              <li>Business Name: ${merchant.businessName}</li>
+              <li>Subscription Price: ${merchant.currency?.symbol ?? ""}${merchant.settings?.subscriptionPrice ?? "N/A"} ${merchant.currency?.code ?? ""}</li>
+            </ul>
           `;
 
+          console.log('[MERCHANT EMAIL] Attempting to send verification email to:', ownerEmail);
           await sendMail({ to: ownerEmail, subject, html });
+          emailSent = true;
+          console.log('[MERCHANT EMAIL] Verification email sent successfully!');
 
-          // Log email into email_logs table
+          // Log successful email
           await prisma.emailLog.create({
             data: {
               merchantId: merchant.id,
@@ -252,32 +277,82 @@ export async function POST(req: NextRequest) {
               sentAt: new Date(),
             },
           });
+
+          console.log(`[MERCHANT EMAIL] Email log created for: ${ownerEmail}`);
+        } else {
+          // Owner's email is already verified, send welcome email only
+          console.log('[MERCHANT EMAIL] Owner email already verified, sending welcome email...');
+          const subject = `Your merchant account "${merchant.businessName}" was created`;
+          const html = `
+            <h1>New Merchant Account</h1>
+            <p>Hi ${merchant.owner.firstName || ""},</p>
+            <p>A merchant account <strong>${merchant.businessName}</strong> has been created and associated with your user account.</p>
+            <p>You can sign in to manage the merchant here: <a href="${process.env.NEXT_PUBLIC_BASE_URL ?? process.env.APP_URL ?? ""}/dashboard">Open Dashboard</a></p>
+            <p><strong>Merchant Details:</strong></p>
+            <ul>
+              <li>Business Name: ${merchant.businessName}</li>
+              <li>Subscription Price: ${merchant.currency?.symbol ?? ""}${merchant.settings?.subscriptionPrice ?? "N/A"} ${merchant.currency?.code ?? ""}</li>
+            </ul>
+          `;
+
+          console.log('[MERCHANT EMAIL] Attempting to send welcome email to:', ownerEmail);
+          await sendMail({ to: ownerEmail, subject, html });
+          emailSent = true;
+          console.log('[MERCHANT EMAIL] Welcome email sent successfully!');
+
+          // Log email
+          await prisma.emailLog.create({
+            data: {
+              merchantId: merchant.id,
+              toEmail: ownerEmail,
+              fromEmail: process.env.SMTP_USER || process.env.SMTP_FROM || "",
+              subject,
+              status: "SENT",
+              sentAt: new Date(),
+            },
+          });
+
+          console.log(`[MERCHANT EMAIL] Email log created for: ${ownerEmail}`);
         }
-      } catch (err) {
-        console.error("Failed to send merchant welcome email:", err);
-        try {
-          if (merchant?.owner?.email) {
-            await prisma.emailLog.create({
-              data: {
-                merchantId: merchant.id,
-                toEmail: merchant.owner.email,
-                fromEmail: process.env.SMTP_USER || process.env.SMTP_FROM || "",
-                subject: `Failed to send: Merchant created: ${merchant.businessName}`,
-                status: "FAILED",
-                sentAt: new Date(),
-              },
-            });
-          }
-        } catch (e) {
-          console.error("Failed to log failed email attempt:", e);
-        }
+      } else {
+        console.log('[MERCHANT EMAIL] No owner email found, skipping email send');
       }
-    })();
+    } catch (err) {
+      console.error("[MERCHANT EMAIL] Failed to send merchant email:", err);
+      console.error("[MERCHANT EMAIL] Error details:", JSON.stringify(err, null, 2));
+      emailError = err;
+      
+      // Log failed email attempt
+      try {
+        if (merchant?.owner?.email) {
+          await prisma.emailLog.create({
+            data: {
+              merchantId: merchant.id,
+              toEmail: merchant.owner.email,
+              fromEmail: process.env.SMTP_USER || process.env.SMTP_FROM || "",
+              subject: `Failed to send: Merchant created: ${merchant.businessName}`,
+              status: "FAILED",
+              sentAt: new Date(),
+            },
+          });
+        }
+      } catch (e) {
+        console.error("Failed to log failed email attempt:", e);
+      }
+    }
+
+    let responseMessage = "Merchant created successfully";
+    if (emailSent) {
+      responseMessage += ". A verification/welcome email has been sent to the owner.";
+    } else if (emailError) {
+      responseMessage += ". However, the verification email could not be sent. Please use the resend verification option.";
+    }
 
     return NextResponse.json(
       {
-        message: "Merchant created successfully",
+        message: responseMessage,
         merchant,
+        emailSent,
       },
       { status: 201 }
     );
