@@ -409,13 +409,18 @@ export function getAccessibleRoutes(userRole: UserRole): string[] {
  * Middleware function to check route access
  */
 export function checkRouteAccess(userRole: UserRole, pathname: string): boolean {
+  // Admin users have full access (including all /admin/* routes)
+  if (userRole === 'ADMIN') {
+    return true;
+  }
+
   const accessibleRoutes = getAccessibleRoutes(userRole);
-  
+
   // Check for exact match first
   if (accessibleRoutes.includes(pathname)) {
     return true;
   }
-  
+
   // Check for partial matches (e.g., /orders/123 matches /orders)
   return accessibleRoutes.some(route => {
     if (route.endsWith('/*')) {

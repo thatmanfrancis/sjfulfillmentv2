@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 
 interface Shipment {
@@ -42,6 +44,8 @@ interface ShipmentResponse {
 }
 
 export default function ShipmentsPage() {
+  const router = useRouter();
+  const { user } = useAuth();
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +53,16 @@ export default function ShipmentsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [showCreate, setShowCreate] = useState(false);
+  const [createOrderId, setCreateOrderId] = useState("");
+  const [createTracking, setCreateTracking] = useState("");
+  const [createCarrier, setCreateCarrier] = useState("");
+  const [createServiceLevel, setCreateServiceLevel] = useState("");
+  const [createShippingCost, setCreateShippingCost] = useState("");
+  const [createEstimatedDelivery, setCreateEstimatedDelivery] = useState("");
+  const [createSignatureRequired, setCreateSignatureRequired] = useState(false);
+  const [createWeight, setCreateWeight] = useState("");
+  const [createDimensions, setCreateDimensions] = useState("");
 
   useEffect(() => {
     fetchShipments();
@@ -149,9 +163,15 @@ export default function ShipmentsPage() {
           <button className="bg-gray-700 text-white px-4 py-2 rounded-lg font-medium hover:bg-gray-600 transition-colors">
             Export
           </button>
-          <button className="bg-[#f08c17] text-black px-4 py-2 rounded-lg font-medium hover:bg-orange-500 transition-colors">
-            Create Shipment
-          </button>
+          {/* Only non-merchant roles should see create shipment */}
+          {user?.role !== "MERCHANT" && user?.role !== "MERCHANT_STAFF" && (
+            <button
+              onClick={() => setShowCreate(true)}
+              className="bg-[#f08c17] text-black px-4 py-2 rounded-lg font-medium hover:bg-orange-500 transition-colors"
+            >
+              Create Shipment
+            </button>
+          )}
         </div>
       </div>
 
@@ -272,7 +292,13 @@ export default function ShipmentsPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
-                        <button className="text-[#f08c17] hover:text-orange-500 transition-colors">
+                        <button
+                          onClick={() => {
+                            if (shipment.trackingNumber) router.push(`/shipments/track/${shipment.trackingNumber}`);
+                            else router.push(`/orders/${shipment.order.orderNumber}`);
+                          }}
+                          className="text-[#f08c17] hover:text-orange-500 transition-colors"
+                        >
                           Track
                         </button>
                         <button className="text-blue-400 hover:text-blue-300 transition-colors">
@@ -288,8 +314,95 @@ export default function ShipmentsPage() {
         </div>
       </div>
 
+      {/* Create Shipment Modal (simple inline form) */}
+      {showCreate && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="bg-black border border-gray-700 rounded-lg p-6 w-full max-w-lg">
+            <h2 className="text-lg font-bold text-white mb-4">Create Shipment</h2>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                try {
+                  const body: any = {
+                    orderId: createOrderId,
+                    trackingNumber: createTracking || undefined,
+                    carrier: createCarrier || undefined,
+                    serviceLevel: createServiceLevel || undefined,
+                    shippingCost: createShippingCost ? parseFloat(createShippingCost) : undefined,
+                    estimatedDeliveryDate: createEstimatedDelivery ? new Date(createEstimatedDelivery).toISOString() : undefined,
+                    signatureRequired: createSignatureRequired,
+                    weight: createWeight ? parseFloat(createWeight) : undefined,
+                    dimensions: createDimensions ? JSON.parse(createDimensions) : undefined,
+                  };
+
+                  const res = await api.post(`/api/shipments`, body);
+                  if (!res.ok) throw new Error(res.error || "Failed to create shipment");
+                  setShowCreate(false);
+                  setCreateOrderId("");
+                  setCreateTracking("");
+                  setCreateCarrier("");
+                  setCreateServiceLevel("");
+                  setCreateShippingCost("");
+                  setCreateEstimatedDelivery("");
+                  setCreateSignatureRequired(false);
+                  setCreateWeight("");
+                  setCreateDimensions("");
+                  fetchShipments();
+                } catch (err) {
+                  alert(err instanceof Error ? err.message : "Failed to create shipment");
+                }
+              }}
+            >
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm text-gray-400">Order ID</label>
+                  <input value={createOrderId} onChange={(e) => setCreateOrderId(e.target.value)} className="w-full px-3 py-2 bg-black border border-gray-600 rounded mt-1 text-white" />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-400">Tracking Number</label>
+                  <input value={createTracking} onChange={(e) => setCreateTracking(e.target.value)} className="w-full px-3 py-2 bg-black border border-gray-600 rounded mt-1 text-white" />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-400">Carrier</label>
+                  <input value={createCarrier} onChange={(e) => setCreateCarrier(e.target.value)} className="w-full px-3 py-2 bg-black border border-gray-600 rounded mt-1 text-white" />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-400">Service Level</label>
+                  <input value={createServiceLevel} onChange={(e) => setCreateServiceLevel(e.target.value)} className="w-full px-3 py-2 bg-black border border-gray-600 rounded mt-1 text-white" />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-400">Shipping Cost</label>
+                  <input value={createShippingCost} onChange={(e) => setCreateShippingCost(e.target.value)} className="w-full px-3 py-2 bg-black border border-gray-600 rounded mt-1 text-white" />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-400">Estimated Delivery Date</label>
+                  <input type="date" value={createEstimatedDelivery} onChange={(e) => setCreateEstimatedDelivery(e.target.value)} className="w-full px-3 py-2 bg-black border border-gray-600 rounded mt-1 text-white" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input id="sig" type="checkbox" checked={createSignatureRequired} onChange={(e) => setCreateSignatureRequired(e.target.checked)} />
+                  <label htmlFor="sig" className="text-sm text-gray-400">Signature Required</label>
+                </div>
+                <div>
+                  <label className="text-sm text-gray-400">Weight (kg)</label>
+                  <input value={createWeight} onChange={(e) => setCreateWeight(e.target.value)} className="w-full px-3 py-2 bg-black border border-gray-600 rounded mt-1 text-white" />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-400">Dimensions (JSON: {`{\"length\":1,\"width\":1,\"height\":1}`})</label>
+                  <input value={createDimensions} onChange={(e) => setCreateDimensions(e.target.value)} placeholder='{"length":10,"width":5,"height":2}' className="w-full px-3 py-2 bg-black border border-gray-600 rounded mt-1 text-white" />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 rounded bg-gray-700">Cancel</button>
+                  <button type="submit" className="px-4 py-2 rounded bg-[#f08c17]">Create</button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Pagination */}
       {totalPages > 1 && (
+
         <div className="flex items-center justify-between">
           <div className="text-gray-400">
             Page {currentPage} of {totalPages}

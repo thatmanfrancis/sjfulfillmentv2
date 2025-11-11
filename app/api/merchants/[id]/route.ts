@@ -229,19 +229,63 @@ export async function DELETE(
       );
     }
 
-    await prisma.merchant.update({
-      where: { id: id },
-      data: {
-        deletedAt: new Date(),
-        status: "CANCELLED",
+    console.log(`[MERCHANT DELETE] Starting deletion process for merchant: ${id}`);
+
+    // Get count of products before archiving
+    const productCount = await prisma.product.count({
+      where: {
+        merchantId: id,
+        deletedAt: null,
       },
     });
 
+    console.log(`[MERCHANT DELETE] Found ${productCount} active products to archive`);
+
+    // Use a transaction to ensure both operations succeed or fail together
+    const result = await prisma.$transaction(async (tx) => {
+      // Archive all products owned by this merchant
+      const archivedProducts = await tx.product.updateMany({
+        where: {
+          merchantId: id,
+          deletedAt: null, // Only archive products that haven't been deleted
+        },
+        data: {
+          status: "ARCHIVED",
+          deletedAt: new Date(), // Soft delete the products as well
+        },
+      });
+
+      console.log(`[MERCHANT DELETE] Archived ${archivedProducts.count} products`);
+
+      // Soft delete the merchant
+      const deletedMerchant = await tx.merchant.update({
+        where: { id: id },
+        data: {
+          deletedAt: new Date(),
+          status: "CANCELLED",
+        },
+        include: {
+          owner: {
+            select: {
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      });
+
+      return { merchant: deletedMerchant, productsArchived: archivedProducts.count };
+    });
+
+    console.log(`[MERCHANT DELETE] Successfully deleted merchant and archived ${result.productsArchived} products`);
+
     return NextResponse.json({
-      message: "Merchant deleted successfully",
+      message: `Merchant deleted successfully. ${result.productsArchived} product(s) have been archived for data retention.`,
+      productsArchived: result.productsArchived,
     });
   } catch (error) {
-    console.error("Delete merchant error:", error);
+    console.error("[MERCHANT DELETE] Delete merchant error:", error);
     return NextResponse.json(
       { error: "Failed to delete merchant" },
       { status: 500 }

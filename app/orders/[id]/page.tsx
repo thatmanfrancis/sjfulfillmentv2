@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
+import ReassignModal from "@/components/ReassignModal";
 
 interface Customer {
   id: string;
@@ -82,6 +83,7 @@ export default function OrderDetailPage() {
   const [error, setError] = useState("");
   const [editing, setEditing] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [showReassignModal, setShowReassignModal] = useState(false);
   
   const [editData, setEditData] = useState({
     status: "",
@@ -211,12 +213,15 @@ export default function OrderDetailPage() {
         </div>
         <div className="flex gap-2">
           {isAdmin && !editing && (
-            <button
-              onClick={() => setEditing(true)}
-              className="bg-[#f08c17] text-black px-4 py-2 rounded-lg font-medium hover:bg-orange-500"
-            >
-              Edit Order
-            </button>
+            <>
+              <button
+                onClick={() => setEditing(true)}
+                className="bg-[#f08c17] text-black px-4 py-2 rounded-lg font-medium hover:bg-orange-500"
+              >
+                Edit Order
+              </button>
+              <button onClick={() => setShowReassignModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700">Reassign</button>
+            </>
           )}
           {isAdmin && editing && (
             <>
@@ -540,6 +545,7 @@ export default function OrderDetailPage() {
           </div>
         </div>
       </div>
+      <ReassignModal isOpen={showReassignModal} onClose={() => setShowReassignModal(false)} orderId={order.id} state={order.shippingAddress?.state} onReassigned={() => fetchOrder()} />
     </div>
   );
 }

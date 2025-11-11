@@ -87,6 +87,12 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const { isAdmin, userRole } = await getUserMerchantContext(auth.userId as string);
+
+    // Only admins or warehouse/logistics personnel can create shipments
+    const allowed = isAdmin || userRole === "WAREHOUSE_MANAGER" || userRole === "LOGISTICS_PERSONNEL";
+    if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
     const body = await req.json();
     const {
       orderId,

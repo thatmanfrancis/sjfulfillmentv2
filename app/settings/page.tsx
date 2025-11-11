@@ -76,6 +76,10 @@ export default function SettingsPage() {
     allowedIpAddresses: [],
   });
 
+  const [apiKeys, setApiKeys] = useState<any[]>([]);
+  const [creatingKey, setCreatingKey] = useState(false);
+  const [newKeyName, setNewKeyName] = useState("");
+
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
     newPassword: "",
@@ -91,6 +95,7 @@ export default function SettingsPage() {
     { id: "notifications", name: "Notifications", icon: "🔔" },
     { id: "security", name: "Security", icon: "🔒" },
     { id: "billing", name: "Billing", icon: "💳" },
+    { id: "api-keys", name: "API Keys", icon: "🔑" },
   ];
 
   useEffect(() => {
@@ -133,6 +138,15 @@ export default function SettingsPage() {
             website: merchant.website || "",
             description: merchant.description || "",
           });
+          // load api keys for this merchant
+          try {
+            const keysRes = await api.get(`/api/merchants/${merchant.id}/api-keys`);
+            if (keysRes.ok && keysRes.data?.apiKeys) {
+              setApiKeys(keysRes.data.apiKeys);
+            }
+          } catch (e) {
+            console.log("Could not load api keys", e);
+          }
         }
       } catch (error) {
         console.log("No merchant data available");
@@ -294,6 +308,56 @@ export default function SettingsPage() {
       setMessage("Failed to update notification preferences");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const createApiKey = async () => {
+    setCreatingKey(true);
+    try {
+      const merchantsRes = await api.get("/api/merchants");
+      if (!merchantsRes.ok || !merchantsRes.data?.merchants?.length) {
+        setMessage("No business found. Please contact support to set up your business.");
+        return;
+      }
+
+      const merchantId = merchantsRes.data.merchants[0].id;
+      const res = await api.post(`/api/merchants/${merchantId}/api-keys`, { keyName: newKeyName || "default" });
+      if (res.ok && res.data) {
+        // show the created key material to the user
+        const created = { id: res.data.id, keyName: newKeyName || "default", prefix: res.data.apiKey?.slice(0,8), createdAt: new Date().toISOString() };
+        setApiKeys(prev => [created, ...prev]);
+        setMessage("API key created — save the apiKey & secret now. This will not be shown again.");
+      } else {
+        throw new Error(res.error || "Failed to create key");
+      }
+    } catch (error: any) {
+      console.error("Create API key error:", error);
+      setMessage(error?.message || "Failed to create API key");
+    } finally {
+      setCreatingKey(false);
+      setNewKeyName("");
+    }
+  };
+
+  const revokeApiKey = async (keyId: string) => {
+    try {
+      const merchantsRes = await api.get("/api/merchants");
+      if (!merchantsRes.ok || !merchantsRes.data?.merchants?.length) {
+        setMessage("No business found.");
+        return;
+      }
+
+      const merchantId = merchantsRes.data.merchants[0].id;
+      const res = await api.patch(`/api/merchants/${merchantId}/api-keys/${keyId}`, { action: 'revoke' });
+      if (res.ok) {
+        setApiKeys(prev => prev.map(k => k.id === keyId ? { ...k, status: 'REVOKED' } : k));
+        setMessage("API key revoked");
+      } else {
+        throw new Error(res.error || "Failed to revoke key");
+      }
+    } catch (error: any) {
+      console.error("Revoke API key error:", error);
+      setMessage(error?.message || "Failed to revoke API key");
     }
   };
 
@@ -668,6 +732,56 @@ export default function SettingsPage() {
                     Billing History
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        );
+
+      case "api-keys":
+        // Only show API key management to merchants and admins. Merchant staff will only view.
+        if (!user) return null;
+        const canCreateKey = user.role === "ADMIN" || user.role === "MERCHANT";
+        const showKeys = user.role !== "LOGISTICS_PERSONNEL";
+
+        if (!showKeys) return (
+          <div className="p-6 text-gray-400">API keys are not available for your role.</div>
+        );
+
+        return (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-medium text-white mb-4">API Keys</h3>
+              <p className="text-gray-400 mb-4">Create and manage API keys for integrations. Only admins and merchant owners can create keys; merchant staff can view and copy.</p>
+
+              <div className="mb-4">
+                <input value={newKeyName} onChange={(e) => setNewKeyName(e.target.value)} placeholder="Key name" className="px-3 py-2 bg-black border border-gray-600 rounded-lg text-white mr-2" />
+                <button disabled={!canCreateKey || creatingKey} onClick={createApiKey} className={`bg-[#f08c17] text-black px-4 py-2 rounded-lg font-medium ${(!canCreateKey || creatingKey) ? 'opacity-50' : ''}`}>
+                  {creatingKey ? 'Creating...' : 'Create API Key'}
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {apiKeys.length === 0 && (
+                  <div className="text-gray-400">No API keys yet.</div>
+                )}
+
+                {apiKeys.map((k) => (
+                  <div key={k.id} className="p-3 bg-gray-800 rounded flex items-center justify-between">
+                    <div>
+                      <div className="text-white font-medium">{k.keyName || 'key'}</div>
+                      <div className="text-gray-400 text-sm">Prefix: {k.prefix} • Created: {new Date(k.createdAt).toLocaleString()}</div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <button className="border border-gray-600 text-gray-300 px-3 py-1 rounded" onClick={() => { navigator.clipboard?.writeText(k.prefix || ''); setMessage('Prefix copied') }}>Copy Prefix</button>
+                      {k.status !== 'REVOKED' && canCreateKey && (
+                        <button onClick={() => revokeApiKey(k.id)} className="bg-red-600 text-white px-3 py-1 rounded">Revoke</button>
+                      )}
+                      {k.status === 'REVOKED' && (
+                        <span className="text-sm text-gray-400">Revoked</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

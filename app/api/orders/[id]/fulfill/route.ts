@@ -20,6 +20,8 @@ export async function POST(
       auth.userId as string
     );
 
+    const userRole = (await getUserMerchantContext(auth.userId as string)).userRole;
+
     // Verify order access
     const order = await prisma.order.findUnique({
       where: { id: orderId },
@@ -51,6 +53,11 @@ export async function POST(
 
     switch (action) {
       case "pick": {
+        // Only admins or warehouse/logistics personnel may pick
+        if (!isAdmin && userRole !== "WAREHOUSE_MANAGER" && userRole !== "LOGISTICS_PERSONNEL") {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+
         // Update order status to PROCESSING and create picking tasks
         await prisma.$transaction(async (tx) => {
           // Update order status
@@ -101,6 +108,11 @@ export async function POST(
       }
 
       case "pack": {
+        // Only admins or warehouse/logistics personnel may pack
+        if (!isAdmin && userRole !== "WAREHOUSE_MANAGER" && userRole !== "LOGISTICS_PERSONNEL") {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+
         // Update order status to PACKED
         await prisma.$transaction(async (tx) => {
           await tx.order.update({
@@ -138,6 +150,11 @@ export async function POST(
       }
 
       case "ship": {
+        // Only admins or warehouse/logistics personnel may ship
+        if (!isAdmin && userRole !== "WAREHOUSE_MANAGER" && userRole !== "LOGISTICS_PERSONNEL") {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+
         const { trackingNumber, shippingCarrier, shippingCost } =
           await req.json();
 
@@ -180,6 +197,11 @@ export async function POST(
       }
 
       case "deliver": {
+        // Only admins or warehouse/logistics personnel may mark delivery
+        if (!isAdmin && userRole !== "WAREHOUSE_MANAGER" && userRole !== "LOGISTICS_PERSONNEL") {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+
         // Mark order as delivered
         await prisma.$transaction(async (tx) => {
           await tx.order.update({

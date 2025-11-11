@@ -21,6 +21,7 @@ const adminRoutes = [
   "/admin",
   "/admin/users",
   "/admin/commissions",
+  "/admin/logistics",
   "/admin/audit-logs",
   "/admin/settings",
 ];
@@ -40,6 +41,8 @@ const roleRoutes = {
     "/shipments",
     "/categories",
     "/commissions",
+    "/admin/commissions",
+    "/admin/logistics",
     "/currencies",
     "/users",
     "/staff",
@@ -76,6 +79,12 @@ const publicRoutes = [
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // Redirect common misspelling '/admin/commisions' -> '/admin/commissions'
+  if (pathname.startsWith("/admin/commisions")) {
+    const correct = new URL(pathname.replace("/admin/commisions", "/admin/commissions"), request.url);
+    return NextResponse.redirect(correct);
+  }
 
   // Skip middleware for static files and API routes (except auth)
   if (
@@ -125,6 +134,15 @@ export async function middleware(request: NextRequest) {
       throw new Error("Invalid token payload");
     }
 
+    // If the user is an ADMIN, allow access to all /admin routes immediately
+    if (payload.role === "ADMIN" && pathname.startsWith("/admin")) {
+      const response = NextResponse.next();
+      response.headers.set("x-user-id", payload.userId as string);
+      response.headers.set("x-user-role", payload.role as string);
+      response.headers.set("x-user-email", (payload as any).email as string);
+      return response;
+    }
+
     // Check role-based access
     const userRole = payload.role as keyof typeof roleRoutes;
     const allowedRoutes = roleRoutes[userRole];
@@ -142,6 +160,13 @@ export async function middleware(request: NextRequest) {
     );
 
     if (!hasAccess) {
+      // Log diagnostic info for debugging access issues
+      console.warn("Middleware access denied", {
+        pathname,
+        userRole,
+        allowedRoutes,
+      });
+
       // User doesn't have access to this route
       const unauthorizedUrl = new URL("/unauthorized", request.url);
       return NextResponse.redirect(unauthorizedUrl);

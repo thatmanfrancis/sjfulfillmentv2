@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-middleware";
+import { getUserMerchantContext } from "@/lib/merchant-context";
 
 export async function GET(
   req: NextRequest,
@@ -16,6 +17,9 @@ export async function GET(
 
   try {
     const { id } = await params;
+    const { isAdmin, merchantIds, userRole } = await getUserMerchantContext(
+      auth.userId as string
+    );
     const shipment = await prisma.shipment.findUnique({
       where: { id: id },
       include: {
@@ -23,6 +27,7 @@ export async function GET(
           include: {
             customer: true,
             shippingAddress: true,
+            warehouse: true,
           },
         },
         trackingEvents: {
@@ -36,6 +41,25 @@ export async function GET(
         { error: "Shipment not found" },
         { status: 404 }
       );
+    }
+
+    // Authorization: admins always allowed. Merchants that own the order allowed.
+    if (!isAdmin) {
+      // Warehouse managers can access shipments for warehouses they manage only
+      if (userRole === "WAREHOUSE_MANAGER") {
+  const managed = await prisma.warehouse.findMany({ where: { managerUserId: auth.userId as string } });
+        const managedIds = managed.map((w) => w.id);
+        const orderWarehouseId = shipment.order?.warehouse?.id || shipment.order?.warehouseId;
+        if (!orderWarehouseId || !managedIds.includes(orderWarehouseId)) {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+      } else {
+        // regular merchant staff: verify order.merchantId
+        const orderMerchantId = shipment.order?.merchantId;
+        if (!orderMerchantId || !(merchantIds || []).includes(orderMerchantId)) {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+      }
     }
 
     return NextResponse.json({ shipment });
@@ -62,9 +86,16 @@ export async function PUT(
 
   try {
     const { id } = await params;
+    const { isAdmin, userRole, merchantIds } = await getUserMerchantContext(
+      auth.userId as string
+    );
     const body = await req.json();
     const { trackingNumber, carrier, serviceLevel, estimatedDeliveryDate } =
       body;
+
+    // Only admins or warehouse/logistics personnel can update shipments
+    const allowed = isAdmin || userRole === "WAREHOUSE_MANAGER" || userRole === "LOGISTICS_PERSONNEL";
+    if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const shipment = await prisma.shipment.update({
       where: { id: id },
@@ -102,6 +133,13 @@ export async function DELETE(
 
   try {
     const { id } = await params;
+    const { isAdmin, userRole } = await getUserMerchantContext(
+      auth.userId as string
+    );
+
+    // Only admins or warehouse managers may delete shipments
+    const allowed = isAdmin || userRole === "WAREHOUSE_MANAGER" || userRole === "LOGISTICS_PERSONNEL";
+    if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     await prisma.shipment.delete({
       where: { id: id },
     });

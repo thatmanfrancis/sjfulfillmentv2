@@ -74,6 +74,78 @@ export async function POST(
       },
     });
 
+    // If approved, attempt to auto-assign a delivery attempt similar to order creation logic
+    if (action === "approve") {
+      try {
+        // load shipping address and state
+        const orderFull = await prisma.order.findUnique({ where: { id }, select: { shippingAddressId: true, merchantId: true } });
+        const shippingAddress = orderFull?.shippingAddressId ? await prisma.address.findUnique({ where: { id: orderFull!.shippingAddressId } }) : null;
+        const state = shippingAddress?.state?.trim();
+
+        if (state) {
+          await prisma.$transaction(async (tx) => {
+            const merchantIdVal = orderFull!.merchantId;
+
+            const queryCandidates = async (merchantScoped: boolean) => {
+              if (merchantScoped) {
+                return await tx.$queryRaw`
+                  SELECT lp.user_id as user_id, lp.capacity as capacity
+                  FROM logistics_profiles lp
+                  JOIN merchant_staff ms ON ms.user_id = lp.user_id
+                  WHERE lp.active = true
+                    AND ms.merchant_id = ${merchantIdVal}
+                    AND lp.coverage_states @> ${JSON.stringify([state])}::jsonb
+                `;
+              }
+
+              return await tx.$queryRaw`
+                SELECT lp.user_id as user_id, lp.capacity as capacity
+                FROM logistics_profiles lp
+                WHERE lp.active = true
+                  AND lp.coverage_states @> ${JSON.stringify([state])}::jsonb
+              `;
+            };
+
+            let rawCandidates: Array<{ user_id: string; capacity: number }> = await queryCandidates(true) as any;
+            if (!rawCandidates || rawCandidates.length === 0) {
+              rawCandidates = await queryCandidates(false) as any;
+            }
+
+            for (const c of rawCandidates) {
+              const candidateId = (c as any).user_id;
+              const capacity = (c as any).capacity || 4;
+
+              await tx.$executeRaw`SELECT 1 FROM logistics_profiles WHERE user_id = ${candidateId} FOR UPDATE`;
+
+              const activeCount = await tx.deliveryAttempt.count({
+                where: {
+                  handlerId: candidateId,
+                  NOT: { status: "DELIVERED" },
+                },
+              });
+
+              if (activeCount < capacity) {
+                await tx.deliveryAttempt.create({
+                  data: {
+                    orderId: id,
+                    attemptNumber: 1,
+                    status: "ASSIGNED",
+                    comments: "Assigned on admin approval",
+                    handlerId: candidateId,
+                  },
+                });
+
+                await tx.order.update({ where: { id }, data: { assignedTo: candidateId } });
+                break;
+              }
+            }
+          });
+        }
+      } catch (assignError) {
+        console.error("Auto-assign after approve error:", assignError);
+      }
+    }
+
     return NextResponse.json({
       message: `Order ${action}d successfully`,
       order: updatedOrder,

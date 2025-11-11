@@ -226,31 +226,22 @@ export default function ProductsPage() {
           </h1>
           <p className="text-gray-400">Manage your product catalog</p>
         </div>
-        <div className="flex gap-2">
-          {user?.role === "MERCHANT" ? (
+        {user?.role !== "MERCHANT" && (
+          <div className="flex gap-2">
             <button 
-              onClick={() => setShowLocationModal(true)}
+              onClick={() => setShowBulkUploadModal(true)}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
             >
-              View Locations
+              📤 Bulk Upload
             </button>
-          ) : (
-            <>
-              <button 
-                onClick={() => setShowBulkUploadModal(true)}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
-              >
-                📤 Bulk Upload
-              </button>
-              <button 
-                onClick={() => setShowCreateModal(true)}
-                className="bg-[#f08c17] text-black px-4 py-2 rounded-lg font-medium hover:bg-orange-500 transition-colors"
-              >
-                Add Product
-              </button>
-            </>
-          )}
-        </div>
+            <button 
+              onClick={() => setShowCreateModal(true)}
+              className="bg-[#f08c17] text-black px-4 py-2 rounded-lg font-medium hover:bg-orange-500 transition-colors"
+            >
+              Add Product
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Filters */}
@@ -380,21 +371,25 @@ export default function ProductsPage() {
                         >
                           View
                         </button>
-                        <button 
-                          onClick={() => handleViewProduct(product.id)}
-                          className="text-[#f08c17] hover:text-orange-500 transition-colors"
-                        >
-                          Edit
-                        </button>
-                        <button 
-                          onClick={() => {
-                            setProductToDelete(product);
-                            setShowDeleteModal(true);
-                          }}
-                          className="text-red-400 hover:text-red-300 transition-colors"
-                        >
-                          Delete
-                        </button>
+                        {user?.role !== "MERCHANT" && (
+                          <>
+                            <button 
+                              onClick={() => handleViewProduct(product.id)}
+                              className="text-[#f08c17] hover:text-orange-500 transition-colors"
+                            >
+                              Edit
+                            </button>
+                            <button 
+                              onClick={() => {
+                                setProductToDelete(product);
+                                setShowDeleteModal(true);
+                              }}
+                              className="text-red-400 hover:text-red-300 transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>

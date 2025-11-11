@@ -31,6 +31,14 @@ export default function MerchantDetail({ merchantId }: Props) {
     try {
       const res = await api.delete(`/api/merchants/${merchantId}`);
       if (res.ok) {
+        // Show success message with product count
+        const message = res.data?.message || 'Merchant deleted successfully';
+        const productsArchived = res.data?.productsArchived || 0;
+        
+        if (productsArchived > 0) {
+          alert(`${message}\n\n${productsArchived} product(s) have been archived and retained for data harvesting.`);
+        }
+        
         // redirect back to merchants list
         router.push('/merchants');
       } else {
@@ -85,7 +93,13 @@ export default function MerchantDetail({ merchantId }: Props) {
         </div>
       </div>
 
-      <ConfirmModal open={confirmOpen} title="Delete merchant" message={`Are you sure you want to delete ${merchant.businessName}? This cannot be undone.`} onCancel={()=>setConfirmOpen(false)} onConfirm={async ()=>{ await handleDelete(); }} />
+      <ConfirmModal 
+        open={confirmOpen} 
+        title="Delete Merchant" 
+        message={`Are you sure you want to delete ${merchant.businessName}?\n\nAll products owned by this merchant will be archived (not permanently deleted) to preserve data for harvesting and analytics.\n\nThe merchant account will be marked as cancelled and can be restored by an admin if needed.`} 
+        onCancel={()=>setConfirmOpen(false)} 
+        onConfirm={async ()=>{ await handleDelete(); }} 
+      />
       <EditMerchantModal open={editOpen} merchantId={merchantId} onClose={()=>setEditOpen(false)} onSaved={(m)=>{ setMerchant(m); }} />
     </div>
   );

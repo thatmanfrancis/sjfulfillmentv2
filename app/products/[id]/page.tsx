@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 
 interface ProductDetail {
     id: string;
@@ -41,6 +42,7 @@ interface ProductDetail {
 
 export default function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
+    const { user } = useAuth();
     const [product, setProduct] = useState<ProductDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -139,12 +141,14 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                         {product.status}
                     </span>
                 </div>
-                <button
-                    onClick={() => router.push(`/products/${product.id}/edit`)}
-                    className="bg-[#f08c17] text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition-colors"
-                >
-                    Edit Product
-                </button>
+                {user?.role === "ADMIN" && (
+                    <button
+                        onClick={() => router.push(`/products/${product.id}/edit`)}
+                        className="bg-[#f08c17] text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition-colors"
+                    >
+                        Edit Product
+                    </button>
+                )}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

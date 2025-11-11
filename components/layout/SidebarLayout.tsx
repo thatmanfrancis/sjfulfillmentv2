@@ -232,6 +232,11 @@ const getNavigationItems = (role: string): NavItem[] => {
                     icon: <StaffIcon />,
                 },
                 {
+                    name: "Logistics",
+                    href: "/admin/logistics",
+                    icon: <ShipmentsIcon />,
+                },
+                {
                     name: "Call Logs",
                     href: "/call-logs",
                     icon: <CallLogsIcon />,
@@ -397,18 +402,8 @@ const getNavigationItems = (role: string): NavItem[] => {
             return [
                 ...baseItems,
                 {
-                    name: "Deliveries",
-                    href: "/deliveries",
-                    icon: <DeliveriesIcon />,
-                },
-                {
                     name: "My Deliveries",
                     href: "/delivery-attempts/assigned-to-me",
-                    icon: <ShipmentsIcon />,
-                },
-                {
-                    name: "All Deliveries",
-                    href: "/delivery-attempts",
                     icon: <ShipmentsIcon />,
                 },
                 {

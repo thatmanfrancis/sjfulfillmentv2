@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import AlertModal from "./AlertModal";
 
 interface Props {
   open: boolean;
@@ -12,6 +13,18 @@ interface Props {
 export default function CreateMerchantModal({ open, onClose, onCreated }: Props) {
   const [loading, setLoading] = useState(false);
   const [currencies, setCurrencies] = useState<any[]>([]);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [createdMerchant, setCreatedMerchant] = useState<any>(null);
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    message: string;
+    type: "error" | "warning";
+  }>({
+    isOpen: false,
+    message: "",
+    type: "error",
+  });
   
   // Owner (User) Details
   const [ownerFirstName, setOwnerFirstName] = useState("");
@@ -63,13 +76,21 @@ export default function CreateMerchantModal({ open, onClose, onCreated }: Props)
     try {
       // Validation
       if (!ownerFirstName || !ownerLastName || !ownerEmail) {
-        alert("Owner first name, last name, and email are required");
+        setAlertModal({
+          isOpen: true,
+          message: "Owner first name, last name, and email are required",
+          type: "warning",
+        });
         setLoading(false);
         return;
       }
 
       if (!businessName || !businessEmail || !currencyId) {
-        alert("Business name, email, and currency are required");
+        setAlertModal({
+          isOpen: true,
+          message: "Business name, email, and currency are required",
+          type: "warning",
+        });
         setLoading(false);
         return;
       }
@@ -96,20 +117,120 @@ export default function CreateMerchantModal({ open, onClose, onCreated }: Props)
 
       const res = await api.post("/api/merchants", payload);
       if (res.ok && res.data) {
-        alert(res.data.message || "Merchant created successfully! Verification email sent to owner.");
+        setSuccessMessage(res.data.message || "Merchant created successfully! Verification email sent to owner.");
+        setCreatedMerchant(res.data.merchant);
+        setShowSuccessModal(true);
         onCreated?.(res.data.merchant);
-        onClose();
         resetForm();
       } else {
-        alert(res.error || "Failed to create merchant");
+        setAlertModal({
+          isOpen: true,
+          message: res.error || "Failed to create merchant",
+          type: "error",
+        });
       }
     } catch (err) {
       console.error(err);
-      alert("Failed to create merchant");
+      setAlertModal({
+        isOpen: true,
+        message: "Failed to create merchant",
+        type: "error",
+      });
     } finally {
       setLoading(false);
     }
   };
+
+  const handleSuccessClose = () => {
+    setShowSuccessModal(false);
+    setSuccessMessage("");
+    setCreatedMerchant(null);
+    onClose();
+  };
+
+  if (showSuccessModal) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="w-full max-w-2xl bg-black border border-green-600 rounded-lg shadow-2xl">
+          <div className="p-6 border-b border-green-600 bg-green-900/20">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-green-600 flex items-center justify-center">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-2xl font-semibold text-white">Merchant Created Successfully!</h2>
+                <p className="text-sm text-gray-400 mt-1">The merchant account has been set up</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-4">
+            <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4">
+              <p className="text-gray-300">{successMessage}</p>
+            </div>
+
+            {createdMerchant && (
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-white">Account Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  <div className="bg-gray-900/30 border border-gray-700 rounded p-3">
+                    <p className="text-gray-400 text-xs mb-1">Business Name</p>
+                    <p className="text-white font-medium">{createdMerchant.businessName}</p>
+                  </div>
+                  <div className="bg-gray-900/30 border border-gray-700 rounded p-3">
+                    <p className="text-gray-400 text-xs mb-1">Business Email</p>
+                    <p className="text-white font-medium">{createdMerchant.businessEmail}</p>
+                  </div>
+                  <div className="bg-gray-900/30 border border-gray-700 rounded p-3">
+                    <p className="text-gray-400 text-xs mb-1">Owner Name</p>
+                    <p className="text-white font-medium">
+                      {createdMerchant.owner?.firstName} {createdMerchant.owner?.lastName}
+                    </p>
+                  </div>
+                  <div className="bg-gray-900/30 border border-gray-700 rounded p-3">
+                    <p className="text-gray-400 text-xs mb-1">Owner Email</p>
+                    <p className="text-white font-medium">{createdMerchant.owner?.email}</p>
+                  </div>
+                  <div className="bg-gray-900/30 border border-gray-700 rounded p-3">
+                    <p className="text-gray-400 text-xs mb-1">Currency</p>
+                    <p className="text-white font-medium">
+                      {createdMerchant.currency?.code} ({createdMerchant.currency?.symbol})
+                    </p>
+                  </div>
+                  <div className="bg-gray-900/30 border border-gray-700 rounded p-3">
+                    <p className="text-gray-400 text-xs mb-1">Status</p>
+                    <p className="text-green-400 font-medium">{createdMerchant.status}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-blue-900/20 border border-blue-700 rounded p-4">
+              <p className="text-sm text-blue-300">
+                <strong>📧 Next Steps:</strong>
+              </p>
+              <ul className="text-sm text-blue-300 mt-2 ml-4 list-disc space-y-1">
+                <li>Owner will receive a verification email shortly</li>
+                <li>They can login using OTP (One-Time Password)</li>
+                <li>Password can be set later in account settings</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="p-6 border-t border-gray-700 flex justify-end">
+            <button
+              className="px-6 py-2 rounded bg-[#f08c17] text-black font-medium hover:bg-[#d67a14]"
+              onClick={handleSuccessClose}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!open) return null;
 
@@ -331,6 +452,13 @@ export default function CreateMerchantModal({ open, onClose, onCreated }: Props)
           </button>
         </div>
       </div>
+      
+      <AlertModal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal({ ...alertModal, isOpen: false })}
+        message={alertModal.message}
+        type={alertModal.type}
+      />
     </div>
   );
 }

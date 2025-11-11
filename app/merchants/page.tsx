@@ -6,6 +6,7 @@ import api from "@/lib/api";
 import CreateMerchantModal from "@/components/CreateMerchantModal";
 import ConfirmModal from "@/components/ConfirmModal";
 import EditMerchantModal from "@/components/EditMerchantModal";
+import AlertModal from "@/components/AlertModal";
 
 interface Merchant {
   id: string;
@@ -59,6 +60,16 @@ export default function MerchantsPage() {
   const router = useRouter();
   const [confirmMerchantId, setConfirmMerchantId] = useState<string | null>(null);
   const [editingMerchantId, setEditingMerchantId] = useState<string | null>(null);
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title?: string;
+    message: string;
+    type: "success" | "error" | "warning" | "info";
+  }>({
+    isOpen: false,
+    message: "",
+    type: "info",
+  });
 
   const filteredMerchants = merchants.filter(merchant => {
     const matchesSearch = merchant.businessName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -82,15 +93,41 @@ export default function MerchantsPage() {
     try {
       const res = await api.delete(`/api/merchants/${id}`);
       if (res.ok) {
+        // Show success message with product count
+        const message = res.data?.message || 'Merchant deleted successfully';
+        const productsArchived = res.data?.productsArchived || 0;
+        
+        let displayMessage = message;
+        if (productsArchived > 0) {
+          displayMessage = `${message}\n\n${productsArchived} product(s) have been archived and retained for data harvesting.`;
+        }
+        
+        setAlertModal({
+          isOpen: true,
+          title: "Merchant Deleted",
+          message: displayMessage,
+          type: "success",
+        });
+        
         // refresh list
         fetchMerchants();
         setConfirmMerchantId(null);
       } else {
-        alert(res.error || 'Failed to delete merchant');
+        setAlertModal({
+          isOpen: true,
+          title: "Delete Failed",
+          message: res.error || 'Failed to delete merchant',
+          type: "error",
+        });
       }
     } catch (err) {
       console.error(err);
-      alert('Failed to delete merchant');
+      setAlertModal({
+        isOpen: true,
+        title: "Delete Failed",
+        message: 'Failed to delete merchant',
+        type: "error",
+      });
     }
   };
 
@@ -280,8 +317,22 @@ export default function MerchantsPage() {
         </div>
       </div>
       {/* Confirmation and edit modals */}
-      <ConfirmModal open={!!confirmMerchantId} title="Delete merchant" message={confirmMerchantId ? `Are you sure you want to delete this merchant?` : undefined} onCancel={()=>setConfirmMerchantId(null)} onConfirm={()=> confirmMerchantId && deleteMerchant(confirmMerchantId)} />
+      <ConfirmModal 
+        open={!!confirmMerchantId} 
+        title="Delete Merchant" 
+        message={confirmMerchantId ? `Are you sure you want to delete this merchant?\n\nNote: All products owned by this merchant will be archived (not permanently deleted) to preserve data for harvesting and analytics.` : undefined} 
+        onCancel={()=>setConfirmMerchantId(null)} 
+        onConfirm={()=> confirmMerchantId && deleteMerchant(confirmMerchantId)} 
+      />
       <EditMerchantModal open={!!editingMerchantId} merchantId={editingMerchantId} onClose={()=>setEditingMerchantId(null)} onSaved={(m)=>{ fetchMerchants(); setEditingMerchantId(null); }} />
+      
+      <AlertModal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal({ ...alertModal, isOpen: false })}
+        title={alertModal.title}
+        message={alertModal.message}
+        type={alertModal.type}
+      />
     </div>
   );
 }

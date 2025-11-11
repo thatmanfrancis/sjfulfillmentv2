@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Modal from "./Modal";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 
 interface Customer {
   id: string;
@@ -38,6 +39,7 @@ interface CreateOrderModalProps {
 }
 
 export default function CreateOrderModal({ isOpen, onClose, onSuccess }: CreateOrderModalProps) {
+  const { user } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
   const [customerSearch, setCustomerSearch] = useState("");
@@ -83,6 +85,23 @@ export default function CreateOrderModal({ isOpen, onClose, onSuccess }: CreateO
   useEffect(() => {
     if (isOpen) {
       fetchCustomersAndProducts();
+    }
+    // If the modal is opened by a merchant, auto-select their merchant and hide search
+    if (isOpen && user?.role === "MERCHANT") {
+      (async () => {
+        try {
+          const resp = await api.get<{ merchants: Merchant[] }>("/api/merchants");
+          if (resp.ok && resp.data) {
+            const list = resp.data.merchants || [];
+            if (list.length > 0) {
+              setFormData(prev => ({ ...prev, merchantId: list[0].id }));
+              setMerchantSearch(list[0].businessName);
+            }
+          }
+        } catch (err) {
+          console.warn("Failed to auto-select merchant for merchant user", err);
+        }
+      })();
     }
   }, [isOpen]);
 
@@ -436,77 +455,75 @@ export default function CreateOrderModal({ isOpen, onClose, onSuccess }: CreateO
           <div className="space-y-4">
             <h4 className="text-white font-medium">Order & Customer Information</h4>
             
-            {/* Merchant Search */}
-            <div className="relative merchant-search-container">
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Search Merchant <span className="text-red-400">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={merchantSearch}
-                  onChange={(e) => handleMerchantSearch(e.target.value)}
-                  onFocus={() => {
-                    setShowMerchantDropdown(true);
-                    if (merchantSearch.length >= 2) {
-                      searchMerchants(merchantSearch);
-                    }
-                  }}
-                  placeholder="Type merchant name to search..."
-                  className="w-full px-3 py-2 pr-10 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]"
-                  disabled={loadingData}
-                  required
-                />
-                {merchantSearch && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMerchantSearch("");
-                      setFormData(prev => ({ ...prev, merchantId: "" }));
-                      setFilteredMerchants([]);
-                    }}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                  >
-                    ✕
-                  </button>
-                )}
+            {/* Merchant Selection (admins can search; merchants auto-select) */}
+            {user?.role === "MERCHANT" ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Merchant</label>
+                <input type="hidden" value={formData.merchantId} />
+                <div className="px-3 py-2 bg-black border border-gray-600 rounded-lg text-gray-300">{merchantSearch || 'Your merchant'}</div>
               </div>
-
-              {/* Merchant Dropdown */}
-              {showMerchantDropdown && (
-                <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                  {loadingMerchants ? (
-                    <div className="px-4 py-3 text-gray-400 text-center">
-                      Searching merchants...
-                    </div>
-                  ) : filteredMerchants.length > 0 ? (
-                    filteredMerchants.map((merchant) => (
-                      <button
-                        key={merchant.id}
-                        type="button"
-                        onClick={() => selectMerchant(merchant)}
-                        className="w-full px-4 py-3 text-left hover:bg-gray-700 border-b border-gray-700 last:border-b-0 transition-colors"
-                      >
-                        <div className="text-white font-medium">
-                          {merchant.businessName}
-                        </div>
-                        <div className="text-sm text-gray-400 mt-1">
-                          ID: {merchant.id}
-                        </div>
-                      </button>
-                    ))
-                  ) : merchantSearch.length >= 2 ? (
-                    <div className="px-4 py-3 text-gray-400 text-center">
-                      No merchants found
-                    </div>
-                  ) : (
-                    <div className="px-4 py-3 text-gray-400 text-center text-sm">
-                      Type at least 2 characters to search
-                    </div>
+            ) : (
+              <div className="relative merchant-search-container">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Search Merchant <span className="text-red-400">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={merchantSearch}
+                    onChange={(e) => handleMerchantSearch(e.target.value)}
+                    onFocus={() => {
+                      setShowMerchantDropdown(true);
+                      if (merchantSearch.length >= 2) {
+                        searchMerchants(merchantSearch);
+                      }
+                    }}
+                    placeholder="Type merchant name to search..."
+                    className="w-full px-3 py-2 pr-10 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]"
+                    disabled={loadingData}
+                    required
+                  />
+                  {merchantSearch && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMerchantSearch("");
+                        setFormData(prev => ({ ...prev, merchantId: "" }));
+                        setFilteredMerchants([]);
+                      }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                    >
+                      ✕
+                    </button>
                   )}
                 </div>
-              )}
-            </div>
+
+                {/* Merchant Dropdown */}
+                {showMerchantDropdown && (
+                  <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {loadingMerchants ? (
+                      <div className="px-4 py-3 text-gray-400 text-center">Searching merchants...</div>
+                    ) : filteredMerchants.length > 0 ? (
+                      filteredMerchants.map((merchant) => (
+                        <button
+                          key={merchant.id}
+                          type="button"
+                          onClick={() => selectMerchant(merchant)}
+                          className="w-full px-4 py-3 text-left hover:bg-gray-700 border-b border-gray-700 last:border-b-0 transition-colors"
+                        >
+                          <div className="text-white font-medium">{merchant.businessName}</div>
+                          <div className="text-sm text-gray-400 mt-1">ID: {merchant.id}</div>
+                        </button>
+                      ))
+                    ) : merchantSearch.length >= 2 ? (
+                      <div className="px-4 py-3 text-gray-400 text-center">No merchants found</div>
+                    ) : (
+                      <div className="px-4 py-3 text-gray-400 text-center text-sm">Type at least 2 characters to search</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Currency Selection */}
             <div>

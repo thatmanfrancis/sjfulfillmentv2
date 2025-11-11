@@ -351,6 +351,9 @@ model User {
   createdCustomers        Customer[]               @relation("CustomerCreator")
   createdMerchants        Merchant[]               @relation("MerchantCreator")
   handledAttempts         DeliveryAttempt[]        @relation("handler")
+  logisticsProfile       LogisticsProfile?
+  delegationRequestsFrom DelegationRequest[]      @relation("DelegationFrom")
+  delegationRequestsTo   DelegationRequest[]      @relation("DelegationTo")
   otps                    Otp[]
   callLogs                CallLog[]                @relation("CallLogs")
   remittances             Remittance[]             @relation("ProcessedRemittances")
@@ -840,9 +843,41 @@ model DeliveryAttempt {
   // Relations
   order   Order @relation(fields: [orderId], references: [id])
   handler User? @relation("handler", fields: [handlerId], references: [id])
+  delegationRequests DelegationRequest[]
 
   @@index([orderId, attemptNumber])
   @@map("delivery_attempts")
+}
+
+// Logistics profiles for delivery personnel (coverage, capacity)
+model LogisticsProfile {
+  id             String   @id @default(uuid())
+  userId         String   @unique @map("user_id")
+  coverageStates Json     @default("[]") // array of state names e.g. ["Lagos", "Oyo"]
+  capacity       Int      @default(4)
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("logistics_profiles")
+}
+
+model DelegationRequest {
+  id                String   @id @default(uuid())
+  deliveryAttemptId String   @map("delivery_attempt_id")
+  fromUserId        String   @map("from_user_id")
+  toUserId          String   @map("to_user_id")
+  status            String   @default("PENDING") // PENDING | ACCEPTED | DECLINED
+  createdAt         DateTime @default(now()) @map("created_at")
+  respondedAt       DateTime?
+
+  deliveryAttempt DeliveryAttempt @relation(fields: [deliveryAttemptId], references: [id], onDelete: Cascade)
+  fromUser        User            @relation("DelegationFrom", fields: [fromUserId], references: [id])
+  toUser          User            @relation("DelegationTo", fields: [toUserId], references: [id])
+
+  @@map("delegation_requests")
 }
 
 // =============================================================================

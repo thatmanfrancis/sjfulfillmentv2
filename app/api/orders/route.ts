@@ -321,6 +321,85 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Auto-assign delivery attempt to a logistics personnel (merchant-specific first, then global)
+    try {
+      // Determine shipping state
+      const shippingAddress = await prisma.address.findUnique({ where: { id: shippingAddressId } });
+      const state = shippingAddress?.state?.trim();
+
+      if (state) {
+        // Use a transaction to reduce race conditions when assigning
+        await prisma.$transaction(async (tx) => {
+          // Helper to query candidate logistics profiles (merchant-specific then global)
+          const queryCandidates = async (merchantScoped: boolean) => {
+            if (merchantScoped) {
+              return await tx.$queryRaw`
+                SELECT lp.user_id as user_id, lp.capacity as capacity
+                FROM logistics_profiles lp
+                JOIN merchant_staff ms ON ms.user_id = lp.user_id
+                WHERE lp.active = true
+                  AND ms.merchant_id = ${merchantId}
+                  AND lp.coverage_states @> ${JSON.stringify([state])}::jsonb
+              `;
+            }
+
+            return await tx.$queryRaw`
+              SELECT lp.user_id as user_id, lp.capacity as capacity
+              FROM logistics_profiles lp
+              WHERE lp.active = true
+                AND lp.coverage_states @> ${JSON.stringify([state])}::jsonb
+            `;
+          };
+
+          // Try merchant-specific candidates first
+          let rawCandidates: Array<{ user_id: string; capacity: number }> = await queryCandidates(true) as any;
+
+          if (!rawCandidates || rawCandidates.length === 0) {
+            rawCandidates = await queryCandidates(false) as any;
+          }
+
+          // If there are candidates, pick one respecting capacity
+          for (const c of rawCandidates) {
+            const candidateId = (c as any).user_id;
+            const capacity = (c as any).capacity || 4;
+
+            // Lock the logistics profile row to avoid races
+            await tx.$executeRaw`
+              SELECT 1 FROM logistics_profiles WHERE user_id = ${candidateId} FOR UPDATE
+            `;
+
+            // Count active attempts for this candidate
+            const activeCount = await tx.deliveryAttempt.count({
+              where: {
+                handlerId: candidateId,
+                NOT: { status: "DELIVERED" },
+              },
+            });
+
+            if (activeCount < capacity) {
+              // assign to this candidate
+              await tx.deliveryAttempt.create({
+                data: {
+                  orderId: order.id,
+                  attemptNumber: 1,
+                  status: "ASSIGNED",
+                  comments: "Auto-assigned delivery attempt",
+                  handlerId: candidateId,
+                },
+              });
+
+              await tx.order.update({ where: { id: order.id }, data: { assignedTo: candidateId } });
+              // assigned - break out
+              break;
+            }
+          }
+        });
+      }
+    } catch (assignError) {
+      console.error("Auto-assign delivery error:", assignError);
+      // Non-fatal — order is created even if auto-assign fails
+    }
+
     return NextResponse.json(
       {
         message: "Order created successfully",

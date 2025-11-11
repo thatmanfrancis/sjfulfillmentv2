@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { api } from "@/lib/api";
 import CreateCustomerModal from "@/components/CreateCustomerModal";
+import EditCustomerModal from "@/components/EditCustomerModal";
 
 interface Customer {
   id: string;
@@ -10,31 +13,44 @@ interface Customer {
   lastName: string;
   email: string;
   phone: string;
-  company: string;
-  totalOrders: number;
-  totalSpent: number;
-  lastOrderDate: string;
   status: string;
+  orderCount: number;
+  lifetimeValue: number;
+  createdAt: string;
+  merchant?: {
+    id: string;
+    businessName: string;
+  };
+  _count?: {
+    orders: number;
+    addresses: number;
+  };
 }
 
 export default function CustomersPage() {
+  const router = useRouter();
   const { user } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchCustomers();
-  }, []);
+    if (user) {
+      fetchCustomers();
+    }
+  }, [user]);
 
   const fetchCustomers = async () => {
     try {
-      const response = await fetch("/api/customers");
-      if (response.ok) {
-        const data = await response.json();
-        setCustomers(data.customers || []);
+      const response = await api.get<{ customers: Customer[] }>("/api/customers");
+      if (response.ok && response.data) {
+        setCustomers(response.data.customers || []);
+      } else {
+        console.error("Failed to fetch customers:", response.error);
       }
     } catch (error) {
       console.error("Failed to fetch customers:", error);
@@ -46,9 +62,8 @@ export default function CustomersPage() {
   const filteredCustomers = customers.filter(customer => {
     const fullName = `${customer.firstName} ${customer.lastName}`.toLowerCase();
     const matchesSearch = fullName.includes(searchTerm.toLowerCase()) ||
-                         customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         customer.company.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "all" || customer.status === statusFilter;
+                         customer.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === "all" || customer.status.toUpperCase() === statusFilter.toUpperCase();
     return matchesSearch && matchesStatus;
   });
 
@@ -111,9 +126,8 @@ export default function CustomersPage() {
           className="px-4 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]"
         >
           <option value="all">All Status</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-          <option value="blocked">Blocked</option>
+          <option value="ACTIVE">Active</option>
+          <option value="INACTIVE">Inactive</option>
         </select>
       </div>
 
@@ -130,16 +144,16 @@ export default function CustomersPage() {
                   Contact
                 </th>
                 <th className="text-left py-4 px-6 font-medium text-gray-300">
-                  Company
+                  Merchant
                 </th>
                 <th className="text-left py-4 px-6 font-medium text-gray-300">
                   Orders
                 </th>
                 <th className="text-left py-4 px-6 font-medium text-gray-300">
-                  Total Spent
+                  Lifetime Value
                 </th>
                 <th className="text-left py-4 px-6 font-medium text-gray-300">
-                  Last Order
+                  Created
                 </th>
                 <th className="text-left py-4 px-6 font-medium text-gray-300">
                   Status
@@ -166,19 +180,19 @@ export default function CustomersPage() {
                     </td>
                     <td className="py-4 px-6">
                       <div className="text-gray-300">{customer.email}</div>
-                      <div className="text-gray-400 text-sm">{customer.phone}</div>
+                      <div className="text-gray-400 text-sm">{customer.phone || "N/A"}</div>
                     </td>
                     <td className="py-4 px-6">
-                      <div className="text-gray-300">{customer.company}</div>
+                      <div className="text-gray-300">{customer.merchant?.businessName || "N/A"}</div>
                     </td>
                     <td className="py-4 px-6 text-gray-300">
-                      {customer.totalOrders}
+                      {customer.orderCount || 0}
                     </td>
                     <td className="py-4 px-6 text-white font-medium">
-                      ${customer.totalSpent.toFixed(2)}
+                      ${(customer.lifetimeValue || 0).toFixed(2)}
                     </td>
                     <td className="py-4 px-6 text-gray-300">
-                      {customer.lastOrderDate ? new Date(customer.lastOrderDate).toLocaleDateString() : "Never"}
+                      {new Date(customer.createdAt).toLocaleDateString()}
                     </td>
                     <td className="py-4 px-6">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(customer.status)}`}>
@@ -187,10 +201,16 @@ export default function CustomersPage() {
                     </td>
                     <td className="py-4 px-6">
                       <div className="flex space-x-2">
-                        <button className="text-[#f08c17] hover:text-orange-500 transition-colors">
+                        <button
+                          onClick={() => router.push(`/customers/${customer.id}`)}
+                          className="text-[#f08c17] hover:text-orange-500 transition-colors"
+                        >
                           View
                         </button>
-                        <button className="text-blue-400 hover:text-blue-300 transition-colors">
+                        <button
+                          onClick={() => { setEditingCustomerId(customer.id); setShowEditModal(true); }}
+                          className="text-blue-400 hover:text-blue-300 transition-colors"
+                        >
                           Edit
                         </button>
                       </div>
@@ -211,19 +231,19 @@ export default function CustomersPage() {
         </div>
         <div className="bg-black border border-gray-700 rounded-lg p-4">
           <div className="text-2xl font-bold text-green-400">
-            {customers.filter(c => c.status === "active").length}
+            {customers.filter(c => c.status === "ACTIVE").length}
           </div>
           <div className="text-sm text-gray-400">Active</div>
         </div>
         <div className="bg-black border border-gray-700 rounded-lg p-4">
           <div className="text-2xl font-bold text-blue-400">
-            {customers.reduce((sum, c) => sum + c.totalOrders, 0)}
+            {customers.reduce((sum, c) => sum + (c.orderCount || 0), 0)}
           </div>
           <div className="text-sm text-gray-400">Total Orders</div>
         </div>
         <div className="bg-black border border-gray-700 rounded-lg p-4">
           <div className="text-2xl font-bold text-yellow-400">
-            ${customers.reduce((sum, c) => sum + c.totalSpent, 0).toFixed(0)}
+            ${customers.reduce((sum, c) => sum + (c.lifetimeValue || 0), 0).toFixed(0)}
           </div>
           <div className="text-sm text-gray-400">Total Revenue</div>
         </div>
@@ -237,6 +257,13 @@ export default function CustomersPage() {
           fetchCustomers(); // Refresh the customers list
           setShowCreateModal(false);
         }}
+      />
+
+      <EditCustomerModal
+        isOpen={showEditModal}
+        customerId={editingCustomerId}
+        onClose={() => { setShowEditModal(false); setEditingCustomerId(null); }}
+        onSuccess={() => { fetchCustomers(); }}
       />
     </div>
   );
