@@ -158,7 +158,7 @@ export default function MerchantDetailPage({ params }: PageProps) {
           <div>
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-3xl font-bold text-white">{merchant.businessName}</h1>
-              <span
+              {/* <span
                 className={`px-3 py-1 rounded-full text-sm font-medium ${
                   merchant.status === "ACTIVE"
                     ? "bg-green-900 text-green-300"
@@ -168,7 +168,7 @@ export default function MerchantDetailPage({ params }: PageProps) {
                 }`}
               >
                 {merchant.status}
-              </span>
+              </span> */}
             </div>
             <p className="text-gray-400">{merchant.businessEmail}</p>
             <p className="text-sm text-gray-500">
