@@ -273,12 +273,30 @@ export default function OrdersPage() {
                       {new Date(order.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button 
-                        onClick={() => router.push(`/orders/${order.id}`)}
-                        className="text-[#f08c17] hover:text-orange-500 transition-colors"
-                      >
-                        View
-                      </button>
+                      <div className="flex space-x-2">
+                        <button 
+                          onClick={() => router.push(`/orders/${order.id}`)}
+                          className="text-[#f08c17] hover:text-orange-500 transition-colors"
+                        >
+                          View
+                        </button>
+                        {user?.role === 'ADMIN' && (
+                          <>
+                            <button
+                              onClick={() => router.push(`/orders/${order.id}/edit`)}
+                              className="text-blue-400 hover:text-blue-300 transition-colors"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => router.push(`/orders/${order.id}/assign`)}
+                              className="text-green-400 hover:text-green-300 transition-colors"
+                            >
+                              Assign
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))

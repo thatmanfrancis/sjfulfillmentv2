@@ -773,9 +773,15 @@ export default function CreateProductModal({ isOpen, onClose, onSuccess }: Creat
                         disabled={warehousesLoading || warehouses.length === 0}
                       >
                         <option value="">Select warehouse</option>
-                        {warehouses.map(w => (
-                          <option key={w.id} value={w.id}>{w.name} ({w.code})</option>
-                        ))}
+                        {warehouses.map(w => {
+                          // determine if this warehouse id is already selected in another row
+                          const alreadySelected = warehouseDistribution.some((r, i) => i !== idx && r.warehouseId === w.id);
+                          return (
+                            <option key={w.id} value={w.id} disabled={alreadySelected}>
+                              {w.name} ({w.code}){alreadySelected ? ' — selected' : ''}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
                     <div>

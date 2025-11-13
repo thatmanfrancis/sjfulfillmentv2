@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import AlertModal from '@/components/AlertModal';
 import { useAuth } from "@/lib/auth-context";
 import { useRBAC } from "@/lib/use-rbac";
 import Pagination from "@/components/Pagination";
@@ -59,6 +60,7 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -70,6 +72,7 @@ export default function ProductsPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [alert, setAlert] = useState({ isOpen: false, title: '', message: '', type: 'info' as 'success' | 'error' | 'warning' | 'info' });
 
   const canCreateProducts = checkPermission('products', 'create');
   const canEditProducts = checkPermission('products', 'update');
@@ -77,6 +80,26 @@ export default function ProductsPage() {
 
   useEffect(() => {
     fetchProducts();
+    // Fetch categories independently from the categories API
+    const fetchCategories = async () => {
+      try {
+        const res = await fetch('/api/categories', {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.categories) {
+            setCategories(data.categories.map((c: any) => ({ id: c.id, name: c.name })));
+          }
+        } else {
+          console.warn('Failed to fetch categories:', res.status);
+        }
+      } catch (err) {
+        console.error('Failed to fetch categories:', err);
+      }
+    };
+
+    fetchCategories();
   }, [currentPage, searchTerm, categoryFilter]);
 
   const fetchProducts = async () => {
@@ -130,6 +153,8 @@ export default function ProductsPage() {
         setProducts(productsWithLocations);
         setTotalCount(data.pagination?.total || 0);
         setTotalPages(data.pagination?.totalPages || 1);
+        // try to set categories if provided by API response
+        if ((data as any).categories) setCategories((data as any).categories.map((c: any) => ({ id: c.id, name: c.name })));
       } else {
         console.error("Failed to fetch products:", response.status, await response.text());
       }
@@ -187,11 +212,11 @@ export default function ProductsPage() {
         fetchProducts(); // Refresh the list
       } else {
         console.error("Failed to delete product");
-        alert("Failed to delete product");
+        setAlert({ isOpen: true, title: 'Error', message: 'Failed to delete product', type: 'error' });
       }
     } catch (error) {
       console.error("Delete error:", error);
-      alert("Failed to delete product");
+      setAlert({ isOpen: true, title: 'Error', message: 'Failed to delete product', type: 'error' });
     } finally {
       setDeleting(false);
     }
@@ -260,12 +285,19 @@ export default function ProductsPage() {
           onChange={(e) => handleCategoryChange(e.target.value)}
           className="px-4 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]"
         >
-          <option value="all">All Categories</option>
-          <option value="electronics">Electronics</option>
-          <option value="clothing">Clothing</option>
-          <option value="home">Home & Garden</option>
-          <option value="books">Books</option>
-          <option value="sports">Sports</option>
+            <option value="all">All Categories</option>
+            {categories.length > 0 ? (
+              categories.map(cat => (
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
+              ))
+            ) : (
+              // fallback to a few common categories if none loaded
+              <>
+                <option value="electronics">Electronics</option>
+                <option value="clothing">Clothing</option>
+                <option value="home">Home & Garden</option>
+              </>
+            )}
         </select>
       </div>
 

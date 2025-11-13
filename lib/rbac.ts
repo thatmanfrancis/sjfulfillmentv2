@@ -389,6 +389,7 @@ export function getAccessibleRoutes(userRole: UserRole): string[] {
       '/shipments',
       '/orders',
       '/call-logs',
+      '/logistics',
     ],
     WAREHOUSE_MANAGER: [
       '/dashboard',

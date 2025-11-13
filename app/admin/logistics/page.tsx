@@ -123,8 +123,8 @@ export default function AdminLogisticsPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '-'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex gap-2">
-                        <button onClick={() => router.push(`/users/${u.id}`)} className="text-blue-400 hover:text-blue-300">View</button>
-                        <button onClick={() => router.push(`/users/${u.id}/edit`)} className="text-[#f08c17] hover:text-orange-500">Edit</button>
+                        <button onClick={() => router.push(`/logistics/${u.id}`)} className="text-blue-400 hover:text-blue-300">View</button>
+                        <button onClick={() => router.push(`/logistics/${u.id}/edit`)} className="text-[#f08c17] hover:text-orange-500">Edit</button>
                       </div>
                     </td>
                   </tr>

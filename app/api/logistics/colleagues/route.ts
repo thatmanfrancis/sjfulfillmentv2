@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
       FROM logistics_profiles lp
       JOIN users u ON u.id = lp.user_id
       WHERE lp.active = true
-        AND lp.coverage_states @> ${JSON.stringify([state])}::jsonb
+        AND lp."coverageStates" @> ${JSON.stringify([state])}::jsonb
         AND u.id <> ${String(auth.userId)}
     `;
 

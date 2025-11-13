@@ -42,7 +42,7 @@ const roleRoutes = {
   ],
   MERCHANT: ["/merchant", "/dashboard", "/orders", "/products", "/customers", "/reports"],
   MERCHANT_STAFF: ["/merchant", "/orders", "/products", "/customers"],
-  LOGISTICS_PERSONNEL: ["/dashboard", "/orders", "/shipments", "/delivery-attempts"],
+  LOGISTICS_PERSONNEL: ["/dashboard", "/orders", "/shipments", "/delivery-attempts", "/logistics"],
   WAREHOUSE_MANAGER: ["/warehouse", "/dashboard", "/orders", "/inventory", "/products"],
 };
 

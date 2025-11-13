@@ -3,7 +3,9 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
+import { authClient } from "@/lib/auth-client";
 import TwoFactorSetupModal from "@/components/TwoFactorSetupModal";
+import AlertModal from '@/components/AlertModal';
 import Image from "next/image";
 
 export default function MerchantSettingsPage() {
@@ -14,11 +16,30 @@ export default function MerchantSettingsPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [alert, setAlert] = useState({ isOpen: false, title: '', message: '', type: 'info' as 'success' | 'error' | 'warning' | 'info' });
   const [show2FAModal, setShow2FAModal] = useState(false);
   const [securitySettings, setSecuritySettings] = useState({
     twoFactorEnabled: false,
     sessionTimeout: 30,
   });
+  const [autoAcceptOrders, setAutoAcceptOrders] = useState<boolean>(false);
+  const [lowStockAlerts, setLowStockAlerts] = useState<boolean>(true);
+  // Business fields
+  const [businessName, setBusinessName] = useState<string>("");
+  const [businessEmail, setBusinessEmail] = useState<string>("");
+  const [businessPhone, setBusinessPhone] = useState<string>("");
+  const [businessType, setBusinessType] = useState<string>("");
+  const [taxId, setTaxId] = useState<string>("");
+  const [streetAddress, setStreetAddress] = useState<string>("");
+  const [city, setCity] = useState<string>("");
+  const [stateProvince, setStateProvince] = useState<string>("");
+  const [postalCode, setPostalCode] = useState<string>("");
+  const [country, setCountry] = useState<string>("United States");
+  const [timezone, setTimezone] = useState<string>("UTC-8 (Pacific Time)");
+  const [websiteUrl, setWebsiteUrl] = useState<string>("");
+  // Branding
+  const [primaryColor, setPrimaryColor] = useState<string>("#f08c17");
+  const [secondaryColor, setSecondaryColor] = useState<string>("#000000");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const tabs = [
@@ -46,11 +67,130 @@ export default function MerchantSettingsPage() {
           ...prev,
           twoFactorEnabled: userData.twoFactorEnabled || false,
         }));
+        // load merchant preferences if available
+        try {
+          const merchantsRes = await api.get("/api/merchants");
+          if (merchantsRes.ok && merchantsRes.data?.merchants?.length) {
+            const merchant = merchantsRes.data.merchants[0];
+            // preferences
+            setAutoAcceptOrders(!!merchant.autoAcceptOrders);
+            setLowStockAlerts(merchant.lowStockAlerts !== undefined ? !!merchant.lowStockAlerts : true);
+
+            // business fields (if present)
+            setBusinessName(merchant.businessName || "");
+            setBusinessEmail(merchant.businessEmail || "");
+            setBusinessPhone(merchant.businessPhone || "");
+            setBusinessType(merchant.businessType || "");
+            setTaxId(merchant.taxId || "");
+            setWebsiteUrl(merchant.websiteUrl || "");
+            setTimezone(merchant.timezone || "UTC-8 (Pacific Time)");
+
+            // address may be nested under businessAddress
+            if (merchant.businessAddress) {
+              setStreetAddress(merchant.businessAddress.street || "");
+              setCity(merchant.businessAddress.city || "");
+              setStateProvince(merchant.businessAddress.state || "");
+              setPostalCode(merchant.businessAddress.postalCode || "");
+              setCountry(merchant.businessAddress.country || "United States");
+            }
+
+            // branding
+            if (merchant.logoUrl) {
+              setLogoPreview(merchant.logoUrl);
+            }
+            if (merchant.brandColors) {
+              setPrimaryColor(merchant.brandColors.primary || "#f08c17");
+              setSecondaryColor(merchant.brandColors.secondary || "#000000");
+            }
+          }
+        } catch (e) {
+          // ignore merchant load errors
+        }
       }
     } catch (error) {
       console.error("Failed to load user data:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const saveMerchantSettings = async () => {
+    setSaving(true);
+    try {
+      const merchantsRes = await api.get("/api/merchants");
+      if (!merchantsRes.ok || !merchantsRes.data?.merchants?.length) {
+        setAlert({ isOpen: true, title: 'Error', message: 'No merchant found for this user', type: 'error' });
+        return;
+      }
+
+      const merchantId = merchantsRes.data.merchants[0].id;
+      // 1) Upload logo if present
+      if (logoFile) {
+        try {
+          // ensure token is valid
+          await authClient.ensureValidToken();
+          const accessToken = authClient.getAccessToken();
+          const form = new FormData();
+          form.append("logo", logoFile as File);
+
+          const uploadResp = await fetch(`/api/merchants/${merchantId}/logo`, {
+            method: "PATCH",
+            headers: {
+              Authorization: accessToken ? `Bearer ${accessToken}` : "",
+            },
+            body: form,
+          });
+
+          if (!uploadResp.ok) {
+            const errText = await uploadResp.text();
+            console.warn("Logo upload failed:", errText);
+            // continue but notify
+            setMessage("Logo upload failed (saved other settings)");
+          } else {
+            const data = await uploadResp.json();
+            if (data?.merchant?.logoUrl) setLogoPreview(data.merchant.logoUrl);
+          }
+        } catch (e) {
+          console.error("Logo upload error:", e);
+        }
+      }
+
+      // 2) Update main merchant record (business info)
+      const merchantPayload: any = {
+        ...(businessName && { businessName }),
+        ...(businessEmail && { businessEmail }),
+        ...(businessPhone && { businessPhone }),
+        ...(timezone && { timezone }),
+        ...(websiteUrl && { websiteUrl }),
+        ...(taxId && { taxId }),
+      };
+
+      const updateRes = await api.put(`/api/merchants/${merchantId}`, merchantPayload);
+      if (!updateRes.ok) {
+        throw new Error(updateRes.error || "Failed to update merchant");
+      }
+
+      // 3) Update settings (key/value store)
+      const settingsPayload = {
+        settings: {
+          autoAcceptOrders: autoAcceptOrders ? "true" : "false",
+          lowStockAlerts: lowStockAlerts ? "true" : "false",
+          primaryColor,
+          secondaryColor,
+        },
+      };
+
+      const settingsRes = await api.put(`/api/merchants/${merchantId}/settings`, settingsPayload);
+      if (!settingsRes.ok) {
+        throw new Error(settingsRes.error || "Failed to update merchant settings");
+      }
+
+      setMessage("Merchant settings saved");
+    } catch (e) {
+      console.error(e);
+      setMessage("Failed to save merchant settings");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -110,7 +250,8 @@ export default function MerchantSettingsPage() {
                     type="text"
                     className="w-full px-3 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]"
                     placeholder="Your Business Name"
-                    defaultValue="ABC Trading Co."
+                    value={businessName}
+                    onChange={(e) => setBusinessName(e.target.value)}
                   />
                 </div>
                 <div>
@@ -121,7 +262,8 @@ export default function MerchantSettingsPage() {
                     type="email"
                     className="w-full px-3 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]"
                     placeholder="business@example.com"
-                    defaultValue="contact@abctrading.com"
+                    value={businessEmail}
+                    onChange={(e) => setBusinessEmail(e.target.value)}
                   />
                 </div>
                 <div>
@@ -132,19 +274,21 @@ export default function MerchantSettingsPage() {
                     type="tel"
                     className="w-full px-3 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]"
                     placeholder="+1 (555) 123-4567"
-                    defaultValue="+1 (555) 987-6543"
+                    value={businessPhone}
+                    onChange={(e) => setBusinessPhone(e.target.value)}
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Business Type
                   </label>
-                  <select className="w-full px-3 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]">
-                    <option>Retail</option>
-                    <option>Wholesale</option>
-                    <option>E-commerce</option>
-                    <option>Manufacturing</option>
-                    <option>Services</option>
+                  <select value={businessType} onChange={(e) => setBusinessType(e.target.value)} className="w-full px-3 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]">
+                    <option value="">Select type</option>
+                    <option value="Retail">Retail</option>
+                    <option value="Wholesale">Wholesale</option>
+                    <option value="E-commerce">E-commerce</option>
+                    <option value="Manufacturing">Manufacturing</option>
+                    <option value="Services">Services</option>
                   </select>
                 </div>
                 <div>
@@ -155,6 +299,8 @@ export default function MerchantSettingsPage() {
                     type="text"
                     className="w-full px-3 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]"
                     placeholder="123-45-6789"
+                    value={taxId}
+                    onChange={(e) => setTaxId(e.target.value)}
                   />
                 </div>
               </div>
@@ -171,6 +317,8 @@ export default function MerchantSettingsPage() {
                     type="text"
                     className="w-full px-3 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]"
                     placeholder="123 Business Street"
+                    value={streetAddress}
+                    onChange={(e) => setStreetAddress(e.target.value)}
                   />
                 </div>
                 <div>
@@ -181,6 +329,8 @@ export default function MerchantSettingsPage() {
                     type="text"
                     className="w-full px-3 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]"
                     placeholder="City"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
                   />
                 </div>
                 <div>
@@ -191,6 +341,8 @@ export default function MerchantSettingsPage() {
                     type="text"
                     className="w-full px-3 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]"
                     placeholder="State"
+                    value={stateProvince}
+                    onChange={(e) => setStateProvince(e.target.value)}
                   />
                 </div>
                 <div>
@@ -201,19 +353,26 @@ export default function MerchantSettingsPage() {
                     type="text"
                     className="w-full px-3 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]"
                     placeholder="12345"
+                    value={postalCode}
+                    onChange={(e) => setPostalCode(e.target.value)}
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Country *
                   </label>
-                  <select className="w-full px-3 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]">
+                  <select value={country} onChange={(e) => setCountry(e.target.value)} className="w-full px-3 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]">
                     <option>United States</option>
                     <option>Canada</option>
                     <option>United Kingdom</option>
                     <option>Other</option>
                   </select>
                 </div>
+              </div>
+              <div className="pt-4">
+                <button onClick={saveMerchantSettings} disabled={saving} className="px-4 py-2 bg-[#f08c17] text-black rounded">
+                  {saving ? 'Saving...' : 'Save Preferences'}
+                </button>
               </div>
             </div>
           </div>
@@ -305,12 +464,14 @@ export default function MerchantSettingsPage() {
                     <input
                       type="color"
                       className="w-12 h-10 border border-gray-600 rounded cursor-pointer"
-                      defaultValue="#f08c17"
+                      value={primaryColor}
+                      onChange={(e) => setPrimaryColor(e.target.value)}
                     />
                     <input
                       type="text"
                       className="flex-1 px-3 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]"
-                      defaultValue="#f08c17"
+                      value={primaryColor}
+                      onChange={(e) => setPrimaryColor(e.target.value)}
                       placeholder="#000000"
                     />
                   </div>
@@ -323,12 +484,14 @@ export default function MerchantSettingsPage() {
                     <input
                       type="color"
                       className="w-12 h-10 border border-gray-600 rounded cursor-pointer"
-                      defaultValue="#000000"
+                      value={secondaryColor}
+                      onChange={(e) => setSecondaryColor(e.target.value)}
                     />
                     <input
                       type="text"
                       className="flex-1 px-3 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]"
-                      defaultValue="#000000"
+                      value={secondaryColor}
+                      onChange={(e) => setSecondaryColor(e.target.value)}
                       placeholder="#000000"
                     />
                   </div>
@@ -361,7 +524,7 @@ export default function MerchantSettingsPage() {
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Time Zone
                   </label>
-                  <select className="w-full md:w-1/2 px-3 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]">
+                  <select value={timezone} onChange={(e) => setTimezone(e.target.value)} className="w-full md:w-1/2 px-3 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]">
                     <option>UTC-8 (Pacific Time)</option>
                     <option>UTC-5 (Eastern Time)</option>
                     <option>UTC+0 (GMT)</option>
@@ -390,7 +553,7 @@ export default function MerchantSettingsPage() {
                     <p className="text-gray-400 text-sm">Automatically accept new orders without manual review</p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" className="sr-only peer" />
+                    <input type="checkbox" className="sr-only peer" checked={autoAcceptOrders} onChange={(e) => setAutoAcceptOrders(e.target.checked)} />
                     <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#f08c17]"></div>
                   </label>
                 </div>
@@ -400,7 +563,7 @@ export default function MerchantSettingsPage() {
                     <p className="text-gray-400 text-sm">Get notified when products reach minimum stock levels</p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" className="sr-only peer" defaultChecked />
+                    <input type="checkbox" className="sr-only peer" checked={lowStockAlerts} onChange={(e) => setLowStockAlerts(e.target.checked)} />
                     <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#f08c17]"></div>
                   </label>
                 </div>
@@ -631,6 +794,7 @@ export default function MerchantSettingsPage() {
             {message}
           </div>
         )}
+          <AlertModal isOpen={alert.isOpen} onClose={()=>setAlert({...alert,isOpen:false})} title={alert.title} message={alert.message} type={alert.type} />
 
         {/* 2FA Setup Modal */}
         <TwoFactorSetupModal

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-middleware";
 import { getUserMerchantContext } from "@/lib/merchant-context";
+import { sendNotification } from "@/lib/notifications";
 
 export async function POST(
   req: NextRequest,
@@ -83,6 +84,7 @@ export async function POST(
         const state = shippingAddress?.state?.trim();
 
         if (state) {
+          let assignedUserId: string | null = null;
           await prisma.$transaction(async (tx) => {
             const merchantIdVal = orderFull!.merchantId;
 
@@ -94,7 +96,7 @@ export async function POST(
                   JOIN merchant_staff ms ON ms.user_id = lp.user_id
                   WHERE lp.active = true
                     AND ms.merchant_id = ${merchantIdVal}
-                    AND lp.coverage_states @> ${JSON.stringify([state])}::jsonb
+                    AND lp."coverageStates" @> ${JSON.stringify([state])}::jsonb
                 `;
               }
 
@@ -102,7 +104,7 @@ export async function POST(
                 SELECT lp.user_id as user_id, lp.capacity as capacity
                 FROM logistics_profiles lp
                 WHERE lp.active = true
-                  AND lp.coverage_states @> ${JSON.stringify([state])}::jsonb
+                  AND lp."coverageStates" @> ${JSON.stringify([state])}::jsonb
               `;
             };
 
@@ -124,26 +126,107 @@ export async function POST(
                 },
               });
 
-              if (activeCount < capacity) {
-                await tx.deliveryAttempt.create({
-                  data: {
-                    orderId: id,
-                    attemptNumber: 1,
-                    status: "ASSIGNED",
-                    comments: "Assigned on admin approval",
-                    handlerId: candidateId,
-                  },
-                });
+                if (activeCount < capacity) {
+                  await tx.deliveryAttempt.create({
+                    data: {
+                      orderId: id,
+                      attemptNumber: 1,
+                      status: "ASSIGNED",
+                      comments: "Assigned on admin approval",
+                      handlerId: candidateId,
+                    },
+                  });
 
-                await tx.order.update({ where: { id }, data: { assignedTo: candidateId } });
-                break;
-              }
+                  await tx.order.update({ where: { id }, data: { assignedTo: candidateId } });
+                  assignedUserId = candidateId;
+                  break;
+                }
             }
-          });
+            });
+
+          // Notify stakeholders if an assignment occurred
+          if (assignedUserId) {
+            try {
+              const refreshedOrder = await prisma.order.findUnique({ where: { id }, select: { assignedTo: true, merchantId: true, orderNumber: true } });
+
+              // Notify assigned logistics user
+              await sendNotification({
+                userId: assignedUserId,
+                merchantId: refreshedOrder?.merchantId,
+                type: "SHIPMENT_UPDATE",
+                title: "Delivery assigned",
+                message: `A delivery for order ${refreshedOrder?.orderNumber} has been assigned to you.`,
+                actionUrl: `/orders/${id}`,
+              });
+
+              // Notify merchant owner
+              if (refreshedOrder?.merchantId) {
+                const merchant = await prisma.merchant.findUnique({ where: { id: refreshedOrder.merchantId }, select: { ownerUserId: true } });
+                if (merchant?.ownerUserId) {
+                  await sendNotification({
+                    userId: merchant.ownerUserId,
+                    merchantId: refreshedOrder.merchantId,
+                    type: "SHIPMENT_UPDATE",
+                    title: "Delivery assigned",
+                    message: `Delivery for order ${refreshedOrder.orderNumber} was assigned to a logistics personnel.`,
+                    actionUrl: `/orders/${id}`,
+                  });
+                }
+              }
+
+              // Notify admins
+              const admins = await prisma.user.findMany({ where: { role: 'ADMIN' }, select: { id: true } });
+              if (admins.length > 0) {
+                await Promise.all(admins.map((a) => sendNotification({
+                  userId: a.id,
+                  merchantId: refreshedOrder?.merchantId,
+                  type: "SHIPMENT_UPDATE",
+                  title: "Delivery assigned",
+                  message: `Order ${refreshedOrder?.orderNumber} was assigned to a logistics personnel.`,
+                  actionUrl: `/orders/${id}`,
+                })));
+              }
+            } catch (notifErr) {
+              console.error("Failed to send assignment notifications after approval:", notifErr);
+            }
+          }
         }
       } catch (assignError) {
         console.error("Auto-assign after approve error:", assignError);
       }
+    }
+
+    // Notify merchant and admins about the order approval/rejection
+    try {
+      const merchantInfo = await prisma.merchant.findUnique({ where: { id: updatedOrder.merchantId }, select: { ownerUserId: true } });
+      const orderNumber = updatedOrder.orderNumber;
+
+      // Notify merchant owner
+      if (merchantInfo?.ownerUserId) {
+        await sendNotification({
+          userId: merchantInfo.ownerUserId,
+          merchantId: updatedOrder.merchantId,
+          type: "ORDER_STATUS",
+          title: `Order ${action}d`,
+          message: `Order ${orderNumber} was ${action}d by an admin.`,
+          actionUrl: `/orders/${id}`,
+        });
+      }
+
+      // Notify admins
+      const admins = await prisma.user.findMany({ where: { role: 'ADMIN' }, select: { id: true } });
+      if (admins.length > 0) {
+        await Promise.all(admins.map((a) => sendNotification({
+          userId: a.id,
+          merchantId: updatedOrder.merchantId,
+          type: "ORDER_STATUS",
+          title: `Order ${action}d`,
+          message: `Order ${orderNumber} was ${action}d by an admin.`,
+          actionUrl: `/orders/${id}`,
+        })));
+      }
+    } catch (notifErr) {
+      console.error("Failed to send order status notifications:", notifErr);
     }
 
     return NextResponse.json({

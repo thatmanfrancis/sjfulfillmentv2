@@ -3,19 +3,36 @@ import { verifyJwt } from "@/lib/jose";
 
 export async function getCurrentUser(req: NextRequest) {
   try {
-    const authHeader = req.headers.get("Authorization");
-    console.log("Auth header:", authHeader ? "Present" : "Missing");
+  const authHeader = req.headers.get("Authorization");
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      console.log("No valid auth header");
+    // Support Authorization header or accessToken cookie
+    let token: string | null = null;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      token = authHeader.substring(7);
+    } else {
+      // Support a "remember" token header (e.g. x-remember-token) for long-lived sessions
+      const rememberHeader = req.headers.get("x-remember-token") || req.headers.get("remember-token") || req.headers.get("rememberToken");
+      if (rememberHeader) {
+        token = rememberHeader;
+      } else {
+      // Try cookie (server-side requests may use cookies)
+      try {
+        const cookieToken = (req as any).cookies?.get?.("accessToken")?.value ?? null;
+        if (cookieToken) {
+          token = cookieToken;
+          console.log("Token read from cookie, length:", token?.length);
+        }
+      } catch (e) {
+        // ignore cookie parsing errors
+      }
+      }
+    }
+
+    if (!token) {
       return null;
     }
-    
-    const token = authHeader.substring(7);
-    console.log("Token extracted, length:", token.length);
-    
-    const payload = await verifyJwt(token);
-    console.log("JWT payload:", payload ? "Valid" : "Invalid");
+
+  const payload = await verifyJwt(token);
 
     if (!payload || !payload.userId) {
       console.log("No valid payload or userId");

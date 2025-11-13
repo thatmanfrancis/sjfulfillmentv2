@@ -26,6 +26,12 @@ const DashboardIcon = () => (
     </svg>
 );
 
+const NotificationsIcon = () => (
+    <svg className={iconClasses} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+    </svg>
+);
+
 const OrdersIcon = () => (
     <svg className={iconClasses} fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
@@ -159,6 +165,11 @@ const getNavigationItems = (role: string): NavItem[] => {
             name: "Dashboard",
             href: "/dashboard",
             icon: <DashboardIcon />,
+        },
+        {
+            name: "Notifications",
+            href: "/notifications",
+            icon: <NotificationsIcon />,
         },
     ];
 
@@ -407,6 +418,11 @@ const getNavigationItems = (role: string): NavItem[] => {
                     icon: <ShipmentsIcon />,
                 },
                 {
+                    name: "Profile",
+                    href: "/logistics/settings",
+                    icon: <SettingsIcon />,
+                },
+                {
                     name: "Shipments",
                     href: "/shipments",
                     icon: <ShipmentsIcon />,
@@ -614,10 +630,10 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
                                 </svg>
                             </button>
 
-                            {/* Page title (mobile only) */}
-                            <h1 className="lg:hidden text-lg font-semibold text-[#f08c17]">
-                                SJFulfillment
-                            </h1>
+                            {/* Page title (mobile only) - show logo icon */}
+                            <div className="lg:hidden">
+                                <Image src="/sjf.png" alt="SJF" width={28} height={28} />
+                            </div>
                         </div>
 
                         {/* Right side - user info (desktop only) */}

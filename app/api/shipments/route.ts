@@ -106,32 +106,61 @@ export async function POST(req: NextRequest) {
       signatureRequired,
     } = body;
 
-    if (!orderId) {
+    // Allow callers to provide either orderId or orderNumber
+    let resolvedOrderId = orderId;
+    if (!resolvedOrderId && (body.orderNumber || body.orderNo)) {
+      const on = body.orderNumber || body.orderNo;
+      const found = await prisma.order.findFirst({ where: { orderNumber: on } });
+      if (found) resolvedOrderId = found.id;
+    }
+
+    if (!resolvedOrderId) {
       return NextResponse.json(
-        { error: "Order ID is required" },
+        { error: "Order ID or orderNumber is required" },
         { status: 400 }
       );
     }
 
-    const shipment = await prisma.shipment.create({
-      data: {
-        orderId,
-        trackingNumber,
-        carrier,
-        serviceLevel,
-        weight,
-        dimensions,
-        shippingCost,
-        estimatedDeliveryDate,
-        signatureRequired: signatureRequired || false,
-        status: "LABEL_CREATED",
-      },
-    });
+    // Ensure the referenced order exists
+    const existingOrder = await prisma.order.findUnique({ where: { id: resolvedOrderId } });
+    if (!existingOrder) {
+      return NextResponse.json({ error: "Order not found" }, { status: 400 });
+    }
 
-    // Update order status
-    await prisma.order.update({
-      where: { id: orderId },
-      data: { status: "PROCESSING" },
+    // Prevent creating shipments for orders in invalid final states
+    const invalidStatuses = ["CANCELLED", "DELIVERED", "RETURNED", "VOID"];
+    if (invalidStatuses.includes((existingOrder.status || "").toString().toUpperCase())) {
+      return NextResponse.json({ error: `Cannot create shipment for order with status ${existingOrder.status}` }, { status: 400 });
+    }
+
+    // Generate a tracking number if one wasn't provided
+    const finalTrackingNumber = trackingNumber && String(trackingNumber).trim().length > 0
+      ? String(trackingNumber)
+      : `TRK-${Math.random().toString(36).slice(2, 11).toUpperCase()}`;
+
+    // Create shipment and update order status inside a transaction for consistency
+    const shipment = await prisma.$transaction(async (tx) => {
+      const created = await tx.shipment.create({
+        data: {
+          orderId: resolvedOrderId,
+          trackingNumber: finalTrackingNumber,
+          carrier,
+          serviceLevel,
+          weight,
+          dimensions,
+          shippingCost,
+          estimatedDeliveryDate,
+          signatureRequired: signatureRequired || false,
+          status: "LABEL_CREATED",
+        },
+      });
+
+      await tx.order.update({
+        where: { id: resolvedOrderId },
+        data: { status: "PROCESSING" },
+      });
+
+      return created;
     });
 
     return NextResponse.json(

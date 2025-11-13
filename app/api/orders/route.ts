@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-middleware";
 import { getUserMerchantContext } from "@/lib/merchant-context";
+import { sendNotification } from "@/lib/notifications";
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
@@ -329,6 +330,8 @@ export async function POST(req: NextRequest) {
 
       if (state) {
         // Use a transaction to reduce race conditions when assigning
+        let assignedUserId: string | null = null;
+
         await prisma.$transaction(async (tx) => {
           // Helper to query candidate logistics profiles (merchant-specific then global)
           const queryCandidates = async (merchantScoped: boolean) => {
@@ -339,7 +342,7 @@ export async function POST(req: NextRequest) {
                 JOIN merchant_staff ms ON ms.user_id = lp.user_id
                 WHERE lp.active = true
                   AND ms.merchant_id = ${merchantId}
-                  AND lp.coverage_states @> ${JSON.stringify([state])}::jsonb
+                  AND lp."coverageStates" @> ${JSON.stringify([state])}::jsonb
               `;
             }
 
@@ -347,7 +350,7 @@ export async function POST(req: NextRequest) {
               SELECT lp.user_id as user_id, lp.capacity as capacity
               FROM logistics_profiles lp
               WHERE lp.active = true
-                AND lp.coverage_states @> ${JSON.stringify([state])}::jsonb
+                AND lp."coverageStates" @> ${JSON.stringify([state])}::jsonb
             `;
           };
 
@@ -389,11 +392,59 @@ export async function POST(req: NextRequest) {
               });
 
               await tx.order.update({ where: { id: order.id }, data: { assignedTo: candidateId } });
+              assignedUserId = candidateId;
               // assigned - break out
               break;
             }
           }
         });
+
+        // If someone was assigned, notify them (outside the transaction)
+        if (assignedUserId) {
+          try {
+            const refreshedOrder = await prisma.order.findUnique({ where: { id: order.id }, select: { assignedTo: true, merchantId: true, orderNumber: true } });
+
+            // Notify assigned logistics user
+            await sendNotification({
+              userId: assignedUserId,
+              merchantId: refreshedOrder?.merchantId,
+              type: "SHIPMENT_UPDATE",
+              title: "Delivery assigned",
+              message: `A delivery for order ${refreshedOrder?.orderNumber} has been assigned to you.`,
+              actionUrl: `/orders/${order.id}`,
+            });
+
+            // Notify merchant owner (if present)
+            if (refreshedOrder?.merchantId) {
+              const merchant = await prisma.merchant.findUnique({ where: { id: refreshedOrder.merchantId }, select: { ownerUserId: true } });
+              if (merchant?.ownerUserId) {
+                await sendNotification({
+                  userId: merchant.ownerUserId,
+                  merchantId: refreshedOrder.merchantId,
+                  type: "SHIPMENT_UPDATE",
+                  title: "Delivery assigned",
+                  message: `Delivery for order ${refreshedOrder.orderNumber} was auto-assigned to a logistics personnel.`,
+                  actionUrl: `/orders/${order.id}`,
+                });
+              }
+            }
+
+            // Notify all admins
+            const admins = await prisma.user.findMany({ where: { role: 'ADMIN' }, select: { id: true } });
+            if (admins && admins.length > 0) {
+              await Promise.all(admins.map((a) => sendNotification({
+                userId: a.id,
+                merchantId: refreshedOrder?.merchantId,
+                type: "SHIPMENT_UPDATE",
+                title: "Delivery auto-assigned",
+                message: `Order ${refreshedOrder?.orderNumber} was auto-assigned to a logistics personnel.`,
+                actionUrl: `/orders/${order.id}`,
+              })));
+            }
+          } catch (notifErr) {
+            console.error("Failed to send assignment notification:", notifErr);
+          }
+        }
       }
     } catch (assignError) {
       console.error("Auto-assign delivery error:", assignError);

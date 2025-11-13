@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { authClient } from "@/lib/auth-client";
 import { api } from "@/lib/api";
 import TwoFactorSetupModal from "@/components/TwoFactorSetupModal";
 import DisableTwoFactorModal from "@/components/DisableTwoFactorModal";
+import AlertModal from "@/components/AlertModal";
 
 interface UserProfile {
   firstName: string;
@@ -88,6 +90,10 @@ export default function SettingsPage() {
 
   const [show2FAModal, setShow2FAModal] = useState(false);
   const [showDisable2FAModal, setShowDisable2FAModal] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [alertOpen, setAlertOpen] = useState(false);
+  const [alertMsg, setAlertMsg] = useState("");
+  const [alertType, setAlertType] = useState<"success" | "error" | "warning" | "info">("info");
 
   const tabs = [
     { id: "profile", name: "Profile", icon: "👤" },
@@ -419,6 +425,70 @@ export default function SettingsPage() {
           <div className="space-y-6">
             <div>
               <h3 className="text-lg font-medium text-white mb-4">Personal Information</h3>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-300 mb-2">Avatar</label>
+                <div className="flex items-center space-x-4">
+                  <div className="h-16 w-16 rounded-full overflow-hidden bg-gray-700">
+                    {profile.avatar ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={profile.avatar} alt="avatar" className="h-16 w-16 object-cover" />
+                    ) : (
+                      <div className="h-16 w-16 bg-gray-600" />
+                    )}
+                  </div>
+                  <div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (!file.type.startsWith("image/")) {
+                          setAlertMsg("Please select an image file");
+                          setAlertType("warning");
+                          setAlertOpen(true);
+                          return;
+                        }
+                        if (file.size > 5 * 1024 * 1024) {
+                          setAlertMsg("Image must be less than 5MB");
+                          setAlertType("warning");
+                          setAlertOpen(true);
+                          return;
+                        }
+                        try {
+                          setUploadingAvatar(true);
+                          const formData = new FormData();
+                          formData.append("avatar", file);
+                          const token = authClient.getAccessToken();
+                          const res = await fetch("/api/users/me/avatar", {
+                            method: "PATCH",
+                            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+                            body: formData,
+                          });
+                          const data = await res.json();
+                          if (!res.ok) {
+                            setAlertMsg(data?.error || "Failed to upload avatar");
+                            setAlertType("error");
+                            setAlertOpen(true);
+                          } else {
+                            const url = data?.user?.avatarUrl || data?.url || "";
+                            setProfile(prev => ({ ...prev, avatar: url }));
+                          }
+                        } catch (err) {
+                          console.error(err);
+                          setAlertMsg("Failed to upload avatar");
+                          setAlertType("error");
+                          setAlertOpen(true);
+                        } finally {
+                          setUploadingAvatar(false);
+                        }
+                      }}
+                    />
+                    {uploadingAvatar && <div className="text-xs text-gray-400">Uploading…</div>}
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -772,7 +842,17 @@ export default function SettingsPage() {
                       <div className="text-gray-400 text-sm">Prefix: {k.prefix} • Created: {new Date(k.createdAt).toLocaleString()}</div>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <button className="border border-gray-600 text-gray-300 px-3 py-1 rounded" onClick={() => { navigator.clipboard?.writeText(k.prefix || ''); setMessage('Prefix copied') }}>Copy Prefix</button>
+                      <button
+                        className={`border border-gray-600 text-gray-300 px-3 py-1 rounded ${k.status === 'REVOKED' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        onClick={() => {
+                          if (k.status === 'REVOKED') return setMessage('This key has been revoked and cannot be copied');
+                          navigator.clipboard?.writeText(k.prefix || '');
+                          setMessage('Prefix copied');
+                        }}
+                        aria-disabled={k.status === 'REVOKED'}
+                      >
+                        Copy Prefix
+                      </button>
                       {k.status !== 'REVOKED' && canCreateKey && (
                         <button onClick={() => revokeApiKey(k.id)} className="bg-red-600 text-white px-3 py-1 rounded">Revoke</button>
                       )}
@@ -867,6 +947,13 @@ export default function SettingsPage() {
           handleDisable2FASuccess();
           setShowDisable2FAModal(false);
         }}
+      />
+      {/* Alert Modal for replacements of window.alert */}
+      <AlertModal
+        isOpen={alertOpen}
+        onClose={() => setAlertOpen(false)}
+        message={alertMsg}
+        type={alertType}
       />
     </div>
   );

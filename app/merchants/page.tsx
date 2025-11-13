@@ -243,7 +243,14 @@ export default function MerchantsPage() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-white">{merchant.businessName}</div>
                       <div className="text-xs text-gray-400">
-                        Joined {new Date(merchant.joinedDate).toLocaleDateString()}
+                        Joined {merchant.joinedDate ? (() => {
+                          try {
+                            const d = new Date(merchant.joinedDate);
+                            return isNaN(d.getTime()) ? 'Unknown' : d.toLocaleDateString();
+                          } catch (e) {
+                            return 'Unknown';
+                          }
+                        })() : 'Unknown'}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

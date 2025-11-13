@@ -41,8 +41,11 @@ export default function CreateShipmentModal({ isOpen, onClose, onCreated }: Prop
       return;
     }
 
+    // Prefer tracking number returned by API
+    const returnedTracking = res.data?.shipment?.trackingNumber || res.data?.trackingNumber;
     setMsgType("success");
-    setMsg("Shipment created");
+    setMsg(returnedTracking ? `Shipment created — tracking: ${returnedTracking}` : "Shipment created");
+    // reset form
     setOrderId("");
     setCarrier("");
     setTrackingNumber("");
@@ -68,6 +71,7 @@ export default function CreateShipmentModal({ isOpen, onClose, onCreated }: Prop
         <div>
           <label className="text-sm text-gray-400">Tracking Number</label>
           <input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} className="w-full mt-1 p-2 bg-black border border-gray-700 rounded text-white" />
+          <p className="text-xs text-gray-500 mt-1">Leave blank to have the system generate a tracking number automatically.</p>
         </div>
 
         <div className="grid grid-cols-2 gap-4">

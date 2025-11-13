@@ -78,6 +78,8 @@ export default function CreateOrderModal({ isOpen, onClose, onSuccess }: CreateO
     notes: "",
     priority: "normal",
   });
+
+  const selectedCurrency = currencies.find(c => c.id === formData.currencyId) as Currency | undefined;
   
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1); // 1: Customer, 2: Items, 3: Shipping, 4: Review
@@ -96,6 +98,15 @@ export default function CreateOrderModal({ isOpen, onClose, onSuccess }: CreateO
             if (list.length > 0) {
               setFormData(prev => ({ ...prev, merchantId: list[0].id }));
               setMerchantSearch(list[0].businessName);
+              // also fetch merchant details to set merchant currency
+              try {
+                const mresp = await api.get(`/api/merchants/${list[0].id}`);
+                if (mresp.ok && mresp.data?.merchant?.currency?.id) {
+                  setFormData(prev => ({ ...prev, currencyId: mresp.data.merchant.currency.id }));
+                }
+              } catch (err) {
+                console.warn('Failed to fetch merchant details for currency', err);
+              }
             }
           }
         } catch (err) {
@@ -235,6 +246,20 @@ export default function CreateOrderModal({ isOpen, onClose, onSuccess }: CreateO
     setFormData(prev => ({ ...prev, merchantId: merchant.id }));
     setMerchantSearch(merchant.businessName);
     setShowMerchantDropdown(false);
+    // fetch merchant details to get merchant currency
+    (async () => {
+      try {
+        const resp = await api.get(`/api/merchants/${merchant.id}`);
+        if (resp.ok && resp.data?.merchant) {
+          const m = resp.data.merchant;
+          if (m.currency?.id) {
+            setFormData(prev => ({ ...prev, currencyId: m.currency.id }));
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch merchant details for currency', err);
+      }
+    })();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -774,11 +799,11 @@ export default function CreateOrderModal({ isOpen, onClose, onSuccess }: CreateO
                       <option value="">
                         {loadingData ? "Loading products..." : "Select product"}
                       </option>
-                      {products.map((product) => {
+                        {products.map((product) => {
                         const totalStock = product.inventory.reduce((sum, inv) => sum + inv.quantityAvailable, 0);
                         return (
                           <option key={product.id} value={product.id}>
-                            {product.name} - ${(product.sellingPrice || 0).toFixed(2)}
+                            {product.name} - {selectedCurrency?.symbol ?? '$'}{(product.sellingPrice || 0).toFixed(2)}
                             {totalStock <= 10 && ` (Stock: ${totalStock})`}
                           </option>
                         );
@@ -808,10 +833,10 @@ export default function CreateOrderModal({ isOpen, onClose, onSuccess }: CreateO
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Price (USD)
+                      Price ({selectedCurrency?.code ?? 'USD'})
                     </label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">{selectedCurrency?.symbol ?? '$'}</span>
                       <input
                         type="text"
                         value={item.price.toFixed(2)}
@@ -823,9 +848,9 @@ export default function CreateOrderModal({ isOpen, onClose, onSuccess }: CreateO
                     </div>
                   </div>
                 </div>
-                {item.productId && (
+                    {item.productId && (
                   <div className="mt-2 text-right text-sm text-gray-400">
-                    Subtotal: <span className="text-white font-medium">${(item.price * item.quantity).toFixed(2)} USD</span>
+                    Subtotal: <span className="text-white font-medium">{selectedCurrency?.symbol ?? '$'}{(item.price * item.quantity).toFixed(2)} {selectedCurrency?.code ?? 'USD'}</span>
                   </div>
                 )}
               </div>
@@ -970,14 +995,14 @@ export default function CreateOrderModal({ isOpen, onClose, onSuccess }: CreateO
                 return (
                   <div key={index} className="flex justify-between text-gray-400 mb-1">
                     <span>{product?.name || `Product ID: ${item.productId}`}</span>
-                    <span>{item.quantity} × ${item.price.toFixed(2)} = ${(item.quantity * item.price).toFixed(2)} USD</span>
+                    <span>{item.quantity} × {selectedCurrency?.symbol ?? '$'}{item.price.toFixed(2)} = {(selectedCurrency?.symbol ?? '$')}{(item.quantity * item.price).toFixed(2)} {selectedCurrency?.code ?? 'USD'}</span>
                   </div>
                 );
               })}
               <div className="border-t border-gray-600 pt-2 mt-2">
                 <div className="flex justify-between text-white font-medium">
                   <span>Total:</span>
-                  <span>${total.toFixed(2)} USD</span>
+                  <span>{selectedCurrency?.symbol ?? '$'}{total.toFixed(2)} {selectedCurrency?.code ?? 'USD'}</span>
                 </div>
               </div>
             </div>

@@ -55,10 +55,10 @@ export async function POST(
       return NextResponse.json({ error: "Merchant staff cannot create API keys" }, { status: 403 });
     }
 
-    // generate key and secret
-    const apiKey = crypto.randomBytes(24).toString("hex");
-    const apiSecret = crypto.randomBytes(32).toString("hex");
-    const prefix = apiKey.slice(0, 8);
+  // generate key and secret (use base64url to keep them URL-safe and ensure length >= 36)
+  const apiKey = crypto.randomBytes(32).toString("base64url"); // ~43 chars
+  const apiSecret = crypto.randomBytes(48).toString("base64url"); // ~64+ chars
+  const prefix = apiKey.slice(0, 8).replace(/[^A-Za-z0-9]/g, "");
 
     const created = await prisma.apiKey.create({
       data: {

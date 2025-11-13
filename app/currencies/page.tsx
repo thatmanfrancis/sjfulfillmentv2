@@ -248,10 +248,8 @@ export default function CurrenciesPage() {
   };
 
   const handleDeleteRate = async (rateId: string) => {
-    if (!confirm("Are you sure you want to delete this exchange rate?")) {
-      return;
-    }
-
+    // Opened via confirm modal flow - this function will be replaced by confirmDeleteRate
+    // kept here for backwards-compat but will perform the delete directly if called
     try {
       const response = await api.delete(`/api/exchange-rates/${rateId}`);
 
@@ -262,6 +260,38 @@ export default function CurrenciesPage() {
       await fetchExchangeRates();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete exchange rate");
+    }
+  };
+
+  // New modal state and handlers for delete confirmation
+  const [showDeleteRateModal, setShowDeleteRateModal] = useState(false);
+  const [rateToDeleteId, setRateToDeleteId] = useState<string | null>(null);
+  const [isDeletingRate, setIsDeletingRate] = useState(false);
+
+  const openDeleteRateModal = (rateId: string) => {
+    setRateToDeleteId(rateId);
+    setShowDeleteRateModal(true);
+  };
+
+  const confirmDeleteRate = async () => {
+    if (!rateToDeleteId) return;
+    setIsDeletingRate(true);
+    try {
+      const response = await api.delete(`/api/exchange-rates/${rateToDeleteId}`);
+
+      if (!response.ok) {
+        throw new Error(response.error || "Failed to delete exchange rate");
+      }
+
+      setShowDeleteRateModal(false);
+      setRateToDeleteId(null);
+      await fetchExchangeRates();
+      setIsDeletingRate(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete exchange rate");
+      setShowDeleteRateModal(false);
+      setRateToDeleteId(null);
+      setIsDeletingRate(false);
     }
   };
 
@@ -466,7 +496,7 @@ export default function CurrenciesPage() {
                             Edit
                           </button>
                           <button
-                            onClick={() => handleDeleteRate(rate.id)}
+                            onClick={() => openDeleteRateModal(rate.id)}
                             className="text-red-400 hover:text-red-300 text-sm"
                           >
                             Delete
@@ -835,6 +865,43 @@ export default function CurrenciesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Delete Exchange Rate Confirmation Modal */}
+      {showDeleteRateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold text-white mb-4">Confirm Delete</h2>
+            <p className="text-gray-300 mb-4">Are you sure you want to delete this exchange rate? This action cannot be undone.</p>
+
+            {error && (
+              <div className="bg-red-900/20 border border-red-700 text-red-300 px-4 py-3 rounded mb-4">
+                {error}
+              </div>
+            )}
+
+            <div className="flex justify-end space-x-3 pt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteRateModal(false);
+                  setRateToDeleteId(null);
+                }}
+                className="px-4 py-2 text-gray-300 hover:text-white transition-colors"
+                disabled={isDeletingRate}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteRate}
+                className="bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isDeletingRate}
+              >
+                {isDeletingRate ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
           </div>
         </div>
       )}

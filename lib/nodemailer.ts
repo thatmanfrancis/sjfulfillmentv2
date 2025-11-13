@@ -1,30 +1,13 @@
-import nodemailer from "nodemailer";
+// Legacy module name retained for compatibility.
+// The project now uses `lib/email.ts` (ZeptoMail). To avoid changing many
+// call-sites across the codebase we provide a thin wrapper that re-exports
+// the modern `sendEmail` function under the historical `sendMail` name.
 
-const transport = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT),
-    secure: false, // true for 465, false for other ports (587)
-    auth: {
-        user: process.env.SMTP_USER!,
-        pass: process.env.SMTP_PASS?.replace(/\s/g, ''), // Remove any spaces from password
-    },
-    tls: {
-        rejectUnauthorized: false // Allow self-signed certificates if needed
-    }
-})
+import { sendEmail } from "./email";
 
-export async function sendMail({ to, subject, html }: { to: string, subject: string, html: string }) {
-    try {
-        const info = await transport.sendMail({
-            from: process.env.SMTP_FROM!,
-            to,
-            subject,
-            html
-        });
-        console.log('Email sent successfully:', info.messageId);
-        return info;
-    } catch (error) {
-        console.error('Error sending email:', error);
-        throw error;
-    }
+export async function sendMail({ to, subject, html }: { to: string | string[]; subject: string; html: string }) {
+  // keep shape similar to the old sendMail and return the underlying result
+  return await sendEmail({ to, subject, html });
 }
+
+export default sendMail;
