@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
+import { exportShipments } from "@/lib/export-utils";
 
 interface Shipment {
   id: string;
@@ -107,6 +108,10 @@ export default function ShipmentsPage() {
     return matchesSearch;
   });
 
+  const handleExportShipments = () => {
+    exportShipments(filteredShipments);
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "LABEL_CREATED": return "bg-gray-900 text-gray-300";
@@ -160,8 +165,11 @@ export default function ShipmentsPage() {
           <p className="text-gray-400">Track and manage package deliveries</p>
         </div>
         <div className="flex gap-2">
-          <button className="bg-gray-700 text-white px-4 py-2 rounded-lg font-medium hover:bg-gray-600 transition-colors">
-            Export
+          <button 
+            onClick={handleExportShipments}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors"
+          >
+            📊 Export CSV
           </button>
           {/* Only non-merchant roles should see create shipment */}
           {user?.role !== "MERCHANT" && user?.role !== "MERCHANT_STAFF" && (

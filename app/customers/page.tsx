@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import CreateCustomerModal from "@/components/CreateCustomerModal";
 import EditCustomerModal from "@/components/EditCustomerModal";
+import { exportCustomers } from "@/lib/export-utils";
 
 interface Customer {
   id: string;
@@ -76,6 +77,10 @@ export default function CustomersPage() {
     }
   };
 
+  const handleExportCustomers = () => {
+    exportCustomers(filteredCustomers);
+  };
+
   if (loading) {
     return (
       <div className="p-6">
@@ -101,12 +106,20 @@ export default function CustomersPage() {
           </h1>
           <p className="text-gray-400">Manage your customer relationships</p>
         </div>
-        <button 
-          onClick={() => setShowCreateModal(true)}
-          className="bg-[#f08c17] text-black px-4 py-2 rounded-lg font-medium hover:bg-orange-500 transition-colors"
-        >
-          Add Customer
-        </button>
+        <div className="flex gap-2">
+          <button 
+            onClick={handleExportCustomers}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors"
+          >
+            📊 Export CSV
+          </button>
+          <button 
+            onClick={() => setShowCreateModal(true)}
+            className="bg-[#f08c17] text-black px-4 py-2 rounded-lg font-medium hover:bg-orange-500 transition-colors"
+          >
+            Add Customer
+          </button>
+        </div>
       </div>
 
       {/* Filters */}

@@ -24,6 +24,18 @@ interface Category {
 interface Merchant {
   id: string;
   businessName: string;
+  currency?: {
+    id: string;
+    code: string;
+    symbol: string;
+  };
+}
+
+interface Currency {
+  id: string;
+  code: string;
+  symbol: string;
+  name: string;
 }
 
 interface WarehouseDistribution {
@@ -43,6 +55,7 @@ interface CreateProductModalProps {
 export default function CreateProductModal({ isOpen, onClose, onSuccess }: CreateProductModalProps) {
   const [formData, setFormData] = useState({
     merchantId: "",
+    currencyId: "",
     name: "",
     description: "",
     sku: "",
@@ -83,6 +96,7 @@ export default function CreateProductModal({ isOpen, onClose, onSuccess }: Creat
   const [warehousesLoading, setWarehousesLoading] = useState(false);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [imageUrl, setImageUrl] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -185,9 +199,10 @@ export default function CreateProductModal({ isOpen, onClose, onSuccess }: Creat
   const fetchInitialData = async () => {
     setDataLoading(true);
     try {
-      const [merchantsRes, categoriesRes] = await Promise.all([
+      const [merchantsRes, categoriesRes, currenciesRes] = await Promise.all([
         api.get("/api/merchants?limit=100"),
         api.get('/api/categories'),
+        api.get('/api/currencies')
       ]);
 
       if (merchantsRes.ok) {
@@ -198,6 +213,21 @@ export default function CreateProductModal({ isOpen, onClose, onSuccess }: Creat
       }
       if (categoriesRes && categoriesRes.ok) {
         setCategories(categoriesRes.data.categories || []);
+      }
+      if (currenciesRes.ok) {
+        const currencyList = currenciesRes.data.currencies || [];
+        setCurrencies(currencyList);
+        
+        // Set default currency to NGN if available, otherwise USD, otherwise first currency
+        const ngnCurrency = currencyList.find((c: Currency) => c.code === 'NGN');
+        const usdCurrency = currencyList.find((c: Currency) => c.code === 'USD');
+        if (ngnCurrency) {
+          setFormData(prev => ({ ...prev, currencyId: ngnCurrency.id }));
+        } else if (usdCurrency) {
+          setFormData(prev => ({ ...prev, currencyId: usdCurrency.id }));
+        } else if (currencyList.length > 0) {
+          setFormData(prev => ({ ...prev, currencyId: currencyList[0].id }));
+        }
       }
     } catch (error) {
       console.error("Error fetching initial data:", error);
@@ -215,6 +245,16 @@ export default function CreateProductModal({ isOpen, onClose, onSuccess }: Creat
 
     setWarehousesLoading(true);
     setWarehouses([]);
+    
+    // Fetch merchant details to get currency
+    try {
+      const merchantRes = await api.get(`/api/merchants/${formData.merchantId}`);
+      if (merchantRes.ok && merchantRes.data?.merchant?.currency?.id) {
+        setFormData(prev => ({ ...prev, currencyId: merchantRes.data.merchant.currency.id }));
+      }
+    } catch (err) {
+      console.warn('Failed to fetch merchant currency:', err);
+    }
     
     try {
       console.log("Fetching ALL warehouses (admin can see all)");
@@ -270,6 +310,7 @@ export default function CreateProductModal({ isOpen, onClose, onSuccess }: Creat
 
       const payload = {
         merchantId: formData.merchantId,
+        currencyId: formData.currencyId,
         name: formData.name,
         description: formData.description,
         sku: skuToUse,
@@ -330,6 +371,7 @@ export default function CreateProductModal({ isOpen, onClose, onSuccess }: Creat
         // Reset form
         setFormData({
           merchantId: "",
+          currencyId: "",
           name: "",
           description: "",
           sku: "",
@@ -586,9 +628,39 @@ export default function CreateProductModal({ isOpen, onClose, onSuccess }: Creat
         <div className="space-y-4">
           <h4 className="text-white font-medium border-b border-gray-700 pb-2">Pricing & Costs</h4>
           
+          {/* Currency Selection */}
+          {formData.merchantId ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Currency</label>
+              <div className="px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-300">
+                {currencies.find(c => c.id === formData.currencyId)?.code || 'Loading...'} ({currencies.find(c => c.id === formData.currencyId)?.symbol || '$'})
+                <span className="text-sm text-gray-500 ml-2">- Merchant Default</span>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Currency *</label>
+              <select
+                required
+                value={formData.currencyId}
+                onChange={(e) => setFormData(prev => ({ ...prev, currencyId: e.target.value }))}
+                className="w-full px-3 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]"
+              >
+                <option value="">Select currency</option>
+                {currencies.map(currency => (
+                  <option key={currency.id} value={currency.id}>
+                    {currency.code} ({currency.symbol}) - {currency.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Sale Price *</label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Sale Price ({currencies.find(c => c.id === formData.currencyId)?.code || 'USD'}) *
+              </label>
               <input
                 type="number"
                 step="0.01"
@@ -599,9 +671,14 @@ export default function CreateProductModal({ isOpen, onClose, onSuccess }: Creat
                 className="w-full px-3 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]"
                 placeholder="0.00"
               />
+              <p className="text-xs text-gray-400 mt-1">
+                {currencies.find(c => c.id === formData.currencyId)?.symbol || '$'}{formData.price.toFixed(2)}
+              </p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Cost Price</label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Cost Price ({currencies.find(c => c.id === formData.currencyId)?.code || 'USD'})
+              </label>
               <input
                 type="number"
                 step="0.01"
@@ -611,6 +688,9 @@ export default function CreateProductModal({ isOpen, onClose, onSuccess }: Creat
                 className="w-full px-3 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]"
                 placeholder="0.00"
               />
+              <p className="text-xs text-gray-400 mt-1">
+                {currencies.find(c => c.id === formData.currencyId)?.symbol || '$'}{formData.cost.toFixed(2)}
+              </p>
             </div>
           </div>
         </div>

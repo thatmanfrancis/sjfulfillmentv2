@@ -358,14 +358,55 @@ export async function GET(req: NextRequest) {
       return `${symbol}${amount.toFixed(2)}`;
     };
 
-    // Default currency (use USD or first available)
-    const defaultCurrency = await prisma.currency.findFirst({
-      where: { code: "USD" },
-      select: { code: true, symbol: true },
-    });
-
-    const currencySymbol = defaultCurrency?.symbol || "$";
-    const currencyCode = defaultCurrency?.code || "USD";
+    // Get currency based on merchant context
+    let currencySymbol = "$";
+    let currencyCode = "USD";
+    
+    if (!isAdmin && merchantIds.length > 0) {
+      // For merchant users, get the merchant's currency
+      const merchant = await prisma.merchant.findFirst({
+        where: { id: { in: merchantIds } },
+        include: { currency: true },
+        orderBy: { createdAt: 'desc' }, // Get most recent if multiple
+      });
+      
+      if (merchant?.currency) {
+        currencySymbol = merchant.currency.symbol;
+        currencyCode = merchant.currency.code;
+      } else {
+        // Fallback to NGN for Nigerian platform
+        const ngnCurrency = await prisma.currency.findFirst({
+          where: { code: "NGN" },
+          select: { code: true, symbol: true },
+        });
+        
+        if (ngnCurrency) {
+          currencySymbol = ngnCurrency.symbol;
+          currencyCode = ngnCurrency.code;
+        }
+      }
+    } else {
+      // Admin users - try to get NGN first, then USD, then any currency
+      const ngnCurrency = await prisma.currency.findFirst({
+        where: { code: "NGN" },
+        select: { code: true, symbol: true },
+      });
+      
+      if (ngnCurrency) {
+        currencySymbol = ngnCurrency.symbol;
+        currencyCode = ngnCurrency.code;
+      } else {
+        const defaultCurrency = await prisma.currency.findFirst({
+          where: { code: "USD" },
+          select: { code: true, symbol: true },
+        });
+        
+        if (defaultCurrency) {
+          currencySymbol = defaultCurrency.symbol;
+          currencyCode = defaultCurrency.code;
+        }
+      }
+    }
 
     return NextResponse.json({
       success: true,

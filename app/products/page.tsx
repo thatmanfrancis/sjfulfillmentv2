@@ -7,6 +7,7 @@ import { useRBAC } from "@/lib/use-rbac";
 import Pagination from "@/components/Pagination";
 import CreateProductModal from "@/components/CreateProductModal";
 import BulkUploadProductsModal from "@/components/BulkUploadProductsModal";
+import { exportProducts } from "@/lib/export-utils";
 
 interface InventoryLocation {
   id: string;
@@ -226,6 +227,49 @@ export default function ProductsPage() {
     window.location.href = `/products/${productId}`;
   };
 
+  const handleExportProducts = () => {
+    // Fetch all products for export (without pagination)
+    const exportAllProducts = async () => {
+      try {
+        const params = new URLSearchParams({
+          page: '1',
+          limit: '1000', // Get a large number to export all
+          search: searchTerm,
+          category: categoryFilter,
+        });
+
+        const response = await fetch(`/api/products?${params}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          },
+        });
+        
+        if (response.ok) {
+          const data: ProductsResponse = await response.json();
+          exportProducts(data.products || []);
+        } else {
+          console.error('Failed to fetch products for export');
+          setAlert({ 
+            isOpen: true, 
+            title: 'Export Error', 
+            message: 'Failed to fetch products for export', 
+            type: 'error' 
+          });
+        }
+      } catch (error) {
+        console.error('Export error:', error);
+        setAlert({ 
+          isOpen: true, 
+          title: 'Export Error', 
+          message: 'Failed to export products', 
+          type: 'error' 
+        });
+      }
+    };
+    
+    exportAllProducts();
+  };
+
   if (loading) {
     return (
       <div className="p-6">
@@ -253,6 +297,12 @@ export default function ProductsPage() {
         </div>
         {user?.role !== "MERCHANT" && (
           <div className="flex gap-2">
+            <button 
+              onClick={handleExportProducts}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors"
+            >
+              📊 Export CSV
+            </button>
             <button 
               onClick={() => setShowBulkUploadModal(true)}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"

@@ -370,6 +370,7 @@ export function getAccessibleRoutes(userRole: UserRole): string[] {
       '/returns',
       '/shipments',
       '/reports',
+      '/notifications',
       '/merchant/settings',
     ],
     MERCHANT_STAFF: [

@@ -7,6 +7,7 @@ import CreateOrderModal from "@/components/CreateOrderModal";
 import CreateProductModal from "@/components/CreateProductModal";
 import CreateCustomerModal from "@/components/CreateCustomerModal";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
+import { exportAnalytics, exportFinancialReport } from "@/lib/export-utils";
 
 interface DashboardData {
   stats: {
@@ -130,6 +131,18 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchDashboardData();
   }, []);
+
+  const handleExportAnalytics = () => {
+    if (dashboardData) {
+      exportAnalytics(dashboardData);
+    }
+  };
+
+  const handleExportFinancialReport = () => {
+    if (dashboardData?.stats) {
+      exportFinancialReport(dashboardData.stats);
+    }
+  };
 
   const fetchDashboardData = async () => {
     setLoading(true);
@@ -290,12 +303,30 @@ export default function DashboardPage() {
     <div className="p-4 lg:p-6 space-y-6">
       {/* Welcome Header */}
       <div className="bg-black border border-gray-700 rounded-lg p-6">
-        <h1 className="text-2xl lg:text-3xl font-bold text-[#f08c17] mb-2">
-          {getRoleBasedWelcome()}
-        </h1>
-        <p className="text-gray-300">
-          Welcome back, {user.firstName}! Here's what's happening with your business today.
-        </p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl lg:text-3xl font-bold text-[#f08c17] mb-2">
+              {getRoleBasedWelcome()}
+            </h1>
+            <p className="text-gray-300">
+              Welcome back, {user.firstName}! Here's what's happening with your business today.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button 
+              onClick={handleExportFinancialReport}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+            >
+              💰 Financial Report
+            </button>
+            <button 
+              onClick={handleExportAnalytics}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors"
+            >
+              📊 Export Analytics
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Quick Stats Grid */}

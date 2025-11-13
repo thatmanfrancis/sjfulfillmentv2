@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import Pagination from "@/components/Pagination";
 import CreateOrderModal from "@/components/CreateOrderModal";
+import { exportOrders } from "@/lib/export-utils";
 
 interface Customer {
   id: string;
@@ -112,14 +113,43 @@ export default function OrdersPage() {
     setCurrentPage(page);
   };
 
-  const copyToClipboard = async (orderNumber: string) => {
+  const copyToClipboard = async (text: string, orderNumber: string) => {
     try {
-      await navigator.clipboard.writeText(orderNumber);
+      await navigator.clipboard.writeText(text);
       setCopiedOrderNumber(orderNumber);
       setTimeout(() => setCopiedOrderNumber(null), 2000);
     } catch (err) {
       console.error("Failed to copy:", err);
     }
+  };
+
+  const handleExportOrders = () => {
+    // Fetch all orders for export (without pagination)
+    const exportAllOrders = async () => {
+      try {
+        const params = new URLSearchParams({
+          page: '1',
+          limit: '1000', // Get a large number to export all
+          search: searchTerm,
+          status: statusFilter,
+        });
+
+        const response = await api.get(`/api/orders?${params}`);
+        
+        if (response.ok) {
+          const ordersFromAPI: OrderFromAPI[] = response.data.orders || [];
+          exportOrders(ordersFromAPI);
+        } else {
+          console.error('Failed to fetch orders for export');
+          alert('Failed to export orders');
+        }
+      } catch (error) {
+        console.error('Export error:', error);
+        alert('Failed to export orders');
+      }
+    };
+    
+    exportAllOrders();
   };
 
   const getStatusColor = (status: string) => {
@@ -158,12 +188,20 @@ export default function OrdersPage() {
           </h1>
           <p className="text-gray-400">Manage and track all orders</p>
         </div>
-        <button 
-          onClick={() => setShowCreateModal(true)}
-          className="bg-[#f08c17] text-black px-4 py-2 rounded-lg font-medium hover:bg-orange-500 transition-colors"
-        >
-          New Order
-        </button>
+        <div className="flex gap-2">
+          <button 
+            onClick={handleExportOrders}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors"
+          >
+            📊 Export CSV
+          </button>
+          <button 
+            onClick={() => setShowCreateModal(true)}
+            className="bg-[#f08c17] text-black px-4 py-2 rounded-lg font-medium hover:bg-orange-500 transition-colors"
+          >
+            New Order
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -238,7 +276,7 @@ export default function OrdersPage() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            copyToClipboard(order.orderNumber);
+                            copyToClipboard(order.orderNumber, order.orderNumber);
                           }}
                           className="text-gray-400 hover:text-[#f08c17] transition-colors"
                           title="Copy tracking number"

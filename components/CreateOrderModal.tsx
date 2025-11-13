@@ -550,28 +550,39 @@ export default function CreateOrderModal({ isOpen, onClose, onSuccess }: CreateO
               </div>
             )}
 
-            {/* Currency Selection */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Currency <span className="text-red-400">*</span>
-              </label>
-              <select
-                value={formData.currencyId}
-                onChange={(e) => setFormData(prev => ({ ...prev, currencyId: e.target.value }))}
-                className="w-full px-3 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]"
-                disabled={loadingData}
-                required
-              >
-                <option value="">
-                  {loadingData ? "Loading currencies..." : "Select currency"}
-                </option>
-                {currencies.map((currency) => (
-                  <option key={currency.id} value={currency.id}>
-                    {currency.code} - {currency.symbol}
+            {/* Currency Selection - Hidden when merchant selected, shows merchant currency */}
+            {formData.merchantId ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Currency
+                </label>
+                <div className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-300">
+                  {selectedCurrency ? `${selectedCurrency.code} - ${selectedCurrency.symbol}` : 'Loading...'}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Currency <span className="text-red-400">*</span>
+                </label>
+                <select
+                  value={formData.currencyId}
+                  onChange={(e) => setFormData(prev => ({ ...prev, currencyId: e.target.value }))}
+                  className="w-full px-3 py-2 bg-black border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#f08c17]"
+                  disabled={loadingData}
+                  required
+                >
+                  <option value="">
+                    {loadingData ? "Loading currencies..." : "Select currency"}
                   </option>
-                ))}
-              </select>
-            </div>
+                  {currencies.map((currency) => (
+                    <option key={currency.id} value={currency.id}>
+                      {currency.code} - {currency.symbol}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             
             <div className="space-y-3">
               <div>
