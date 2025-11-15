@@ -1,0 +1,157 @@
+import { NextRequest, NextResponse } from 'next/server';
+import prisma from '@/lib/prisma';
+import { getSession } from '@/lib/auth';
+
+export async function GET(request: NextRequest) {
+  try {
+    // Verify logistics session
+    const session = await getSession();
+    
+    if (!session || session.role !== 'LOGISTICS') {
+      return NextResponse.json(
+        { error: 'Unauthorized access' },
+        { status: 403 }
+      );
+    }
+
+    // Get user's assigned region - temporarily disabled
+    // TODO: Re-enable when logistics regions are properly configured
+    const assignedRegions: string[] = [];
+
+    // Fetch logistics dashboard statistics
+    const [
+      activeShipments,
+      deliveredToday,
+      pendingPickups,
+      totalDrivers,
+      regionsServed,
+      recentShipments
+    ] = await Promise.all([
+      // Count active shipments
+      prisma.shipment.count({
+        where: {
+          status: { in: ['PICKED_UP', 'IN_TRANSIT'] },
+          ...(assignedRegions.length > 0 && {
+            order: {
+              business: {
+                logisticsRegionId: { in: assignedRegions }
+              }
+            }
+          })
+        }
+      }),
+
+      // Count deliveries completed today
+      prisma.shipment.count({
+        where: {
+          status: 'DELIVERED',
+          deliveredAt: {
+            gte: new Date(new Date().setHours(0, 0, 0, 0))
+          }
+          // Logistics region filtering disabled
+        }
+      }),
+
+      // Count pending pickups
+      prisma.shipment.count({
+        where: {
+          status: 'PENDING'
+          // Logistics region filtering disabled
+        }
+      }),
+
+      // Count total drivers (placeholder - would need driver table)
+      Promise.resolve(25),
+
+      // Count regions served
+      assignedRegions.length > 0 
+        ? assignedRegions.length
+        : prisma.logisticsRegion.count({ where: { isActive: true } }),
+
+      // Get recent shipments
+      prisma.shipment.findMany({
+        take: 10,
+        orderBy: { createdAt: 'desc' },
+        where: {
+          // Logistics region filtering disabled
+        },
+        include: {
+          order: {
+            include: {
+              business: {
+                select: { name: true }
+              }
+            }
+          }
+        }
+      })
+    ]);
+
+    // Calculate average delivery time
+    const deliveryTimes = await prisma.shipment.findMany({
+      where: {
+        status: 'DELIVERED',
+        deliveredAt: { not: null },
+        createdAt: {
+          gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // Last 7 days
+        }
+        // Logistics region filtering disabled
+      },
+      select: {
+        createdAt: true,
+        deliveredAt: true
+      }
+    });
+
+    const avgDeliveryTime = deliveryTimes.length > 0 
+      ? deliveryTimes.reduce((acc, shipment) => {
+          const hours = (new Date(shipment.deliveredAt!).getTime() - new Date(shipment.createdAt).getTime()) / (1000 * 60 * 60);
+          return acc + hours;
+        }, 0) / deliveryTimes.length
+      : 0;
+
+    // Calculate on-time delivery rate
+    const onTimeDeliveries = deliveryTimes.filter(shipment => {
+      const hours = (new Date(shipment.deliveredAt!).getTime() - new Date(shipment.createdAt).getTime()) / (1000 * 60 * 60);
+      return hours <= 24; // Consider on-time if delivered within 24 hours
+    }).length;
+
+    const onTimeDeliveryRate = deliveryTimes.length > 0 
+      ? Math.round((onTimeDeliveries / deliveryTimes.length) * 100)
+      : 0;
+
+    // Regional performance calculation disabled
+    // TODO: Re-implement when logistics regions are configured
+    const regionalPerformance: any[] = [];
+
+    const dashboardData = {
+      activeShipments,
+      deliveredToday,
+      pendingPickups,
+      averageDeliveryTime: Math.round(avgDeliveryTime * 10) / 10,
+      totalDrivers,
+      regionsServed,
+      onTimeDeliveryRate,
+      recentShipments: recentShipments.map(shipment => ({
+        id: shipment.id,
+        trackingNumber: shipment.trackingNumber,
+        status: shipment.status,
+        businessName: shipment.order.business.name,
+        // pickupAddress: shipment.pickupAddress, - not in schema
+        // deliveryAddress: shipment.deliveryAddress, - not in schema
+        createdAt: shipment.createdAt
+        // estimatedDelivery: shipment.estimatedDelivery - not in schema
+      })),
+      regionalPerformance
+    };
+
+    return NextResponse.json(dashboardData);
+
+  } catch (error) {
+    console.error('Logistics dashboard error:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch dashboard data' },
+      { status: 500 }
+    );
+  }
+}

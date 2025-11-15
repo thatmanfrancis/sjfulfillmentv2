@@ -1,0 +1,291 @@
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import prisma from "@/lib/prisma";
+import { verifyAuth } from "@/lib/auth";
+
+const createLogisticsRegionSchema = z.object({
+  userId: z.string().uuid(),
+  regionId: z.string().uuid(),
+});
+
+export async function GET(request: NextRequest) {
+  try {
+    const authResult = await verifyAuth(request);
+    if (!authResult.success) {
+      return NextResponse.json({ error: authResult.error }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get("userId");
+    const regionId = searchParams.get("regionId");
+
+    let where: any = {};
+
+    // Admin can see all logistics region assignments
+    if (authResult.user.role === "ADMIN") {
+      if (userId) where.userId = userId;
+      if (regionId) where.regionId = regionId;
+    } else {
+      // Logistics users can only see their own assignments
+      where.userId = authResult.user.id;
+    }
+
+    const logisticsRegions = await prisma.userLogisticsRegion.findMany({
+      where,
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            role: true,
+          },
+        },
+        warehouse: {
+          select: {
+            id: true,
+            name: true,
+            region: true,
+          },
+        },
+      },
+      orderBy: [
+        { logisticsRegion: { name: "asc" } },
+        { user: { lastName: "asc" } },
+      ],
+    });
+
+    // Get summary statistics for admin
+    let summary = {};
+    if (authResult.user.role === "ADMIN") {
+      const [warehouseStats, userStats] = await Promise.all([
+        prisma.userLogisticsRegion.groupBy({
+          by: ['regionId'],
+          _count: true,
+          orderBy: { _count: { regionId: 'desc' } },
+        }),
+        prisma.userLogisticsRegion.groupBy({
+          by: ['userId'],
+          _count: true,
+          orderBy: { _count: { userId: 'desc' } },
+        }),
+      ]);
+
+      summary = {
+        totalAssignments: logisticsRegions.length,
+        warehousesWithLogistics: warehouseStats.length,
+        logisticsUsersWithRegions: userStats.length,
+      };
+    }
+
+    return NextResponse.json({
+      logisticsRegions,
+      summary,
+    });
+  } catch (error) {
+    console.error("Error fetching logistics regions:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const authResult = await verifyAuth(request);
+    if (!authResult.success) {
+      return NextResponse.json({ error: authResult.error }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const validatedData = createLogisticsRegionSchema.parse(body);
+
+    // Verify user exists and is a logistics user
+    const user = await prisma.user.findUnique({
+      where: { id: validatedData.userId },
+      select: { id: true, firstName: true, lastName: true, role: true },
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "User not found" },
+        { status: 404 }
+      );
+    }
+
+    if (user.role !== "LOGISTICS") {
+      return NextResponse.json(
+        { error: "User must have LOGISTICS role" },
+        { status: 400 }
+      );
+    }
+
+    // Verify region exists
+    const logisticsRegion = await prisma.logisticsRegion.findUnique({
+      where: { id: validatedData.regionId },
+      select: { id: true, name: true, isActive: true },
+    });
+
+    if (!logisticsRegion) {
+      return NextResponse.json(
+        { error: "Logistics region not found" },
+        { status: 404 }
+      );
+    }
+
+    if (!logisticsRegion.isActive) {
+      return NextResponse.json(
+        { error: "Logistics region is not active" },
+        { status: 400 }
+      );
+    }
+
+    // Check if assignment already exists
+    const existingAssignment = await prisma.userLogisticsRegion.findUnique({
+      where: {
+        userId_regionId: {
+          userId: validatedData.userId,
+          regionId: validatedData.regionId,
+        },
+      },
+    });
+
+    if (existingAssignment) {
+      return NextResponse.json(
+        { error: "User is already assigned to this logistics region" },
+        { status: 409 }
+      );
+    }
+
+    const logisticsRegion = await prisma.userLogisticsRegion.create({
+      data: validatedData,
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            role: true,
+          },
+        },
+        warehouse: {
+          select: {
+            id: true,
+            name: true,
+            region: true,
+          },
+        },
+      },
+    });
+
+    // Create audit log
+    await prisma.auditLog.create({
+      data: {
+        entityType: "LogisticsRegion",
+        entityId: logisticsRegion.id,
+        action: "LOGISTICS_REGION_ASSIGNED",
+        details: {
+          userId: logisticsRegion.userId,
+          warehouseId: logisticsRegion.warehouseId,
+          userName: `${user.firstName} ${user.lastName}`,
+          warehouseName: warehouse.name,
+          region: warehouse.region,
+        },
+        changedById: authResult.user.id,
+      },
+    });
+
+    return NextResponse.json({
+      logisticsRegion,
+    }, { status: 201 });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: "Validation error", details: error.issues },
+        { status: 400 }
+      );
+    }
+    console.error("Error creating logistics region assignment:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const authResult = await verifyAuth(request);
+    if (!authResult.success) {
+      return NextResponse.json({ error: authResult.error }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get("userId");
+    const warehouseId = searchParams.get("warehouseId");
+
+    if (!userId || !warehouseId) {
+      return NextResponse.json(
+        { error: "Both userId and warehouseId are required" },
+        { status: 400 }
+      );
+    }
+
+    const existingAssignment = await prisma.logisticsRegion.findUnique({
+      where: {
+        userId_warehouseId: {
+          userId,
+          warehouseId,
+        },
+      },
+      include: {
+        user: { select: { firstName: true, lastName: true } },
+        warehouse: { select: { name: true, region: true } },
+      },
+    });
+
+    if (!existingAssignment) {
+      return NextResponse.json(
+        { error: "Assignment not found" },
+        { status: 404 }
+      );
+    }
+
+    await prisma.userLogisticsRegion.delete({
+      where: {
+        userId_warehouseId: {
+          userId,
+          warehouseId,
+        },
+      },
+    });
+
+    // Create audit log
+    await prisma.auditLog.create({
+      data: {
+        entityType: "LogisticsRegion",
+        entityId: existingAssignment.id,
+        action: "LOGISTICS_REGION_UNASSIGNED",
+        details: {
+          userId: existingAssignment.userId,
+          warehouseId: existingAssignment.warehouseId,
+          userName: `${existingAssignment.user.firstName} ${existingAssignment.user.lastName}`,
+          warehouseName: existingAssignment.warehouse.name,
+          region: existingAssignment.warehouse.region,
+        },
+        changedById: authResult.user.id,
+      },
+    });
+
+    return NextResponse.json({ message: "Logistics region assignment removed successfully" });
+  } catch (error) {
+    console.error("Error removing logistics region assignment:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
