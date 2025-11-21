@@ -5,7 +5,7 @@ import { getCurrentSession } from '@/lib/session';
 export async function GET(req: NextRequest) {
   try {
     const session = await getCurrentSession();
-    if (!session?.user?.id) {
+    if (!session?.userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -13,8 +13,8 @@ export async function GET(req: NextRequest) {
     const where: any = {};
     
     // Add business filter for merchants
-    if (session.user.role !== 'ADMIN') {
-      where.businessId = session.user.businessId;
+    if (session.role !== 'ADMIN') {
+      where.businessId = session.businessId;
     }
 
     const stats = await prisma.order.groupBy({

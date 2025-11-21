@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
       prisma.orderItem.groupBy({
         by: ['productId'],
         where: {
-          order: orderFilters,
+          Order: orderFilters,
         },
         _sum: { 
           quantity: true,
@@ -112,13 +112,7 @@ export async function GET(request: NextRequest) {
           id: true,
           name: true,
           region: true,
-          _count: {
-            select: {
-              fulfilledOrders: {
-                where: { orderDate: { gte: startDate } },
-              },
-            },
-          },
+          // No _count.fulfilledOrders, remove this block
         },
       }),
 
@@ -155,24 +149,21 @@ export async function GET(request: NextRequest) {
       prisma.stockAllocation.findMany({
         where: {
           allocatedQuantity: { lt: 10 },
-          product: productFilters,
+          Product: productFilters,
         },
         select: {
           id: true,
           allocatedQuantity: true,
-          product: {
+          Product: {
             select: {
               id: true,
               name: true,
               sku: true,
-              business: {
-                select: { name: true },
-              },
+              businessId: true,
+              Business: { select: { name: true } },
             },
           },
-          warehouse: {
-            select: { name: true },
-          },
+          Warehouse: { select: { name: true } },
         },
         orderBy: { allocatedQuantity: 'asc' },
         take: 20,
@@ -187,7 +178,7 @@ export async function GET(request: NextRequest) {
         id: true,
         name: true,
         sku: true,
-        business: { select: { name: true } },
+        Business: { select: { name: true } },
       },
     });
 
@@ -197,7 +188,7 @@ export async function GET(request: NextRequest) {
         ...product,
         productName: details?.name || 'Unknown',
         productSku: details?.sku || 'N/A',
-        businessName: details?.business?.name || 'Unknown',
+        businessName: details && details.Business ? details.Business.name : 'Unknown',
       };
     });
 
@@ -261,20 +252,17 @@ export async function GET(request: NextRequest) {
       },
       rankings: {
         topProducts: enrichedTopProducts,
-        warehousePerformance: warehouseStats.map(warehouse => ({
-          ...warehouse,
-          ordersFulfilled: warehouse._count.fulfilledOrders,
-        })),
+        warehousePerformance: warehouseStats,
       },
       alerts: {
         lowStockAllocations: inventoryLevels.map(item => ({
           id: item.id,
           stockLevel: item.allocatedQuantity,
-          productId: item.product.id,
-          productName: item.product.name,
-          productSku: item.product.sku,
-          businessName: item.product.business.name,
-          warehouseName: item.warehouse.name,
+          productId: item.Product.id,
+          productName: item.Product.name,
+          productSku: item.Product.sku,
+          businessName: item.Product.Business?.name || 'Unknown',
+          warehouseName: item.Warehouse?.name || 'Unknown',
         })),
         totalCustomers: customerStats._count.id,
       },

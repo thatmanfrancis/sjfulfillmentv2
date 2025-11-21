@@ -45,10 +45,26 @@ export async function GET(
       );
     }
 
-    const merchant = await prisma.business.findUnique({
-      where: { id },
-      include: {
-        staff: {
+        const business = await prisma.business.findUnique({
+      where: { 
+        id,
+        deletedAt: null // Exclude soft-deleted merchants
+      },
+      select: {
+        id: true,
+        name: true,
+        logoUrl: true,
+        baseCurrency: true,
+        isActive: true,
+        onboardingStatus: true,
+        address: true,
+        city: true,
+        contactPhone: true,
+        country: true,
+        state: true,
+        createdAt: true,
+        updatedAt: true,
+        User_User_businessIdToBusiness: {
           select: {
             id: true,
             firstName: true,
@@ -56,38 +72,83 @@ export async function GET(
             email: true,
             isVerified: true,
             mfaEnabled: true,
-            role: true,
             createdAt: true,
             lastLoginAt: true,
+            role: true,
           },
         },
         Order: {
+          take: 50, // Limit to recent orders
+          orderBy: { orderDate: 'desc' },
           select: {
             id: true,
-            status: true,
+            externalOrderId: true,
+            customerName: true,
+            customerPhone: true,
+            customerAddress: true,
             totalAmount: true,
+            status: true,
             orderDate: true,
-          },
-          take: 10,
-          orderBy: { orderDate: 'desc' },
+          }
         },
-        _count: {
+        Product: {
+          take: 100, // Limit products
           select: {
-            Order: true,
-            staff: true,
-          },
-        },
+            id: true,
+            sku: true,
+            name: true,
+            weightKg: true,
+            imageUrl: true,
+          }
+        }
       },
     });
 
-    if (!merchant) {
+    if (!business) {
       return NextResponse.json(
         { error: 'Merchant not found' },
         { status: 404 }
       );
     }
 
-    return NextResponse.json({ merchant });
+    // Calculate stats
+    const totalRevenue = business.Order.reduce((sum: number, order: any) => sum + (order.totalAmount || 0), 0);
+    const totalOrders = business.Order.length;
+    const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+    const activeProducts = business.Product.length; // All selected products are active
+
+    // Transform business data to match frontend expectations
+    const merchantData = {
+      id: business.id,
+      name: business.name,
+      description: null, // Not in schema
+      contactEmail: business.contactPhone || 'N/A',
+      contactPhone: business.contactPhone,
+      address: business.address,
+      city: business.city,
+      state: business.state,
+      postalCode: null, // Not in schema
+      country: business.country,
+      website: null, // Not in schema
+      isActive: business.isActive,
+      createdAt: business.createdAt.toISOString(),
+      updatedAt: business.updatedAt.toISOString(),
+      staff: business.User_User_businessIdToBusiness,
+      orders: business.Order,
+      products: business.Product,
+      stats: {
+        totalOrders,
+        totalRevenue,
+        averageOrderValue,
+        totalProducts: business.Product.length,
+        activeProducts,
+        totalStaff: business.User_User_businessIdToBusiness.length,
+      }
+    };
+
+    return NextResponse.json({
+      merchant: merchantData
+    }, { status: 200 });
 
   } catch (error) {
     console.error('Get merchant details error:', error);
@@ -139,9 +200,12 @@ export async function PUT(
 
     // Get current merchant data
     const existingMerchant = await prisma.business.findUnique({
-      where: { id },
+      where: { 
+        id,
+        deletedAt: null // Exclude soft-deleted merchants
+      },
       include: {
-        staff: {
+        User_User_businessIdToBusiness: {
           where: { role: 'MERCHANT' },
           select: { id: true, firstName: true, email: true },
         },
@@ -187,7 +251,10 @@ export async function PUT(
 
     if (result.data.status && result.data.status !== existingMerchant.onboardingStatus) {
       updateData.onboardingStatus = result.data.status;
+      // Sync isActive with onboardingStatus
+      updateData.isActive = result.data.status === 'ACTIVE';
       changes.status = { from: existingMerchant.onboardingStatus, to: result.data.status };
+      changes.isActive = { from: existingMerchant.isActive, to: result.data.status === 'ACTIVE' };
     }
 
     updateData.updatedAt = new Date();
@@ -197,7 +264,7 @@ export async function PUT(
       where: { id },
       data: updateData,
       include: {
-        staff: {
+        User_User_businessIdToBusiness: {
           where: { role: 'MERCHANT' },
           select: {
             id: true,
@@ -224,8 +291,8 @@ export async function PUT(
     );
 
     // Send notification if status changed
-    if (changes.status && updatedMerchant.staff.length > 0) {
-      const primaryUser = updatedMerchant.staff[0];
+    if (changes.status && updatedMerchant.User_User_businessIdToBusiness.length > 0) {
+      const primaryUser = updatedMerchant.User_User_businessIdToBusiness[0];
       let notificationMessage = '';
       
       switch (result.data.status) {
@@ -305,9 +372,12 @@ export async function DELETE(
     }
 
     const merchant = await prisma.business.findUnique({
-      where: { id },
+      where: { 
+        id,
+        deletedAt: null // Exclude already soft-deleted merchants
+      },
       include: {
-        staff: {
+        User_User_businessIdToBusiness: {
           where: { role: 'MERCHANT' },
           select: { id: true, firstName: true, email: true },
         },
@@ -316,40 +386,43 @@ export async function DELETE(
 
     if (!merchant) {
       return NextResponse.json(
-        { error: 'Merchant not found' },
+        { error: 'Merchant not found or already deleted' },
         { status: 404 }
       );
     }
 
-    // Suspend instead of hard delete
-    const suspendedMerchant = await prisma.business.update({
+    // Implement soft delete instead of just suspending
+    const deletedMerchant = await prisma.business.update({
       where: { id },
       data: {
+        deletedAt: new Date(),
+        deletedBy: session.userId,
         onboardingStatus: 'SUSPENDED',
+        isActive: false,
         updatedAt: new Date(),
       },
     });
 
-    // Log the suspension
+    // Log the soft delete
     await createAuditLog(
       session.userId,
       'Business',
       id,
-      'MERCHANT_SUSPENDED',
+      'MERCHANT_SOFT_DELETED',
       {
         adminEmail: adminUser.email,
         businessName: merchant.name,
-        reason: 'Admin deletion/suspension',
+        reason: 'Admin soft deletion',
         timestamp: new Date().toISOString(),
       }
     );
 
     // Notify merchant users
-    for (const user of merchant.staff) {
+    for (const user of merchant.User_User_businessIdToBusiness) {
       try {
         await createNotification(
           user.id,
-          `Your ${merchant.name} account has been suspended. Please contact support for assistance.`,
+          `Your ${merchant.name} account has been suspended and marked for deletion. Please contact support for assistance.`,
           null,
           'EMAIL_VERIFICATION', // Using existing template
           {
@@ -360,13 +433,13 @@ export async function DELETE(
           }
         );
       } catch (notificationError) {
-        console.error('Failed to send suspension notification:', notificationError);
+        console.error('Failed to send deletion notification:', notificationError);
       }
     }
 
     return NextResponse.json({
-      message: 'Merchant suspended successfully',
-      merchant: suspendedMerchant,
+      message: 'Merchant soft deleted successfully',
+      merchant: deletedMerchant,
     });
 
   } catch (error) {

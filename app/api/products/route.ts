@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { z } from "zod";
 import prisma from "@/lib/prisma";
 import { verifyAuth } from "@/lib/auth";
@@ -58,15 +59,15 @@ export async function GET(request: NextRequest) {
       prisma.product.findMany({
         where,
         include: {
-          business: {
+          Business: {
             select: {
               id: true,
               name: true,
             },
           },
-          stockAllocations: {
+          StockAllocation: {
             include: {
-              warehouse: {
+              Warehouse: {
                 select: {
                   id: true,
                   name: true,
@@ -77,7 +78,7 @@ export async function GET(request: NextRequest) {
           },
           _count: {
             select: {
-              orderItems: true,
+              OrderItem: true,
             },
           },
         },
@@ -91,15 +92,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       products: products.map(product => ({
         ...product,
-        totalStock: product.stockAllocations.reduce(
-          (sum, allocation) => sum + allocation.allocatedQuantity,
+        totalStock: (product.StockAllocation ?? []).reduce(
+          (sum: number, allocation: any) => sum + allocation.allocatedQuantity,
           0
         ),
-        availableStock: product.stockAllocations.reduce(
-          (sum, allocation) => sum + (allocation.allocatedQuantity - allocation.safetyStock),
+        availableStock: (product.StockAllocation ?? []).reduce(
+          (sum: number, allocation: any) => sum + (allocation.allocatedQuantity - allocation.safetyStock),
           0
         ),
-        orderCount: product._count.orderItems,
+        orderCount: product._count?.OrderItem ?? 0,
       })),
       pagination: {
         page,
@@ -182,14 +183,15 @@ export async function POST(request: NextRequest) {
 
     const product = await prisma.product.create({
       data: {
+        id: randomUUID(),
         businessId,
         sku: validatedData.sku,
         name: validatedData.name,
         weightKg: validatedData.weightKg,
-        dimensions,
+        dimensions: dimensions as unknown as any, // fallback for JsonValue
       },
       include: {
-        business: {
+        Business: {
           select: {
             id: true,
             name: true,

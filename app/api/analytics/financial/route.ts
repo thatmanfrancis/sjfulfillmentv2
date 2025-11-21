@@ -56,9 +56,9 @@ export async function GET(request: NextRequest) {
           orderDate: { gte: startDate }
         },
         include: {
-          items: {
+          OrderItem: {
             include: {
-              product: {
+              Product: {
                 select: { businessId: true }
               }
             }
@@ -94,17 +94,7 @@ export async function GET(request: NextRequest) {
 
       // Warehouse operational costs (simplified)
       authResult.user.role === "ADMIN" 
-        ? prisma.warehouse.findMany({
-            include: {
-              _count: {
-                select: {
-                  fulfilledOrders: {
-                    where: { orderDate: { gte: startDate } }
-                  }
-                }
-              }
-            }
-          })
+        ? prisma.warehouse.findMany({})
         : []
     ]);
 
@@ -124,13 +114,13 @@ export async function GET(request: NextRequest) {
       revenueAnalysis.totalRevenue += revenue;
       revenueAnalysis.revenueByStatus[order.status] = 
         (revenueAnalysis.revenueByStatus[order.status] || 0) + revenue;
-      revenueAnalysis.revenueByBusiness[order.merchant.name] = 
-        (revenueAnalysis.revenueByBusiness[order.merchant.name] || 0) + revenue;
+      revenueAnalysis.revenueByBusiness[order.Business?.name || 'Unknown'] = 
+        (revenueAnalysis.revenueByBusiness[order.Business?.name || 'Unknown'] || 0) + revenue;
       revenueAnalysis.dailyRevenue[date] = 
         (revenueAnalysis.dailyRevenue[date] || 0) + revenue;
 
       // Category breakdown - using 'General' as default since category field doesn't exist
-      order.items.forEach((item: any) => {
+      order.OrderItem.forEach((item: any) => {
         const category = 'General';
         const itemRevenue = item.quantity * 100 * exchangeRate; // Using fixed price
         revenueAnalysis.revenueByCategory[category] = 

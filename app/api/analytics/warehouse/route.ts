@@ -52,25 +52,25 @@ export async function GET(request: NextRequest) {
     const warehouses = await prisma.warehouse.findMany({
       where: warehouseFilter,
       include: {
-        stockAllocations: {
+        StockAllocation: {
           include: {
-            product: {
+            Product: {
               select: {
                 id: true,
                 name: true,
                 sku: true,
-                business: { select: { name: true } }
+                Business: { select: { name: true } }
               }
             }
           }
         },
-        fulfilledOrders: {
+        Order: {
           where: { orderDate: { gte: startDate } },
           include: {
             Business: { select: { name: true } },
-            items: { 
+            OrderItem: { 
               include: { 
-                product: { select: { name: true, sku: true } }
+                Product: { select: { name: true, sku: true } }
               }
             }
           }

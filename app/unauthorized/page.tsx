@@ -31,10 +31,10 @@ export default function UnauthorizedPage() {
             </div>
             
             <div className="space-y-3">
-              <Link href="/dashboard" className="block">
+              <Link href="/auth/login" className="block">
                 <Button className="w-full bg-gradient-gold hover:bg-gradient-gold/90 text-brand-black font-semibold">
                   <ArrowLeft className="w-4 h-4 mr-2" />
-                  Back to Dashboard
+                  Back to Login
                 </Button>
               </Link>
               

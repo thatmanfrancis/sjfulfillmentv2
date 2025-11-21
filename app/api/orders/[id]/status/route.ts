@@ -5,7 +5,7 @@ import prisma from '@/lib/prisma';
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getCurrentSession();
-    if (!session?.user?.id) {
+    if (!session?.userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -22,8 +22,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const where: any = { id: orderId };
 
     // Add business filter for merchants
-    if (session.user.role !== 'ADMIN') {
-      where.businessId = session.user.businessId;
+    if (session.role !== 'ADMIN') {
+      where.businessId = session.businessId;
     }
 
     const order = await prisma.order.update({

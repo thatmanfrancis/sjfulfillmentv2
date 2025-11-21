@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
         take: limit,
         orderBy: { createdAt: "desc" },
         include: {
-          user: {
+          User: {
             select: {
               id: true,
               firstName: true,
@@ -161,13 +161,14 @@ export async function POST(request: NextRequest) {
 
     const token = await prisma.verificationToken.create({
       data: {
+        id: require('crypto').randomUUID(),
         userId: validatedData.userId,
         token: tokenValue,
         type: validatedData.type,
         expiresAt,
       },
       include: {
-        user: {
+        User: {
           select: {
             id: true,
             firstName: true,
@@ -181,6 +182,7 @@ export async function POST(request: NextRequest) {
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: require('crypto').randomUUID(),
         entityType: "VerificationToken",
         entityId: token.id,
         action: "VERIFICATION_TOKEN_CREATED",
@@ -191,6 +193,7 @@ export async function POST(request: NextRequest) {
           expiresAt: token.expiresAt,
         },
         changedById: authResult.user.id,
+        User: { connect: { id: authResult.user.id } },
       },
     });
 
@@ -266,7 +269,7 @@ export async function DELETE(request: NextRequest) {
     const deletedTokens = await prisma.verificationToken.findMany({
       where,
       include: {
-        user: {
+        User: {
           select: { email: true },
         },
       },
@@ -278,6 +281,7 @@ export async function DELETE(request: NextRequest) {
     if (deletedTokens.length > 0) {
       await prisma.auditLog.create({
         data: {
+          id: require('crypto').randomUUID(),
           entityType: "VerificationToken",
           entityId: deletedTokens[0].id,
           action: "VERIFICATION_TOKENS_DELETED",
@@ -286,10 +290,11 @@ export async function DELETE(request: NextRequest) {
             tokens: deletedTokens.map(t => ({
               id: t.id,
               type: t.type,
-              userEmail: t.user.email,
+              userEmail: t.User.email,
             })),
           },
           changedById: authResult.user.id,
+          User: { connect: { id: authResult.user.id } },
         },
       });
     }

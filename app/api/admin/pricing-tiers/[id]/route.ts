@@ -38,7 +38,7 @@ export async function GET(
     const pricingTier = await prisma.pricingTier.findUnique({
       where: { id: tierId },
       include: {
-        merchant: {
+        Business: {
           select: {
             id: true,
             name: true,
@@ -120,7 +120,7 @@ export async function PUT(
     const existingTier = await prisma.pricingTier.findUnique({
       where: { id: tierId },
       include: {
-        merchant: {
+        Business: {
           select: { id: true, name: true },
         },
       },
@@ -135,14 +135,14 @@ export async function PUT(
 
     // Validate merchant if changing merchantId
     if (validatedData.merchantId && validatedData.merchantId !== existingTier.merchantId) {
-      const merchant = await prisma.business.findUnique({
+      const business = await prisma.business.findUnique({
         where: { id: validatedData.merchantId },
         select: { id: true, name: true },
       });
 
-      if (!merchant) {
+      if (!business) {
         return NextResponse.json(
-          { error: "Merchant not found" },
+          { error: "Business not found" },
           { status: 404 }
         );
       }
@@ -174,7 +174,7 @@ export async function PUT(
       where: { id: tierId },
       data: validatedData,
       include: {
-        merchant: {
+        Business: {
           select: {
             id: true,
             name: true,
@@ -186,6 +186,7 @@ export async function PUT(
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "PricingTier",
         entityId: tierId,
         action: "UPDATE",
@@ -202,6 +203,8 @@ export async function PUT(
           changedFields: Object.keys(validatedData),
         },
         changedById: authResult.user.id,
+        timestamp: new Date(),
+        User: { connect: { id: authResult.user.id } },
       },
     });
 
@@ -248,7 +251,7 @@ export async function DELETE(
     const existingTier = await prisma.pricingTier.findUnique({
       where: { id: tierId },
       include: {
-        merchant: {
+        Business: {
           select: {
             id: true,
             name: true,
@@ -289,6 +292,7 @@ export async function DELETE(
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "PricingTier",
         entityId: tierId,
         action: "DELETE",
@@ -304,6 +308,8 @@ export async function DELETE(
           },
         },
         changedById: authResult.user.id,
+        timestamp: new Date(),
+        User: { connect: { id: authResult.user.id } },
       },
     });
 
@@ -312,7 +318,7 @@ export async function DELETE(
       deletedTier: {
         id: existingTier.id,
         serviceType: existingTier.serviceType,
-        merchantName: existingTier.merchant?.name || "System Default",
+        merchantName: existingTier.Business?.name || "System Default",
       },
     });
 

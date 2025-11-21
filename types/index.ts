@@ -238,6 +238,7 @@ export interface Notification {
   title: string;
   message: string;
   data?: any;
+  linkUrl?: string;
   isRead: boolean;
   priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
   createdAt: Date;

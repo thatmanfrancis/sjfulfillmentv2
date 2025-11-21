@@ -62,23 +62,19 @@ export async function GET(request: NextRequest) {
       topProducts,
       warehouseStats
     ] = await Promise.all([
-      // Total orders
       prisma.order.count({
         where: {
           ...businessFilter,
           orderDate: { gte: startDate }
         }
       }),
-      
-      // Pending orders
       prisma.order.count({
         where: {
           ...businessFilter,
-          status: { in: ['NEW', 'AWAITING_ALLOC', 'DISPATCHED'] }
+          status: 'PENDING',
+          orderDate: { gte: startDate }
         }
       }),
-      
-      // Delivered orders
       prisma.order.count({
         where: {
           ...businessFilter,
@@ -86,8 +82,6 @@ export async function GET(request: NextRequest) {
           orderDate: { gte: startDate }
         }
       }),
-      
-      // Canceled orders
       prisma.order.count({
         where: {
           ...businessFilter,
@@ -95,8 +89,6 @@ export async function GET(request: NextRequest) {
           orderDate: { gte: startDate }
         }
       }),
-      
-      // Total revenue
       prisma.order.aggregate({
         where: {
           ...businessFilter,
@@ -105,57 +97,43 @@ export async function GET(request: NextRequest) {
         },
         _sum: { totalAmount: true }
       }),
-      
-      // Total products
       prisma.product.count({
-        where: businessFilter
-      }),
-      
-      // Low stock products
-      prisma.stockAllocation.count({
         where: {
-          ...warehouseFilter,
-          allocatedQuantity: { lte: 10 },
-          product: businessFilter.businessId ? { businessId: businessFilter.businessId } : undefined
+          ...businessFilter
         }
       }),
-      
-      // Out of stock products
-      prisma.stockAllocation.count({
+      prisma.product.count({
         where: {
-          ...warehouseFilter,
-          allocatedQuantity: 0,
-          product: businessFilter.businessId ? { businessId: businessFilter.businessId } : undefined
+          ...businessFilter,
+          stock: { lte: 10, gt: 0 }
         }
       }),
-      
-      // Total invoices
+      prisma.product.count({
+        where: {
+          ...businessFilter,
+          stock: 0
+        }
+      }),
       prisma.invoice.count({
         where: {
-          merchant: businessFilter.businessId ? { id: businessFilter.businessId } : undefined,
+          merchantId: businessFilter.businessId ? businessFilter.businessId : undefined,
           issueDate: { gte: startDate }
         }
       }),
-      
-      // Paid invoices
       prisma.invoice.count({
         where: {
-          merchant: businessFilter.businessId ? { id: businessFilter.businessId } : undefined,
+          merchantId: businessFilter.businessId ? businessFilter.businessId : undefined,
           status: 'PAID',
           issueDate: { gte: startDate }
         }
       }),
-      
-      // Overdue invoices
       prisma.invoice.count({
         where: {
-          merchant: businessFilter.businessId ? { id: businessFilter.businessId } : undefined,
+          merchantId: businessFilter.businessId ? businessFilter.businessId : undefined,
           status: { in: ['ISSUED', 'OVERDUE'] },
           dueDate: { lt: new Date() }
         }
       }),
-      
-      // Recent orders
       prisma.order.findMany({
         where: {
           ...businessFilter,
@@ -163,20 +141,16 @@ export async function GET(request: NextRequest) {
         },
         include: {
           Business: { select: { name: true } },
-          fulfillmentWarehouse: { select: { name: true, region: true } }
+          Warehouse: { select: { name: true, region: true } }
         },
         orderBy: { orderDate: 'desc' },
         take: 10
       }),
-      
-      // Stock movements (transfers) - disabled until stockTransfer table exists
-      Promise.resolve(0),
-      
-      // Top products by order volume
+      Promise.resolve(0), // Stock movements placeholder
       prisma.orderItem.groupBy({
         by: ['productId'],
         where: {
-          order: {
+          Order: {
             ...businessFilter,
             orderDate: { gte: startDate },
             status: { not: 'CANCELED' }
@@ -186,23 +160,14 @@ export async function GET(request: NextRequest) {
         orderBy: { _sum: { quantity: 'desc' } },
         take: 10
       }),
-      
-      // Warehouse statistics
-      authResult.user.role === "ADMIN" || authResult.user.role === "LOGISTICS" 
+      (authResult.user.role === "ADMIN" || authResult.user.role === "LOGISTICS")
         ? prisma.warehouse.findMany({
             where: Object.keys(warehouseFilter).length > 0 ? { id: { in: warehouseFilter.warehouseId.in } } : undefined,
             include: {
-              stockAllocations: {
+              StockAllocation: {
                 select: {
                   allocatedQuantity: true,
                   safetyStock: true
-                }
-              },
-              _count: {
-                select: {
-                  fulfilledOrders: {
-                    where: { orderDate: { gte: startDate } }
-                  }
                 }
               }
             }
@@ -220,7 +185,7 @@ export async function GET(request: NextRequest) {
         id: true,
         name: true,
         sku: true,
-        business: { select: { name: true } }
+        Business: { select: { name: true } }
       }
     }) : [];
 
@@ -291,10 +256,10 @@ export async function GET(request: NextRequest) {
         id: warehouse.id,
         name: warehouse.name,
         region: warehouse.region,
-        totalStock: warehouse.stockAllocations.reduce((sum: number, stock: any) => sum + stock.allocatedQuantity, 0),
+        totalStock: warehouse.StockAllocation.reduce((sum: number, stock: any) => sum + stock.allocatedQuantity, 0),
         ordersProcessed: warehouse._count.fulfilledOrders,
-        utilizationRate: warehouse.stockAllocations.length > 0 
-          ? Math.round((warehouse.stockAllocations.filter((s: any) => s.allocatedQuantity > s.safetyStock).length / warehouse.stockAllocations.length) * 100)
+        utilizationRate: warehouse.StockAllocation.length > 0 
+          ? Math.round((warehouse.StockAllocation.filter((s: any) => s.allocatedQuantity > s.safetyStock).length / warehouse.StockAllocation.length) * 100)
           : 0
       })),
       
@@ -306,8 +271,8 @@ export async function GET(request: NextRequest) {
         totalAmount: Math.round(order.totalAmount * exchangeRate * 100) / 100,
         formattedAmount: CurrencyService.formatCurrency(order.totalAmount * exchangeRate, currency),
         orderDate: order.orderDate,
-        merchantName: order.merchant.name,
-        warehouseName: order.fulfillmentWarehouse?.name || 'Unassigned'
+        merchantName: order.Business?.name,
+        warehouseName: order.Warehouse?.name || 'Unassigned'
       })),
       
       topProducts: topProductsData,

@@ -1,0 +1,8 @@
+customerName,customerPhone,customerAddress,businessName,productSku,quantity
+John Doe,+234-800-123-4567,"123 Main Street Lagos Nigeria",ABC Electronics,PHONE-001,2
+Jane Smith,+234-800-987-6543,"456 Victoria Island Lagos Nigeria",ABC Electronics,LAPTOP-002,1
+Mike Johnson,+234-800-555-0123,"789 Ikeja Lagos Nigeria",XYZ Fashion,SHIRT-003,5
+Sarah Williams,+234-800-444-5678,"321 Abuja FCT Nigeria",ABC Electronics,PHONE-001,1
+David Brown,+234-800-333-2222,"654 Port Harcourt Rivers Nigeria",XYZ Fashion,JEANS-004,3
+Mary Wilson,+234-800-777-8888,"987 Kano Kano State Nigeria",ABC Electronics,HEADPHONES-005,2
+James Davis,+234-800-666-9999,"246 Ibadan Oyo State Nigeria",XYZ Fashion,DRESS-006,4

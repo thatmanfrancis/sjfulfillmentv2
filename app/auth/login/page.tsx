@@ -22,7 +22,7 @@ function LoginForm() {
 
   const router = useRouter();
   const searchParams = useSearchParams();
-  const from = searchParams.get('from') || '/dashboard';
+  const from = searchParams.get('from'); // Don't default to /dashboard
   const message = searchParams.get('message');
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -45,12 +45,38 @@ function LoginForm() {
       const result = await response.json();
 
       if (response.ok) {
+        // Check if this is a first-time login requiring password setup
+        if (result.isFirstTimeLogin && result.requiresPasswordSetup) {
+          router.push('/auth/set-password');
+          return;
+        }
+        
         // Check if MFA is required
         if (result.mfaRequired) {
           router.push(`/auth/verify-mfa?token=${result.tempToken}`);
         } else {
+          // Redirect based on user role from the response
+          const userRole = result.user?.role;
+          let redirectUrl = '/auth/login'; // fallback
+          
+          switch (userRole) {
+            case 'ADMIN':
+              redirectUrl = '/admin/dashboard';
+              break;
+            case 'MERCHANT':
+              redirectUrl = '/merchant/dashboard';
+              break;
+            case 'LOGISTICS':
+              redirectUrl = '/logistics/dashboard';
+              break;
+            default:
+              console.warn('Unknown user role:', userRole);
+              redirectUrl = '/auth/login';
+          }
+          
+          console.log('🔄 Redirecting to:', redirectUrl, 'for role:', userRole);
           // Force a full page navigation to trigger middleware
-          window.location.href = from;
+          window.location.href = redirectUrl;
         }
       } else {
         setError(result.error || 'Login failed. Please try again.');
@@ -115,7 +141,7 @@ function LoginForm() {
                 onChange={handleInputChange}
                 required
                 disabled={isLoading}
-                className="w-full"
+                className="w-full border border-[#f08c17]"
               />
             </div>
 
@@ -131,7 +157,7 @@ function LoginForm() {
                   onChange={handleInputChange}
                   required
                   disabled={isLoading}
-                  className="w-full pr-10"
+                  className="w-full pr-10 border border-[#f08c17]"
                 />
                 <Button
                   type="button"
@@ -178,7 +204,7 @@ function LoginForm() {
           <CardFooter className="flex flex-col space-y-6 pt-6">
             <Button
               type="submit"
-              className="w-full bg-black hover:bg-gray-800 text-white border-2 border-transparent hover:border-[#f8c017] transition-all duration-200"
+              className="w-full bg-[#f08c17] hover:bg-gray-800 text-white border-2 border-transparent hover:border-[#f8c017] transition-all duration-200"
               disabled={isLoading}
             >
               {isLoading ? (
@@ -191,12 +217,12 @@ function LoginForm() {
               )}
             </Button>
 
-            <div className="text-center text-sm text-gray-600">
+            {/* <div className="text-center text-sm text-white">
               Don't have an account?{' '}
               <Link href="/auth/register" className="text-[#f8c017] hover:underline font-medium">
                 Sign up
               </Link>
-            </div>
+            </div> */}
           </CardFooter>
         </form>
       </Card>

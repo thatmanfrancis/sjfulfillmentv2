@@ -11,6 +11,33 @@ const createWarehouseSchema = z.object({
 
 const updateWarehouseSchema = createWarehouseSchema.partial();
 
+// Generate warehouse code based on region
+function generateWarehouseCode(region: string, existingCodes: string[]): string {
+  // Extract first 2 letters of region and make uppercase
+  const prefix = region.slice(0, 2).toUpperCase();
+  
+  // Find existing codes with same prefix
+  const existingNumbers = existingCodes
+    .filter(code => code.startsWith(prefix))
+    .map(code => {
+      const num = parseInt(code.split('-')[1] || '0');
+      return isNaN(num) ? 0 : num;
+    })
+    .sort((a, b) => a - b);
+  
+  // Find next available number
+  let nextNumber = 1;
+  for (const num of existingNumbers) {
+    if (num === nextNumber) {
+      nextNumber++;
+    } else {
+      break;
+    }
+  }
+  
+  return `${prefix}-${nextNumber.toString().padStart(2, '0')}`;
+}
+
 // GET /api/warehouses - List warehouses
 export async function GET(request: NextRequest) {
   try {
@@ -49,25 +76,7 @@ export async function GET(request: NextRequest) {
     const warehouses = await prisma.warehouse.findMany({
       where,
       include: {
-        fulfilledOrders: includeStats
-          ? {
-              where: {
-                status: {
-                  in: ["DISPATCHED", "PICKED_UP", "DELIVERING", "DELIVERED"],
-                },
-              },
-              select: { id: true, status: true },
-            }
-          : undefined,
-        LogisticsRegion: {
-          select: {
-            id: true,
-            User: {
-              select: { id: true, firstName: true, lastName: true }
-            }
-          },
-        },
-        stockAllocations: includeStats ? {
+        StockAllocation: includeStats ? {
           select: {
             allocatedQuantity: true
           }
@@ -81,15 +90,11 @@ export async function GET(request: NextRequest) {
         ...warehouse,
         stats: includeStats
           ? {
-              totalProducts: warehouse.stockAllocations?.length || 0,
-              totalStock: warehouse.stockAllocations?.reduce(
+              totalProducts: warehouse.StockAllocation?.length || 0,
+              totalStock: warehouse.StockAllocation?.reduce(
                 (sum: number, allocation: any) => sum + allocation.allocatedQuantity,
                 0
               ) || 0,
-              activeOrders: warehouse.fulfilledOrders?.filter(
-                (order: any) => order.status !== "DELIVERED"
-              ).length || 0,
-              assignedLogistics: warehouse.logisticsRegion ? 1 : 0,
             }
           : undefined,
       })),
@@ -125,6 +130,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = createWarehouseSchema.parse(body);
 
+    // Generate unique warehouse code
+    const existingWarehouses = await prisma.warehouse.findMany({
+      select: { code: true }
+    });
+    const existingCodes = existingWarehouses.map(w => w.code).filter((code): code is string => code !== null);
+    const warehouseCode = generateWarehouseCode(validatedData.region, existingCodes);
+
     // Check if warehouse with same name in same region exists
     const existingWarehouse = await prisma.warehouse.findFirst({
       where: {
@@ -132,7 +144,6 @@ export async function POST(request: NextRequest) {
         region: validatedData.region,
       },
     });
-
     if (existingWarehouse) {
       return NextResponse.json(
         { error: "Warehouse with this name already exists in the region" },
@@ -141,9 +152,14 @@ export async function POST(request: NextRequest) {
     }
 
     const warehouse = await prisma.warehouse.create({
-      data: validatedData,
+      data: {
+        id: crypto.randomUUID(),
+        ...validatedData,
+        code: warehouseCode,
+        updatedAt: new Date(),
+      },
       include: {
-        stockAllocations: true,
+        StockAllocation: true,
         LogisticsRegion: {
           select: {
             id: true,

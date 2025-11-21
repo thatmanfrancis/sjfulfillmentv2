@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import prisma from "@/lib/prisma";
@@ -35,21 +36,18 @@ export async function GET(
       return NextResponse.json({ error: authResult.error }, { status: 401 });
     }
 
-    const resolvedParams = await params;
-    const allocationId = resolvedParams.id;
-
-    // Get the stock allocation with related data
+    const { id } = await params;
     const allocation = await prisma.stockAllocation.findUnique({
-      where: { id: allocationId },
+      where: { id },
       include: {
-        product: {
+        Product: {
           include: {
-            business: {
+            Business: {
               select: { id: true, name: true },
             },
           },
         },
-        warehouse: {
+        Warehouse: {
           select: {
             id: true,
             name: true,
@@ -68,7 +66,7 @@ export async function GET(
 
     // Role-based access control
     if (authResult.user.role === "MERCHANT" || authResult.user.role === "MERCHANT_STAFF") {
-      if (allocation.product.businessId !== authResult.user.businessId) {
+      if (allocation.Product.Business.id !== authResult.user.businessId) {
         return NextResponse.json(
           { error: "Access denied" },
           { status: 403 }
@@ -88,7 +86,7 @@ export async function GET(
     const recentOrders = await prisma.orderItem.findMany({
       where: {
         productId: allocation.productId,
-        order: {
+        Order: {
           fulfillmentWarehouseId: allocation.warehouseId,
           status: {
             in: ['DISPATCHED', 'PICKED_UP', 'DELIVERING', 'DELIVERED']
@@ -99,7 +97,7 @@ export async function GET(
         },
       },
       include: {
-        order: {
+        Order: {
           select: {
             id: true,
             externalOrderId: true,
@@ -109,7 +107,7 @@ export async function GET(
           },
         },
       },
-      orderBy: { order: { orderDate: 'desc' } },
+      orderBy: { Order: { orderDate: 'desc' } },
       take: 10,
     });
 
@@ -117,7 +115,7 @@ export async function GET(
     const last30DaysOrders = await prisma.orderItem.findMany({
       where: {
         productId: allocation.productId,
-        order: {
+        Order: {
           fulfillmentWarehouseId: allocation.warehouseId,
           orderDate: {
             gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
@@ -125,7 +123,7 @@ export async function GET(
         },
       },
       include: {
-        order: {
+        Order: {
           select: { status: true, orderDate: true },
         },
       },
@@ -144,7 +142,7 @@ export async function GET(
         warehouseId: { not: allocation.warehouseId },
       },
       include: {
-        warehouse: {
+        Warehouse: {
           select: {
             id: true,
             name: true,
@@ -210,7 +208,7 @@ export async function PUT(
     const existingAllocation = await prisma.stockAllocation.findUnique({
       where: { id: allocationId },
       include: {
-        product: {
+        Product: {
           select: {
             id: true,
             name: true,
@@ -218,7 +216,7 @@ export async function PUT(
             businessId: true,
           },
         },
-        warehouse: {
+        Warehouse: {
           select: {
             id: true,
             name: true,
@@ -237,7 +235,7 @@ export async function PUT(
     // Role-based permissions
     if (authResult.user.role === "MERCHANT" || authResult.user.role === "MERCHANT_STAFF") {
       // Merchants can only update their own products' stock
-      if (existingAllocation.product.businessId !== authResult.user.businessId) {
+      if (existingAllocation.Product.businessId !== authResult.user.businessId) {
         return NextResponse.json(
           { error: "Access denied" },
           { status: 403 }
@@ -275,17 +273,17 @@ export async function PUT(
       where: { id: allocationId },
       data: validatedData,
       include: {
-        product: {
+        Product: {
           select: {
             id: true,
             name: true,
             sku: true,
-            business: {
+            Business: {
               select: { id: true, name: true },
             },
           },
         },
-        warehouse: {
+        Warehouse: {
           select: {
             id: true,
             name: true,
@@ -298,6 +296,7 @@ export async function PUT(
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "StockAllocation",
         entityId: allocationId,
         action: "UPDATE",
@@ -307,10 +306,11 @@ export async function PUT(
             safetyStock: existingAllocation.safetyStock,
           },
           newValues: validatedData,
-          product: existingAllocation.product,
-          warehouse: existingAllocation.warehouse,
+          Product: existingAllocation.Product,
+          Warehouse: existingAllocation.Warehouse,
         },
         changedById: authResult.user.id,
+        User: { connect: { id: authResult.user.id } },
       },
     });
 
@@ -360,10 +360,10 @@ export async function DELETE(
     const existingAllocation = await prisma.stockAllocation.findUnique({
       where: { id: allocationId },
       include: {
-        product: {
+        Product: {
           select: { id: true, name: true, sku: true },
         },
-        warehouse: {
+        Warehouse: {
           select: { id: true, name: true },
         },
       },
@@ -380,7 +380,7 @@ export async function DELETE(
     const pendingOrders = await prisma.orderItem.findMany({
       where: {
         productId: existingAllocation.productId,
-        order: {
+        Order: {
           fulfillmentWarehouseId: existingAllocation.warehouseId,
           status: {
             in: ['NEW', 'AWAITING_ALLOC', 'DISPATCHED']
@@ -388,7 +388,7 @@ export async function DELETE(
         },
       },
       include: {
-        order: {
+        Order: {
           select: { id: true, externalOrderId: true, status: true },
         },
       },
@@ -398,9 +398,9 @@ export async function DELETE(
       return NextResponse.json({
         error: "Cannot delete stock allocation with pending orders",
         pendingOrders: pendingOrders.map(po => ({
-          orderId: po.order.id,
-          externalOrderId: po.order.externalOrderId,
-          status: po.order.status,
+          orderId: po.Order.id,
+          externalOrderId: po.Order.externalOrderId,
+          status: po.Order.status,
           quantity: po.quantity,
         })),
       }, { status: 409 });
@@ -414,6 +414,7 @@ export async function DELETE(
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "StockAllocation",
         entityId: allocationId,
         action: "DELETE",
@@ -421,6 +422,7 @@ export async function DELETE(
           deletedAllocation: existingAllocation,
         },
         changedById: authResult.user.id,
+        User: { connect: { id: authResult.user.id } },
       },
     });
 

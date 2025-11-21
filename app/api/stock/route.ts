@@ -42,35 +42,32 @@ function getAvailableStock(allocation: any) {
 // GET /api/stock - List stock allocations with filtering
 export async function GET(request: NextRequest) {
   try {
+    const url = new URL(request.url);
+    const searchParams = url.searchParams;
+    const page = parseInt(searchParams.get("page") || "1", 10);
+    const limit = parseInt(searchParams.get("limit") || "20", 10);
+    const availableOnly = searchParams.get("availableOnly") === "true";
+    const search = searchParams.get("search");
+    const warehouseId = searchParams.get("warehouseId");
+    const productId = searchParams.get("productId");
+    const businessId = searchParams.get("businessId");
+    const lowStock = searchParams.get("lowStock") === "true";
+
     const authResult = await verifyAuth(request);
     if (!authResult.success) {
       return NextResponse.json({ error: authResult.error }, { status: 401 });
     }
 
-    const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100);
-    const warehouseId = searchParams.get("warehouseId");
-    const productId = searchParams.get("productId");
-    const businessId = searchParams.get("businessId");
-    const lowStock = searchParams.get("lowStock") === "true";
-    const availableOnly = searchParams.get("availableOnly") === "true";
-    const search = searchParams.get("search");
-
     const offset = (page - 1) * limit;
 
     // Build filters based on user role
     let whereClause: any = {};
-    
     if (authResult.user.role === "MERCHANT" || authResult.user.role === "MERCHANT_STAFF") {
-      // Merchants can only see their own products' stock
-      whereClause.product = {
+      whereClause.Product = {
         businessId: authResult.user.businessId,
       };
     } else if (authResult.user.role === "LOGISTICS") {
-      // Logistics region filtering disabled for now
-      // TODO: Re-implement when logistics regions are properly configured
-      whereClause.warehouseId = { in: [] }; // Empty array = no restrictions for now
+      whereClause.warehouseId = { in: [] }; // No restrictions for now
     }
 
     // Apply additional filters
@@ -92,8 +89,8 @@ export async function GET(request: NextRequest) {
     }
 
     if (businessId && authResult.user.role === "ADMIN") {
-      whereClause.product = {
-        ...whereClause.product,
+      whereClause.Product = {
+        ...whereClause.Product,
         businessId: businessId,
       };
     }
@@ -101,17 +98,17 @@ export async function GET(request: NextRequest) {
     if (search) {
       whereClause.OR = [
         {
-          product: {
+          Product: {
             name: { contains: search, mode: "insensitive" },
           },
         },
         {
-          product: {
+          Product: {
             sku: { contains: search, mode: "insensitive" },
           },
         },
         {
-          warehouse: {
+          Warehouse: {
             name: { contains: search, mode: "insensitive" },
           },
         },
@@ -123,17 +120,17 @@ export async function GET(request: NextRequest) {
       prisma.stockAllocation.findMany({
         where: whereClause,
         include: {
-          product: {
+          Product: {
             select: {
               id: true,
               name: true,
               sku: true,
-              business: {
+              Business: {
                 select: { id: true, name: true },
               },
             },
           },
-          warehouse: {
+          Warehouse: {
             select: {
               id: true,
               name: true,
@@ -142,8 +139,8 @@ export async function GET(request: NextRequest) {
           },
         },
         orderBy: [
-          { warehouse: { name: "asc" } },
-          { product: { name: "asc" } },
+          { Warehouse: { name: "asc" } },
+          { Product: { name: "asc" } },
         ],
         skip: offset,
         take: limit,
@@ -214,7 +211,7 @@ export async function POST(request: NextRequest) {
     const [product, warehouse] = await Promise.all([
       prisma.product.findUnique({
         where: { id: validatedData.productId },
-        include: { business: { select: { id: true, name: true } } },
+        include: { Business: { select: { id: true, name: true } } },
       }),
       prisma.warehouse.findUnique({
         where: { id: validatedData.warehouseId },
@@ -255,17 +252,23 @@ export async function POST(request: NextRequest) {
 
     // Create the stock allocation
     const allocation = await prisma.stockAllocation.create({
-      data: validatedData,
+      data: {
+        id: crypto.randomUUID(),
+        productId: validatedData.productId,
+        warehouseId: validatedData.warehouseId,
+        allocatedQuantity: validatedData.allocatedQuantity,
+        safetyStock: validatedData.safetyStock,
+      },
       include: {
-        product: {
+        Product: {
           select: {
             id: true,
             name: true,
             sku: true,
-            business: { select: { id: true, name: true } },
+            Business: { select: { id: true, name: true } },
           },
         },
-        warehouse: {
+        Warehouse: {
           select: { id: true, name: true, region: true },
         },
       },
@@ -274,6 +277,7 @@ export async function POST(request: NextRequest) {
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "StockAllocation",
         entityId: allocation.id,
         action: "CREATE",
@@ -284,6 +288,7 @@ export async function POST(request: NextRequest) {
           safetyStock: validatedData.safetyStock,
         },
         changedById: authResult.user.id,
+        User: { connect: { id: authResult.user.id } },
       },
     });
 
@@ -353,14 +358,15 @@ export async function PUT(request: NextRequest) {
                 safetyStock: allocation.safetyStock,
               },
               create: {
+                id: crypto.randomUUID(),
                 productId: allocation.productId,
                 warehouseId: allocation.warehouseId,
                 allocatedQuantity: allocation.allocatedQuantity,
                 safetyStock: allocation.safetyStock,
               },
               include: {
-                product: { select: { name: true, sku: true } },
-                warehouse: { select: { name: true } },
+                Product: { select: { name: true, sku: true } },
+                Warehouse: { select: { name: true } },
               },
             });
 
@@ -379,8 +385,8 @@ export async function PUT(request: NextRequest) {
                 safetyStock: allocation.safetyStock,
               },
               include: {
-                product: { select: { name: true, sku: true } },
-                warehouse: { select: { name: true } },
+                Product: { select: { name: true, sku: true } },
+                Warehouse: { select: { name: true } },
               },
             });
             results.updated.push(result);
@@ -397,6 +403,7 @@ export async function PUT(request: NextRequest) {
     // Create audit log for bulk operation
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "StockAllocation",
         entityId: "BULK_OPERATION",
         action: "BULK_UPDATE",
@@ -408,6 +415,7 @@ export async function PUT(request: NextRequest) {
           errors: results.errors.length,
         },
         changedById: authResult.user.id,
+        User: { connect: { id: authResult.user.id } },
       },
     });
 

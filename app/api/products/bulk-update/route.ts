@@ -5,7 +5,7 @@ import { getCurrentSession } from '@/lib/session';
 export async function PATCH(req: NextRequest) {
   try {
     const session = await getCurrentSession();
-    if (!session?.user?.id) {
+    if (!session?.userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -21,8 +21,8 @@ export async function PATCH(req: NextRequest) {
     };
 
     // Add business filter for merchants
-    if (session.user.role !== 'ADMIN') {
-      where.businessId = session.user.businessId;
+    if (session.role !== 'ADMIN') {
+      where.businessId = session.businessId;
     }
 
     // Product model doesn't have a status field - disable this functionality

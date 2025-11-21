@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import prisma from "@/lib/prisma";
-import { verifyAuth } from "@/lib/auth";
+import { getCurrentSession } from "@/lib/session";
 
 // Validation schemas
 const userUpdateSchema = z.object({
@@ -25,13 +25,18 @@ const userCreateSchema = z.object({
 // GET /api/admin/users - List all users with filtering
 export async function GET(request: NextRequest) {
   try {
-    const authResult = await verifyAuth(request);
-    if (!authResult.success) {
-      return NextResponse.json({ error: authResult.error }, { status: 401 });
+    const session = await getCurrentSession();
+    if (!session?.userId) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
     // Only admins can manage users
-    if (authResult.user.role !== "ADMIN") {
+    const adminUser = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: { role: true },
+    });
+
+    if (!adminUser || adminUser.role !== "ADMIN") {
       return NextResponse.json(
         { error: "Only administrators can access user management" },
         { status: 403 }
@@ -85,7 +90,7 @@ export async function GET(request: NextRequest) {
           lastLoginAt: true,
           createdAt: true,
           updatedAt: true,
-          business: {
+          Business_User_businessIdToBusiness: {
             select: {
               id: true,
               name: true,
@@ -117,8 +122,8 @@ export async function GET(request: NextRequest) {
           _count: { role: true },
           where: whereClause,
         }),
-        activeUsers: await prisma.user.count({
-          where: { ...whereClause, isActive: true },
+        verifiedUsers: await prisma.user.count({
+          where: { ...whereClause, isVerified: true },
         }),
       },
     });
@@ -135,13 +140,18 @@ export async function GET(request: NextRequest) {
 // POST /api/admin/users - Create new user
 export async function POST(request: NextRequest) {
   try {
-    const authResult = await verifyAuth(request);
-    if (!authResult.success) {
-      return NextResponse.json({ error: authResult.error }, { status: 401 });
+    const session = await getCurrentSession();
+    if (!session?.userId) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
     // Only admins can create users
-    if (authResult.user.role !== "ADMIN") {
+    const adminUser = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: { role: true },
+    });
+
+    if (!adminUser || adminUser.role !== "ADMIN") {
       return NextResponse.json(
         { error: "Only administrators can create users" },
         { status: 403 }
@@ -190,12 +200,14 @@ export async function POST(request: NextRequest) {
         lastName: validatedData.lastName,
         email: validatedData.email,
         role: validatedData.role,
-        businessId: validatedData.businessId,
+        businessId: validatedData.businessId || null,
         passwordHash,
         isVerified: false,
+        id: `user_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+        updatedAt: new Date()
       },
       include: {
-        business: {
+        Business_User_businessIdToBusiness: {
           select: {
             id: true,
             name: true,
@@ -208,9 +220,10 @@ export async function POST(request: NextRequest) {
     // Create audit log
     await prisma.auditLog.create({
       data: {
-        entityType: "User",
+        id: `audit_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+        entityType: 'User',
         entityId: newUser.id,
-        action: "CREATE",
+        action: 'CREATED',
         details: {
           createdUser: {
             id: newUser.id,
@@ -218,12 +231,41 @@ export async function POST(request: NextRequest) {
             lastName: newUser.lastName,
             email: newUser.email,
             role: newUser.role,
-            businessId: newUser.businessId,
-          },
+            businessId: newUser.businessId
+          }
         },
-        changedById: authResult.user.id,
-      },
+        changedById: session.userId
+      }
     });
+
+    // Send email verification for logistics users
+    if (validatedData.role === 'LOGISTICS') {
+      try {
+        const { generateVerificationToken } = await import('@/lib/auth');
+        const { createNotification } = await import('@/lib/notifications');
+        
+        const verificationToken = await generateVerificationToken(newUser.id);
+        
+        await createNotification(
+          newUser.id,
+          `Your logistics account has been created. Please verify your email address to complete the setup.`,
+          null,
+          'EMAIL_VERIFICATION',
+          {
+            firstName: newUser.firstName,
+            verificationUrl: `${process.env.NEXT_PUBLIC_APP_URL}/auth/verify-email?token=${verificationToken}&email=${encodeURIComponent(newUser.email)}`,
+            supportEmail: process.env.SUPPORT_EMAIL || 'support@sjfulfillment.com',
+            temporaryPassword: !validatedData.password ? password : undefined,
+            email: newUser.email
+          }
+        );
+        
+        console.log('Email verification sent to logistics user:', newUser.email);
+      } catch (emailError) {
+        console.error('Failed to send verification email to logistics user:', emailError);
+        // Don't fail the user creation if email fails
+      }
+    }
 
     // TODO: Send welcome email with temporary password
     // For now, return the password in response (should be removed in production)
@@ -252,6 +294,143 @@ export async function POST(request: NextRequest) {
       );
     }
     console.error("Error creating user:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+// PATCH /api/admin/users - Handle user actions (verify, activate, etc.)
+export async function PATCH(request: NextRequest) {
+  try {
+    const session = await getCurrentSession();
+    if (!session?.userId) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+
+    // Only admins can perform user actions
+    const adminUser = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: { role: true },
+    });
+
+    if (!adminUser || adminUser.role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Only administrators can perform user actions" },
+        { status: 403 }
+      );
+    }
+
+    const body = await request.json();
+    const { userId, action } = body;
+
+    if (!userId || !action) {
+      return NextResponse.json(
+        { error: "User ID and action are required" },
+        { status: 400 }
+      );
+    }
+
+    // Get existing user
+    const existingUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        businessId: true,
+        isVerified: true,
+      },
+    });
+
+    if (!existingUser) {
+      return NextResponse.json(
+        { error: "User not found" },
+        { status: 404 }
+      );
+    }
+
+    // Prevent admin from acting on themselves for destructive actions
+    if (userId === session.userId && ['deactivate', 'delete'].includes(action)) {
+      return NextResponse.json(
+        { error: "Cannot perform this action on your own account" },
+        { status: 400 }
+      );
+    }
+
+    let updatedUser;
+    let auditAction;
+    let auditDetails: any = {};
+
+    switch (action) {
+      case 'verify':
+        updatedUser = await prisma.user.update({
+          where: { id: userId },
+          data: { isVerified: true },
+        });
+        auditAction = 'VERIFY';
+        auditDetails = { verifiedUser: { id: userId, email: existingUser.email } };
+        break;
+
+      case 'unverify':
+        updatedUser = await prisma.user.update({
+          where: { id: userId },
+          data: { isVerified: false },
+        });
+        auditAction = 'UNVERIFY';
+        auditDetails = { unverifiedUser: { id: userId, email: existingUser.email } };
+        break;
+
+      case 'resetPassword':
+        // Generate a temporary password
+        const bcrypt = require('bcryptjs');
+        const tempPassword = Math.random().toString(36).slice(-10) + "Aa1!";
+        const passwordHash = await bcrypt.hash(tempPassword, 12);
+        
+        updatedUser = await prisma.user.update({
+          where: { id: userId },
+          data: { passwordHash },
+        });
+        auditAction = 'RESET_PASSWORD';
+        auditDetails = { resetPasswordFor: { id: userId, email: existingUser.email } };
+        
+        // TODO: Send email with temporary password
+        console.log(`Temporary password for ${existingUser.email}: ${tempPassword}`);
+        break;
+
+      default:
+        return NextResponse.json(
+          { error: `Unknown action: ${action}` },
+          { status: 400 }
+        );
+    }
+
+    // Create audit log
+    await prisma.auditLog.create({
+      data: {
+        id: `audit_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+        entityType: 'User',
+        entityId: userId,
+        action: auditAction,
+        details: auditDetails,
+        changedById: session.userId
+      }
+    });
+
+    // Remove sensitive data
+    const { passwordHash, ...safeUser } = updatedUser;
+
+    return NextResponse.json({ 
+      success: true, 
+      user: safeUser,
+      message: `User ${action} completed successfully`
+    });
+
+  } catch (error) {
+    console.error(`Error performing user action:`, error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

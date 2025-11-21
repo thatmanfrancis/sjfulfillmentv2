@@ -10,109 +10,6 @@ const updateShipmentSchema = z.object({
   deliveryAttempts: z.number().int().min(1).max(3).optional(),
 });
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const authResult = await verifyAuth(request);
-    if (!authResult.success) {
-      return NextResponse.json({ error: authResult.error }, { status: 401 });
-    }
-
-    const { id } = await params;
-
-    const shipment = await prisma.shipment.findUnique({
-      where: { id },
-      include: {
-        order: {
-          include: {
-            Business: {
-              select: {
-                id: true,
-                name: true,
-                baseCurrency: true,
-                contactPhone: true,
-              },
-            },
-            fulfillmentWarehouse: {
-              select: {
-                id: true,
-                name: true,
-                region: true,
-              },
-            },
-            assignedLogistics: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
-            items: {
-              include: {
-                product: {
-                  select: {
-                    id: true,
-                    name: true,
-                    sku: true,
-                    weightKg: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (!shipment) {
-      return NextResponse.json(
-        { error: "Shipment not found" },
-        { status: 404 }
-      );
-    }
-
-    // Check access permissions
-    if (authResult.user.role === "MERCHANT" || authResult.user.role === "MERCHANT_STAFF") {
-      if (shipment.order.merchantId !== authResult.user.businessId) {
-        return NextResponse.json(
-          { error: "Shipment not found" },
-          { status: 404 }
-        );
-      }
-    } else if (authResult.user.role === "LOGISTICS") {
-      if (shipment.order.assignedLogisticsId !== authResult.user.id) {
-        return NextResponse.json(
-          { error: "Shipment not found" },
-          { status: 404 }
-        );
-      }
-    }
-
-    return NextResponse.json({
-      shipment: {
-        ...shipment,
-        totalItems: shipment.order?.items?.reduce((sum: number, item: any) => sum + item.quantity, 0) || 0,
-        totalWeight: shipment.order?.items?.reduce(
-          (sum: number, item: any) => sum + (item.product.weightKg * item.quantity),
-          0
-        ) || 0,
-        daysInTransit: Math.ceil((new Date().getTime() - shipment.lastStatusUpdate.getTime()) / (1000 * 3600 * 24)),
-        canRetry: shipment.deliveryAttempts < 3,
-        nextAttemptAllowed: shipment.deliveryAttempts < 3,
-      },
-    });
-  } catch (error) {
-    console.error("Error fetching shipment:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
-  }
-}
-
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -130,7 +27,7 @@ export async function PUT(
     const existingShipment = await prisma.shipment.findUnique({
       where: { id },
       include: {
-        order: {
+        Order: {
           select: {
             id: true,
             merchantId: true,
@@ -149,7 +46,7 @@ export async function PUT(
     }
 
     // Check if logistics user is assigned to this order
-    if (authResult.user.role === "LOGISTICS" && existingShipment.order.assignedLogisticsId !== authResult.user.id) {
+    if (authResult.user.role === "LOGISTICS" && existingShipment.Order.assignedLogisticsId !== authResult.user.id) {
       return NextResponse.json(
         { error: "You are not assigned to this order" },
         { status: 403 }
@@ -160,13 +57,14 @@ export async function PUT(
       where: { id },
       data: validatedData,
       include: {
-        order: {
+        Order: {
           include: {
             Business: { select: { id: true, name: true, baseCurrency: true } },
-            fulfillmentWarehouse: { select: { id: true, name: true, region: true } },
-            items: {
+            Warehouse: { select: { id: true, name: true, region: true } },
+            User: { select: { id: true, firstName: true, lastName: true, email: true } },
+            OrderItem: {
               include: {
-                product: { select: { name: true, sku: true, weightKg: true } },
+                Product: { select: { name: true, sku: true, weightKg: true } },
               },
             },
           },
@@ -175,13 +73,13 @@ export async function PUT(
     });
 
     // Update order status based on delivery attempts
-    let orderStatus = existingShipment.order.status;
+    let orderStatus = existingShipment.Order.status;
     if (validatedData.deliveryAttempts) {
       if (validatedData.deliveryAttempts === 3) {
         // Max attempts reached, mark as returned
         orderStatus = "RETURNED";
         await prisma.order.update({
-          where: { id: existingShipment.order.id },
+          where: { id: existingShipment.Order.id },
           data: { status: orderStatus },
         });
       }
@@ -190,6 +88,7 @@ export async function PUT(
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "Shipment",
         entityId: updatedShipment.id,
         action: "SHIPMENT_UPDATED",
@@ -199,20 +98,21 @@ export async function PUT(
           orderStatus,
         },
         changedById: authResult.user.id,
+        User: { connect: { id: authResult.user.id } },
       },
     });
 
     return NextResponse.json({
       shipment: {
         ...updatedShipment,
-        totalItems: updatedShipment.order?.items?.reduce((sum: number, item: any) => sum + item.quantity, 0) || 0,
-        totalWeight: updatedShipment.order?.items?.reduce(
-          (sum: number, item: any) => sum + (item.product.weightKg * item.quantity),
+        totalItems: updatedShipment.Order?.OrderItem?.reduce((sum: number, item: any) => sum + item.quantity, 0) || 0,
+        totalWeight: updatedShipment.Order?.OrderItem?.reduce(
+          (sum: number, item: any) => sum + (item.Product.weightKg * item.quantity),
           0
         ) || 0,
         daysInTransit: Math.ceil((new Date().getTime() - updatedShipment.lastStatusUpdate.getTime()) / (1000 * 3600 * 24)),
         canRetry: updatedShipment.deliveryAttempts < 3,
-        orderStatusUpdated: orderStatus !== existingShipment.order.status,
+        orderStatusUpdated: orderStatus !== existingShipment.Order.status,
       },
     });
   } catch (error) {
@@ -280,6 +180,7 @@ export async function DELETE(
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "Shipment",
         entityId: id,
         action: "SHIPMENT_DELETED",
@@ -288,6 +189,7 @@ export async function DELETE(
           trackingNumber: existingShipment.trackingNumber,
         },
         changedById: authResult.user.id,
+        User: { connect: { id: authResult.user.id } },
       },
     });
 

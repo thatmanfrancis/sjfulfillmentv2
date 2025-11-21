@@ -34,16 +34,16 @@ export async function GET(
     const warehouse = await prisma.warehouse.findUnique({
       where: { id },
       include: {
-        stockAllocations: {
+        StockAllocation: {
           include: {
-            product: {
+            Product: {
               select: {
                 id: true,
                 name: true,
                 sku: true,
                 weightKg: true,
                 dimensions: true,
-                business: {
+                Business: {
                   select: {
                     name: true,
                   }
@@ -52,8 +52,6 @@ export async function GET(
             }
           }
         },
-        // fulfilledOrders - not available in current schema
-        // logisticsRegion - disabled until schema is fixed
       }
     });
 
@@ -65,21 +63,21 @@ export async function GET(
     }
 
     // Calculate warehouse statistics
-    const totalAllocations = warehouse.stockAllocations.length;
-    const totalAllocatedQuantity = warehouse.stockAllocations.reduce(
-      (sum, allocation) => sum + allocation.allocatedQuantity, 0
+    const totalAllocations = warehouse.StockAllocation.length;
+    const totalAllocatedQuantity = warehouse.StockAllocation.reduce(
+      (sum: number, allocation: any) => sum + allocation.allocatedQuantity, 0
     );
-    const totalSafetyStock = warehouse.stockAllocations.reduce(
-      (sum, allocation) => sum + allocation.safetyStock, 0
+    const totalSafetyStock = warehouse.StockAllocation.reduce(
+      (sum: number, allocation: any) => sum + allocation.safetyStock, 0
     );
     const availableStock = totalAllocatedQuantity - totalSafetyStock;
 
     // Group allocations by product
-    const productSummary = warehouse.stockAllocations.reduce((acc, allocation) => {
-      const productId = allocation.product.id;
+    const productSummary = warehouse.StockAllocation.reduce((acc: any, allocation: any) => {
+      const productId = allocation.Product.id;
       if (!acc[productId]) {
         acc[productId] = {
-          product: allocation.product,
+          product: allocation.Product,
           allocatedQuantity: 0,
           safetyStock: 0,
           availableQuantity: 0,
@@ -108,13 +106,6 @@ export async function GET(
       orderBy: { timestamp: "desc" },
       take: 10,
       include: {
-        changedBy: {
-          select: {
-            firstName: true,
-            lastName: true,
-            role: true,
-          }
-        }
       }
     });
 
@@ -139,6 +130,98 @@ export async function GET(
     });
   } catch (error) {
     console.error("Error fetching warehouse:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const authResult = await verifyAuth(request);
+    if (!authResult.success) {
+      return NextResponse.json({ error: authResult.error }, { status: 401 });
+    }
+
+    // Only ADMIN can update warehouses
+    if (authResult.user.role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Insufficient permissions" },
+        { status: 403 }
+      );
+    }
+
+    const { id } = await params;
+    const body = await request.json();
+    
+    // For PATCH, we only validate the fields that are present
+    const validatedData = updateWarehouseSchema.parse(body);
+
+    const existingWarehouse = await prisma.warehouse.findUnique({
+      where: { id }
+    });
+
+    if (!existingWarehouse) {
+      return NextResponse.json(
+        { error: "Warehouse not found" },
+        { status: 404 }
+      );
+    }
+
+    const updateData: any = {};
+    
+    Object.keys(validatedData).forEach(key => {
+      if (validatedData[key as keyof typeof validatedData] !== undefined) {
+        updateData[key] = validatedData[key as keyof typeof validatedData];
+      }
+    });
+
+    const updatedWarehouse = await prisma.warehouse.update({
+      where: { id },
+      data: updateData,
+      include: {
+        StockAllocation: {
+          include: {
+            Product: {
+              select: {
+                name: true,
+                sku: true,
+              }
+            }
+          }
+        }
+      },
+    });
+
+    // Create audit log
+    await prisma.auditLog.create({
+      data: {
+        id: crypto.randomUUID(),
+        entityType: "Warehouse",
+        entityId: id,
+        action: "WAREHOUSE_UPDATED",
+        details: {
+          changes: validatedData,
+          warehouseName: updatedWarehouse.name,
+        },
+        changedById: authResult.user.id,
+        User: { connect: { id: authResult.user.id } },
+      },
+    });
+
+    return NextResponse.json({ warehouse: updatedWarehouse });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: "Validation error", details: error.issues },
+        { status: 400 }
+      );
+    }
+    console.error("Error updating warehouse:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -208,9 +291,9 @@ export async function PUT(
       where: { id },
       data: updateData,
       include: {
-        stockAllocations: {
+        StockAllocation: {
           include: {
-            product: {
+            Product: {
               select: {
                 name: true,
                 sku: true,
@@ -224,6 +307,7 @@ export async function PUT(
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "Warehouse",
         entityId: id,
         action: "WAREHOUSE_UPDATED",
@@ -236,6 +320,7 @@ export async function PUT(
           warehouseName: updatedWarehouse.name,
         },
         changedById: authResult.user.id,
+        User: { connect: { id: authResult.user.id } },
       },
     });
 
@@ -334,6 +419,7 @@ export async function DELETE(
       // Create audit log
       await prisma.auditLog.create({
         data: {
+          id: crypto.randomUUID(),
           entityType: "Warehouse",
           entityId: id,
           action: "WAREHOUSE_DEACTIVATED",
@@ -343,6 +429,7 @@ export async function DELETE(
             deactivatedAt: new Date(),
           },
           changedById: authResult.user.id,
+          User: { connect: { id: authResult.user.id } },
         },
       });
 
@@ -359,6 +446,7 @@ export async function DELETE(
       // Create audit log
       await prisma.auditLog.create({
         data: {
+          id: crypto.randomUUID(),
           entityType: "Warehouse",
           entityId: id,
           action: "WAREHOUSE_DELETED",
@@ -367,6 +455,7 @@ export async function DELETE(
             deletedAt: new Date(),
           },
           changedById: authResult.user.id,
+          User: { connect: { id: authResult.user.id } },
         },
       });
 

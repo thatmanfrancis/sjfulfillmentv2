@@ -1,566 +1,122 @@
-import { CurrencyService } from './currency';
+import axios from "axios";
 
-export interface EmailTemplate {
+type SendEmailParams = {
+  to: string | string[];
   subject: string;
   html: string;
-  text?: string;
-}
+};
 
-export interface OrderStatusData {
-  orderId: string;
-  externalOrderId?: string;
-  customerName: string;
-  status: string;
-  merchantName: string;
-  trackingNumber?: string;
-  estimatedDelivery?: Date;
-}
+// Nodemailer/SMTP removed — using ZeptoMail HTTP API exclusively.
 
-export interface LowStockData {
-  productName: string;
-  sku: string;
-  currentStock: number;
-  safetyStock: number;
-  warehouseName: string;
-  businessName: string;
-}
+// Send using ZeptoMail HTTP API
+async function sendViaZeptoMail({
+  to,
+  subject,
+  html,
+  from,
+}: SendEmailParams & { from: string }) {
+  const apiKey = process.env.ZEPTOMAIL_API_KEY?.trim();
+  const apiUrl =
+    process.env.ZEPTOMAIL_API_URL || "https://api.zeptomail.com/v1.1/email";
 
-export interface InvoiceData {
-  invoiceId: string;
-  billingPeriod: string;
-  totalAmount: number;
-  dueDate: Date;
-  merchantName: string;
-  currency: string;
-}
-
-export class EmailService {
-  private static readonly ZEPTO_API_URL = 'https://api.zeptomail.com/v1.1/email';
-
-  /**
-   * Send email using ZeptoMail API
-   */
-  static async sendEmail(
-    to: string | string[],
-    subject: string,
-    html: string,
-    text?: string
-  ): Promise<boolean> {
-    try {
-      if (!this.isConfigured()) {
-        console.error('Email service not configured - missing ZeptoMail API key');
-        return false;
-      }
-
-      const recipients = Array.isArray(to) ? to.map(email => ({ email_address: { address: email } })) : [{ email_address: { address: to } }];
-      
-      const emailData = {
-        bounce_address: process.env.ZEPTO_BOUNCE_ADDRESS || process.env.ZEPTO_FROM_EMAIL,
-        from: {
-          address: process.env.ZEPTO_FROM_EMAIL || 'noreply@sendjon.com',
-          name: process.env.COMPANY_NAME || 'SendJon Logistics'
-        },
-        to: recipients,
-        subject,
-        htmlbody: html,
-        textbody: text || this.htmlToText(html),
-        track_clicks: true,
-        track_opens: true,
-        client_reference: `sendjon-${Date.now()}`,
-        mime_headers: {
-          'X-Mailer': 'SendJon Logistics Platform'
-        }
-      };
-
-      const response = await fetch(this.ZEPTO_API_URL, {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'Authorization': `Zoho-enczapikey ${process.env.ZEPTO_API_KEY}`
-        },
-        body: JSON.stringify(emailData)
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log('Email sent successfully via ZeptoMail:', result.request_id);
-        return true;
-      } else {
-        const errorData = await response.json();
-        console.error('ZeptoMail API error:', response.status, errorData);
-        return false;
-      }
-
-    } catch (error) {
-      console.error('Error sending email via ZeptoMail:', error);
-      return false;
-    }
+  if (!apiKey) {
+    throw new Error("ZeptoMail API key not set (ZEPTOMAIL_API_KEY)");
   }
 
-  /**
-   * Send order status update notification
-   */
-  static async sendOrderStatusUpdate(
-    email: string,
-    data: OrderStatusData
-  ): Promise<boolean> {
-    const template = this.generateOrderStatusTemplate(data);
-    return this.sendEmail(email, template.subject, template.html, template.text);
+  // Parse the from field: "Name <email@domain.com>" or just "email@domain.com"
+  let fromEmail = "no-reply@sjfulfillment.com";
+  let fromName = "SJFulfillment";
+  const fromMatch = from.match(/^(.+?)\s*<([^>]+)>$/);
+  if (fromMatch) {
+    fromName = fromMatch[1].trim();
+    fromEmail = fromMatch[2].trim();
   }
 
-  /**
-   * Send low stock alert
-   */
-  static async sendLowStockAlert(
-    emails: string[],
-    data: LowStockData
-  ): Promise<boolean> {
-    const template = this.generateLowStockTemplate(data);
-    return this.sendEmail(emails, template.subject, template.html, template.text);
-  }
+  // ZeptoMail API v1.1 requires this exact structure
+  const recipients = Array.isArray(to) ? to : [to];
+  const payload = {
+    from: {
+      address: fromEmail,
+      name: fromName,
+    },
+    to: recipients.map((email) => ({
+      email_address: {
+        address: email,
+        name: email.split("@")[0], // simple fallback name
+      },
+    })),
+    subject,
+    htmlbody: html,
+  };
 
-  /**
-   * Send invoice notification
-   */
-  static async sendInvoiceNotification(
-    email: string,
-    data: InvoiceData
-  ): Promise<boolean> {
-    const template = await this.generateInvoiceTemplate(data);
-    return this.sendEmail(email, template.subject, template.html, template.text);
-  }
+  try {
+    console.log("Sending email via ZeptoMail...", {
+      to: recipients,
+      subject,
+      from: fromEmail,
+      fromName,
+      apiUrl,
+      apiKeyPrefix: apiKey.substring(0, 20) + "...", // Log prefix for debugging
+    });
 
-  /**
-   * Send welcome email to new users
-   */
-  static async sendWelcomeEmail(
-    email: string,
-    firstName: string,
-    role: string,
-    tempPassword?: string
-  ): Promise<boolean> {
-    const template = this.generateWelcomeTemplate(firstName, role, tempPassword);
-    return this.sendEmail(email, template.subject, template.html, template.text);
-  }
+    const res = await axios.post(apiUrl, payload, {
+      headers: {
+        Authorization: apiKey, // ZeptoMail uses the key directly, not "Bearer"
+        "Content-Type": "application/json",
+      },
+      timeout: 15000,
+    });
 
-  /**
-   * Send password reset email
-   */
-  static async sendPasswordReset(
-    email: string,
-    firstName: string,
-    resetToken: string
-  ): Promise<boolean> {
-    const template = this.generatePasswordResetTemplate(firstName, resetToken);
-    return this.sendEmail(email, template.subject, template.html, template.text);
-  }
+    console.log("✅ ZeptoMail response status:", res.status);
+    console.log("✅ Email sent successfully");
+    return res.data;
+  } catch (err: any) {
+    console.error("❌ Error sending email via ZeptoMail:", {
+      status: err?.response?.status,
+      statusText: err?.response?.statusText,
+      data: err?.response?.data,
+      message: err?.message,
+      code: err?.code,
+    });
 
-  /**
-   * Generate order status update template
-   */
-  private static generateOrderStatusTemplate(data: OrderStatusData): EmailTemplate {
-    const statusMessages = {
-      'NEW': 'Your order has been received and is being processed.',
-      'AWAITING_ALLOC': 'Your order is being prepared for fulfillment.',
-      'DISPATCHED': 'Your order has been dispatched from our warehouse.',
-      'PICKED_UP': 'Your order has been picked up by our delivery partner.',
-      'DELIVERING': 'Your order is out for delivery.',
-      'DELIVERED': 'Your order has been successfully delivered.',
-      'RETURNED': 'Your order has been returned.',
-      'CANCELED': 'Your order has been canceled.',
-      'ON_HOLD': 'Your order is currently on hold.'
-    };
-
-    const message = statusMessages[data.status as keyof typeof statusMessages] || 'Your order status has been updated.';
-
-    const subject = `Order Update: ${data.externalOrderId || data.orderId} - ${data.status}`;
-
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Order Update</title>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background-color: #2c5aa0; color: white; padding: 20px; text-align: center; }
-          .content { padding: 20px; background-color: #f9f9f9; }
-          .order-info { background-color: white; padding: 15px; margin: 10px 0; border-radius: 5px; }
-          .status { font-weight: bold; font-size: 18px; color: #2c5aa0; }
-          .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>Order Status Update</h1>
-          </div>
-          <div class="content">
-            <p>Dear ${data.customerName},</p>
-            
-            <div class="order-info">
-              <h3>Order Details</h3>
-              <p><strong>Order ID:</strong> ${data.externalOrderId || data.orderId}</p>
-              <p><strong>Status:</strong> <span class="status">${data.status}</span></p>
-              <p><strong>Merchant:</strong> ${data.merchantName}</p>
-              ${data.trackingNumber ? `<p><strong>Tracking Number:</strong> ${data.trackingNumber}</p>` : ''}
-              ${data.estimatedDelivery ? `<p><strong>Estimated Delivery:</strong> ${data.estimatedDelivery.toDateString()}</p>` : ''}
-            </div>
-            
-            <p>${message}</p>
-            
-            ${data.status === 'DELIVERING' || data.status === 'DISPATCHED' ? 
-              '<p>Please ensure someone is available to receive the delivery.</p>' : ''}
-            
-            <p>If you have any questions about your order, please contact ${data.merchantName} directly.</p>
-            
-            <p>Thank you for choosing SendJon Logistics!</p>
-          </div>
-          <div class="footer">
-            <p>SendJon Logistics - Reliable Third-Party Logistics Services</p>
-            <p>This email was sent automatically. Please do not reply to this email.</p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
-
-    return { subject, html };
-  }
-
-  /**
-   * Generate low stock alert template
-   */
-  private static generateLowStockTemplate(data: LowStockData): EmailTemplate {
-    const subject = `Low Stock Alert: ${data.productName} (${data.sku})`;
-
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Low Stock Alert</title>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background-color: #ff6b35; color: white; padding: 20px; text-align: center; }
-          .content { padding: 20px; background-color: #f9f9f9; }
-          .alert { background-color: #fff3cd; border: 1px solid #ffecb5; padding: 15px; margin: 10px 0; border-radius: 5px; }
-          .stock-info { background-color: white; padding: 15px; margin: 10px 0; border-radius: 5px; }
-          .urgent { color: #d63384; font-weight: bold; }
-          .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>⚠️ Low Stock Alert</h1>
-          </div>
-          <div class="content">
-            <div class="alert">
-              <p class="urgent">ATTENTION: Stock levels are running low for one of your products.</p>
-            </div>
-            
-            <div class="stock-info">
-              <h3>Product Information</h3>
-              <p><strong>Product:</strong> ${data.productName}</p>
-              <p><strong>SKU:</strong> ${data.sku}</p>
-              <p><strong>Business:</strong> ${data.businessName}</p>
-              <p><strong>Warehouse:</strong> ${data.warehouseName}</p>
-              <p><strong>Current Stock:</strong> <span class="urgent">${data.currentStock} units</span></p>
-              <p><strong>Safety Stock Level:</strong> ${data.safetyStock} units</p>
-            </div>
-            
-            <p>Your product stock has fallen below the safety stock level. Consider restocking soon to avoid stockouts.</p>
-            
-            <p><strong>Recommended Actions:</strong></p>
-            <ul>
-              <li>Review your inventory replenishment schedule</li>
-              <li>Contact your suppliers to arrange new stock deliveries</li>
-              <li>Consider adjusting safety stock levels if needed</li>
-              <li>Update your product availability on sales channels if necessary</li>
-            </ul>
-            
-            <p>Log into your SendJon dashboard to view detailed inventory reports and take action.</p>
-          </div>
-          <div class="footer">
-            <p>SendJon Logistics - Smart Inventory Management</p>
-            <p>This is an automated alert. Manage your notification preferences in your dashboard.</p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
-
-    return { subject, html };
-  }
-
-  /**
-   * Generate invoice template
-   */
-  private static async generateInvoiceTemplate(data: InvoiceData): Promise<EmailTemplate> {
-    const subject = `Invoice ${data.billingPeriod} - ${data.merchantName}`;
-    
-    let formattedAmount;
-    try {
-      formattedAmount = CurrencyService.formatCurrency(data.totalAmount, data.currency);
-    } catch (error) {
-      formattedAmount = `${data.currency} ${data.totalAmount.toFixed(2)}`;
+    // Provide helpful error messages
+    if (err?.response?.status === 401) {
+      console.error(
+        "ZeptoMail 401: Check your ZEPTOMAIL_API_KEY is correct and active"
+      );
+    } else if (err?.response?.status === 403) {
+      console.error(
+        "ZeptoMail 403: Check your sender domain is verified in ZeptoMail console"
+      );
+    } else if (err?.code === "ECONNREFUSED") {
+      console.error("Connection refused: Unable to reach ZeptoMail API");
+    } else if (err?.code === "ETIMEDOUT") {
+      console.error(
+        "Connection timeout: ZeptoMail API did not respond in time"
+      );
     }
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Invoice Notification</title>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background-color: #2c5aa0; color: white; padding: 20px; text-align: center; }
-          .content { padding: 20px; background-color: #f9f9f9; }
-          .invoice-info { background-color: white; padding: 15px; margin: 10px 0; border-radius: 5px; }
-          .amount { font-weight: bold; font-size: 20px; color: #2c5aa0; }
-          .due-date { color: #d63384; font-weight: bold; }
-          .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>📄 New Invoice Available</h1>
-          </div>
-          <div class="content">
-            <p>Dear ${data.merchantName},</p>
-            
-            <p>Your invoice for ${data.billingPeriod} is now available.</p>
-            
-            <div class="invoice-info">
-              <h3>Invoice Summary</h3>
-              <p><strong>Invoice ID:</strong> ${data.invoiceId}</p>
-              <p><strong>Billing Period:</strong> ${data.billingPeriod}</p>
-              <p><strong>Total Amount:</strong> <span class="amount">${formattedAmount}</span></p>
-              <p><strong>Due Date:</strong> <span class="due-date">${data.dueDate.toDateString()}</span></p>
-            </div>
-            
-            <p>This invoice includes charges for:</p>
-            <ul>
-              <li>Storage fees for your inventory</li>
-              <li>Order fulfillment and picking fees</li>
-              <li>Receiving and processing fees</li>
-              <li>Any additional services utilized</li>
-            </ul>
-            
-            <p>You can download the detailed PDF invoice from your dashboard or by clicking the link below:</p>
-            <p><a href="${process.env.FRONTEND_URL}/dashboard/invoices/${data.invoiceId}" style="background-color: #2c5aa0; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">View Invoice</a></p>
-            
-            <p><strong>Payment Instructions:</strong><br>
-            Please ensure payment is made by the due date to avoid late fees. Contact our billing team if you have any questions about this invoice.</p>
-          </div>
-          <div class="footer">
-            <p>SendJon Logistics - Professional 3PL Services</p>
-            <p>Questions? Contact us at billing@sendjon.com</p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
-
-    return { subject, html };
-  }
-
-  /**
-   * Generate welcome email template
-   */
-  private static generateWelcomeTemplate(
-    firstName: string, 
-    role: string, 
-    tempPassword?: string
-  ): EmailTemplate {
-    const subject = `Welcome to SendJon Logistics Platform!`;
-
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Welcome to SendJon</title>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background-color: #28a745; color: white; padding: 20px; text-align: center; }
-          .content { padding: 20px; background-color: #f9f9f9; }
-          .welcome-info { background-color: white; padding: 15px; margin: 10px 0; border-radius: 5px; }
-          .password { background-color: #fff3cd; border: 1px solid #ffecb5; padding: 15px; margin: 10px 0; border-radius: 5px; }
-          .button { background-color: #28a745; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 10px 0; }
-          .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>🎉 Welcome to SendJon!</h1>
-          </div>
-          <div class="content">
-            <p>Dear ${firstName},</p>
-            
-            <p>Welcome to the SendJon Logistics platform! Your account has been created successfully.</p>
-            
-            <div class="welcome-info">
-              <h3>Account Details</h3>
-              <p><strong>Role:</strong> ${role}</p>
-              <p><strong>Platform Access:</strong> Full logistics management dashboard</p>
-            </div>
-            
-            ${tempPassword ? `
-            <div class="password">
-              <p><strong>⚠️ Temporary Password:</strong></p>
-              <p style="font-family: monospace; font-size: 16px; font-weight: bold;">${tempPassword}</p>
-              <p><em>Please change this password after your first login for security purposes.</em></p>
-            </div>
-            ` : ''}
-            
-            <p><strong>What you can do with your account:</strong></p>
-            <ul>
-              <li>Manage inventory and stock levels</li>
-              <li>Track order fulfillment in real-time</li>
-              <li>Generate reports and analytics</li>
-              <li>Coordinate with logistics team</li>
-              <li>Monitor billing and invoicing</li>
-            </ul>
-            
-            <p>Get started by logging into your dashboard:</p>
-            <a href="${process.env.FRONTEND_URL}/login" class="button">Access Dashboard</a>
-            
-            <p>If you need any assistance, our support team is here to help!</p>
-          </div>
-          <div class="footer">
-            <p>SendJon Logistics - Your Trusted 3PL Partner</p>
-            <p>Need help? Contact us at support@sendjon.com</p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
-
-    return { subject, html };
-  }
-
-  /**
-   * Generate password reset template
-   */
-  private static generatePasswordResetTemplate(firstName: string, resetToken: string): EmailTemplate {
-    const subject = `Password Reset - SendJon Logistics`;
-    const resetUrl = `${process.env.FRONTEND_URL}/auth/reset-password?token=${resetToken}`;
-
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Password Reset</title>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background-color: #dc3545; color: white; padding: 20px; text-align: center; }
-          .content { padding: 20px; background-color: #f9f9f9; }
-          .reset-info { background-color: white; padding: 15px; margin: 10px 0; border-radius: 5px; }
-          .button { background-color: #dc3545; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 10px 0; }
-          .warning { background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 15px; margin: 10px 0; border-radius: 5px; color: #721c24; }
-          .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>🔒 Password Reset Request</h1>
-          </div>
-          <div class="content">
-            <p>Dear ${firstName},</p>
-            
-            <p>We received a request to reset your password for your SendJon Logistics account.</p>
-            
-            <div class="reset-info">
-              <p>Click the button below to reset your password:</p>
-              <a href="${resetUrl}" class="button">Reset Password</a>
-              <p>Or copy and paste this link into your browser:</p>
-              <p style="word-break: break-all;">${resetUrl}</p>
-            </div>
-            
-            <div class="warning">
-              <p><strong>⚠️ Security Notice:</strong></p>
-              <p>This password reset link will expire in 1 hour for security reasons.</p>
-              <p>If you didn't request this password reset, please ignore this email or contact support immediately.</p>
-            </div>
-          </div>
-          <div class="footer">
-            <p>SendJon Logistics Security Team</p>
-            <p>Questions? Contact us at security@sendjon.com</p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
-
-    return { subject, html };
-  }
-
-  /**
-   * Convert HTML to plain text (basic implementation)
-   */
-  private static htmlToText(html: string): string {
-    return html
-      .replace(/<[^>]*>/g, '') // Remove HTML tags
-      .replace(/\s+/g, ' ') // Normalize whitespace
-      .trim();
-  }
-
-  /**
-   * Check if email service is configured
-   */
-  static isConfigured(): boolean {
-    return !!(
-      process.env.ZEPTO_API_KEY &&
-      process.env.ZEPTO_FROM_EMAIL
-    );
-  }
-
-  /**
-   * Test email configuration
-   */
-  static async testConfiguration(): Promise<boolean> {
-    try {
-      // Test ZeptoMail configuration by checking API key format
-      const apiKey = process.env.ZEPTO_API_KEY;
-      const fromEmail = process.env.ZEPTO_FROM_EMAIL;
-      
-      if (!apiKey || !fromEmail) {
-        console.error('ZeptoMail configuration missing: API_KEY or FROM_EMAIL');
-        return false;
-      }
-
-      // Basic validation - API key should be base64 encoded
-      if (apiKey.length < 20) {
-        console.error('ZeptoMail API key appears invalid');
-        return false;
-      }
-
-      // Basic email validation
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(fromEmail)) {
-        console.error('ZeptoMail FROM_EMAIL appears invalid');
-        return false;
-      }
-
-      console.log('ZeptoMail configuration appears valid');
-      return true;
-    } catch (error) {
-      console.error('ZeptoMail configuration test failed:', error);
-      return false;
-    }
+    throw err;
   }
 }
 
-export default EmailService;
+export async function sendEmail({
+  to,
+  subject,
+  html,
+}: SendEmailParams): Promise<void> {
+  // Log environment variables for debugging
+  console.log("📧 sendEmail called with environment check:", {
+    EMAIL_PROVIDER: process.env.EMAIL_PROVIDER,
+    EMAIL_FROM: process.env.EMAIL_FROM,
+    ZEPTOMAIL_API_KEY_SET: !!process.env.ZEPTOMAIL_API_KEY,
+    ZEPTOMAIL_API_KEY_LENGTH: process.env.ZEPTOMAIL_API_KEY?.length,
+    to,
+    subject,
+  });
+
+  const from =
+    process.env.EMAIL_FROM || "SJFulfillment <no-reply@sjfulfillment.com>";
+  // Use ZeptoMail exclusively
+  await sendViaZeptoMail({ to, subject, html, from });
+}

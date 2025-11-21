@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
       prisma.pricingTier.findMany({
         where: whereClause,
         include: {
-          merchant: {
+          Business: {
             select: {
               id: true,
               name: true,
@@ -160,10 +160,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Create the pricing tier
+    const createData: any = { ...validatedData };
+    if (typeof validatedData.merchantId !== 'string') {
+      delete createData.merchantId;
+    }
     const newPricingTier = await prisma.pricingTier.create({
-      data: validatedData,
+      data: createData,
       include: {
-        merchant: {
+        Business: {
           select: {
             id: true,
             name: true,
@@ -175,6 +179,7 @@ export async function POST(request: NextRequest) {
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "PricingTier",
         entityId: newPricingTier.id,
         action: "CREATE",
@@ -182,6 +187,8 @@ export async function POST(request: NextRequest) {
           createdTier: validatedData,
         },
         changedById: authResult.user.id,
+        timestamp: new Date(),
+        User: { connect: { id: authResult.user.id } },
       },
     });
 

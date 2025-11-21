@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     const user = await prisma.user.findUnique({
       where: { email: email.toLowerCase() },
       include: {
-        business: {
+        Business_User_businessIdToBusiness: {
           select: {
             name: true
           }
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
           'PASSWORD_RESET',
           {
             firstName: user.firstName,
-            businessName: user.business?.name || 'Your Business',
+            businessName: user.Business_User_businessIdToBusiness?.name || 'Your Business',
             resetUrl: `${process.env.NEXT_PUBLIC_APP_URL}/auth/reset-password?token=${resetToken}`,
             supportEmail: 'support@sjfulfillment.com',
             expiryMinutes: 30

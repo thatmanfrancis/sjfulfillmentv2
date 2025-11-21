@@ -29,7 +29,7 @@ export async function GET(
     const invoice = await prisma.invoice.findUnique({
       where: { id },
       include: {
-        merchant: {
+        Business: {
           select: {
             id: true,
             name: true,
@@ -94,7 +94,7 @@ export async function PUT(
     const existingInvoice = await prisma.invoice.findUnique({
       where: { id },
       include: {
-        merchant: {
+        Business: {
           select: { id: true, name: true },
         },
       },
@@ -130,7 +130,7 @@ export async function PUT(
       where: { id },
       data: updateData,
       include: {
-        merchant: {
+        Business: {
           select: {
             id: true,
             name: true,
@@ -143,6 +143,7 @@ export async function PUT(
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "Invoice",
         entityId: updatedInvoice.id,
         action: "INVOICE_UPDATED",
@@ -221,6 +222,7 @@ export async function DELETE(
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "Invoice",
         entityId: id,
         action: "INVOICE_DELETED",

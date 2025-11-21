@@ -34,16 +34,16 @@ export async function GET(
     const product = await prisma.product.findUnique({
       where: { id },
       include: {
-        business: {
+        Business: {
           select: {
             id: true,
             name: true,
             baseCurrency: true,
           },
         },
-        stockAllocations: {
+        StockAllocation: {
           include: {
-            warehouse: {
+            Warehouse: {
               select: {
                 id: true,
                 name: true,
@@ -52,9 +52,9 @@ export async function GET(
             },
           },
         },
-        orderItems: {
+        OrderItem: {
           include: {
-            order: {
+            Order: {
               select: {
                 id: true,
                 customerName: true,
@@ -65,14 +65,14 @@ export async function GET(
           },
           take: 10, // Latest 10 orders
           orderBy: {
-            order: {
+            Order: {
               orderDate: "desc",
             },
           },
         },
         _count: {
           select: {
-            orderItems: true,
+            OrderItem: true,
           },
         },
       },
@@ -99,11 +99,11 @@ export async function GET(
     }
 
     // Calculate stock metrics
-    const totalStock = product.stockAllocations.reduce(
+    const totalStock = product.StockAllocation.reduce(
       (sum, allocation) => sum + allocation.allocatedQuantity,
       0
     );
-    const availableStock = product.stockAllocations.reduce(
+    const availableStock = product.StockAllocation.reduce(
       (sum, allocation) => sum + (allocation.allocatedQuantity - allocation.safetyStock),
       0
     );
@@ -112,8 +112,8 @@ export async function GET(
       ...product,
       totalStock,
       availableStock,
-      orderCount: product._count.orderItems,
-      recentOrders: product.orderItems,
+      orderCount: product._count.OrderItem,
+      recentOrders: product.OrderItem,
     });
   } catch (error) {
     console.error("Error fetching product:", error);
@@ -204,15 +204,15 @@ export async function PUT(
       where: { id },
       data: validatedData,
       include: {
-        business: {
+        Business: {
           select: {
             id: true,
             name: true,
           },
         },
-        stockAllocations: {
+        StockAllocation: {
           include: {
-            warehouse: {
+            Warehouse: {
               select: {
                 id: true,
                 name: true,
@@ -281,10 +281,10 @@ export async function DELETE(
     const existingProduct = await prisma.product.findUnique({
       where: { id },
       include: {
-        orderItems: {
+        OrderItem: {
           select: { id: true },
         },
-        stockAllocations: {
+        StockAllocation: {
           select: { id: true },
         },
       },
@@ -308,7 +308,7 @@ export async function DELETE(
     }
 
     // Check if product has associated orders
-    if (existingProduct.orderItems.length > 0) {
+    if (existingProduct.OrderItem.length > 0) {
       return NextResponse.json(
         { 
           error: "Cannot delete product that has associated orders. Consider archiving instead." 
@@ -318,7 +318,7 @@ export async function DELETE(
     }
 
     // Delete stock allocations first
-    if (existingProduct.stockAllocations.length > 0) {
+    if (existingProduct.StockAllocation.length > 0) {
       await prisma.stockAllocation.deleteMany({
         where: { productId: id },
       });

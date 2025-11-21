@@ -84,9 +84,9 @@ export async function GET(request: NextRequest) {
         take: 10,
         orderBy: { orderDate: 'desc' },
         include: {
-          items: {
+          OrderItem: {
             include: {
-              product: {
+              Product: {
                 select: {
                   name: true,
                   weightKg: true
@@ -123,7 +123,7 @@ export async function GET(request: NextRequest) {
     const topProducts = await prisma.orderItem.groupBy({
       by: ['productId'],
       where: {
-        order: {
+        Order: {
           merchantId: businessId,
           orderDate: {
             gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
@@ -140,6 +140,32 @@ export async function GET(request: NextRequest) {
       },
       take: 5
     });
+
+    // Fetch merchant's products
+    const products = await prisma.product.findMany({
+      where: { businessId },
+      select: {
+        id: true,
+        name: true,
+        sku: true,
+        weightKg: true,
+        imageUrl: true
+      },
+      take: 10,
+      orderBy: { name: 'asc' }
+    });
+
+    // Fetch merchant's invoices (payments)
+    const invoices = await prisma.invoice.findMany({
+      where: { merchantId: businessId },
+      orderBy: { issueDate: 'desc' },
+      take: 10
+    });
+
+    // Calculate payment stats
+    const activePayments = invoices.filter(inv => inv.status === 'PAID').length;
+    const pendingPayments = invoices.filter(inv => inv.status === 'OVERDUE').length;
+    const overduePayments = invoices.filter(inv => inv.status === 'OVERDUE').length;
 
     const topProductsWithDetails = await Promise.all(
       topProducts.map(async (item) => {
@@ -172,10 +198,22 @@ export async function GET(request: NextRequest) {
         customerPhone: order.customerPhone,
         totalAmount: order.totalAmount,
         status: order.status,
-        itemCount: order.items?.length || 0,
-        orderDate: order.orderDate
+        itemCount: order.OrderItem?.length || 0,
+        orderDate: order.orderDate,
+        items: order.OrderItem?.map(oi => ({
+          name: oi.Product?.name,
+          weightKg: oi.Product?.weightKg,
+          quantity: oi.quantity
+        })) || []
       })),
-      topProducts: topProductsWithDetails
+      topProducts: topProductsWithDetails,
+      products,
+      payments: {
+        invoices,
+        activePayments,
+        pendingPayments,
+        overduePayments
+      }
     };
 
     return NextResponse.json(dashboardData);

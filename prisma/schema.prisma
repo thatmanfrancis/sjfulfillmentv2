@@ -8,86 +8,71 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id                 String              @id @default(uuid())
-  email              String              @unique
-  passwordHash       String
-  role               UserRole
-  isVerified         Boolean             @default(false)
-  mfaEnabled         Boolean             @default(false)
-  mfaSecret          String?
-  businessId         String?
-  createdAt          DateTime            @default(now())
-  firstName          String
-  lastLoginAt        DateTime?
-  lastName           String
-  loginCount         Int                 @default(0)
-  updatedAt          DateTime            @updatedAt
-  auditLogs          AuditLog[]
-  ownedBusiness      Business?           @relation("BusinessOwner")
-  LogisticsRegion    LogisticsRegion[]
-  notifications      Notification[]
-  assignedOrders     Order[]             @relation("AssignedLogistics")
-  uploadedImages     ProductImage[]      @relation("ProductImageUploads")
-  business           Business?           @relation("BusinessUsers", fields: [businessId], references: [id])
-  verificationTokens VerificationToken[]
-  requestedTransfers StockTransfer[]     @relation("RequestedTransfers")
-  approvedTransfers  StockTransfer[]     @relation("ApprovedTransfers")
+model AuditLog {
+  id          String   @id
+  entityType  String
+  entityId    String
+  action      String
+  details     Json?
+  changedById String
+  timestamp   DateTime @default(now())
+  User        User     @relation(fields: [changedById], references: [id])
 
-  @@index([businessId])
+  @@index([changedById])
+  @@index([entityId])
 }
 
 model Business {
-  id               String           @id @default(uuid())
-  name             String           @unique
-  logoUrl          String?
-  baseCurrency     String           @default("USD")
-  isActive         Boolean          @default(false)
-  onboardingStatus String           @default("PENDING_VERIFICATION")
-  ownerId          String?          @unique
-  address          String?
-  city             String?
-  contactPhone     String?
-  country          String?          @default("Nigeria")
-  createdAt        DateTime         @default(now())
-  state            String?
-  updatedAt        DateTime         @updatedAt
-  owner            User?            @relation("BusinessOwner", fields: [ownerId], references: [id])
-  invoices         Invoice[]
-  apiKeys          MerchantApiKey[]
-  Order            Order[]
-  pricing          PricingTier[]
-  products         Product[]
-  staff            User[]           @relation("BusinessUsers")
+  id                             String           @id
+  name                           String           @unique
+  logoUrl                        String?
+  baseCurrency                   String           @default("USD")
+  isActive                       Boolean          @default(false)
+  onboardingStatus               String           @default("PENDING_VERIFICATION")
+  ownerId                        String?          @unique
+  address                        String?
+  city                           String?
+  contactPhone                   String?
+  country                        String?          @default("Nigeria")
+  createdAt                      DateTime         @default(now())
+  state                          String?
+  updatedAt                      DateTime
+  deletedAt                      DateTime?
+  deletedBy                      String?
+  User_Business_ownerIdToUser    User?            @relation("Business_ownerIdToUser", fields: [ownerId], references: [id])
+  Invoice                        Invoice[]
+  MerchantApiKey                 MerchantApiKey[]
+  Order                          Order[]
+  PricingTier                    PricingTier[]
+  Product                        Product[]
+  User_User_businessIdToBusiness User[]           @relation("User_businessIdToBusiness")
 
-  @@index([ownerId])
+  @@index([deletedAt])
   @@index([name])
+  @@index([ownerId])
 }
 
-model MerchantApiKey {
-  id         String   @id @default(uuid())
-  merchantId String
-  apiKey     String   @unique
-  name       String
-  isRevoked  Boolean  @default(false)
-  business   Business @relation(fields: [merchantId], references: [id])
+model Invoice {
+  id              String        @id
+  merchantId      String
+  billingPeriod   String
+  issueDate       DateTime      @default(now())
+  dueDate         DateTime
+  totalDue        Float
+  status          InvoiceStatus @default(DRAFT)
+  storageCharges  Float         @default(0)
+  fulfillmentFees Float         @default(0)
+  receivingFees   Float         @default(0)
+  otherFees       Float         @default(0)
+  amountPaid      Float         @default(0)
+  Business        Business      @relation(fields: [merchantId], references: [id])
 
   @@index([merchantId])
-}
-
-model Warehouse {
-  id               String            @id @default(uuid())
-  name             String
-  region           String
-  LogisticsRegion  LogisticsRegion[]
-  fulfilledOrders  Order[]           @relation("FulfillmentWarehouse")
-  stockAllocations StockAllocation[]
-  transfersFrom    StockTransfer[]   @relation("TransfersFrom")
-  transfersTo      StockTransfer[]   @relation("TransfersTo")
+  @@index([status])
 }
 
 model LogisticsRegion {
-  id          String    @id @default(uuid())
+  id          String    @id
   userId      String
   warehouseId String
   User        User      @relation(fields: [userId], references: [id])
@@ -97,25 +82,117 @@ model LogisticsRegion {
   @@index([userId])
 }
 
+model MerchantApiKey {
+  id         String   @id
+  merchantId String
+  apiKey     String   @unique
+  name       String
+  isRevoked  Boolean  @default(false)
+  Business   Business @relation(fields: [merchantId], references: [id])
+
+  @@index([merchantId])
+}
+
+model Notification {
+  id                                  String               @id
+  userId                              String?
+  message                             String
+  linkUrl                             String?
+  isRead                              Boolean              @default(false)
+  sendEmail                           Boolean              @default(true)
+  actionLabel                         String?
+  actionUrl                           String?
+  audienceType                        String?
+  channels                            String[]             @default(["IN_APP"])
+  content                             String?
+  createdAt                           DateTime             @default(now())
+  createdById                         String?
+  expiresAt                           DateTime?
+  metadata                            Json?
+  priority                            NotificationPriority @default(MEDIUM)
+  readCount                           Int?                 @default(0)
+  scheduledFor                        DateTime?
+  sentAt                              DateTime?
+  status                              String?              @default("PENDING")
+  title                               String
+  totalRecipients                     Int?                 @default(0)
+  type                                NotificationType     @default(INFO)
+  updatedAt                           DateTime
+  User_Notification_createdByIdToUser User?                @relation("Notification_createdByIdToUser", fields: [createdById], references: [id])
+  User_Notification_userIdToUser      User?                @relation("Notification_userIdToUser", fields: [userId], references: [id])
+
+  @@index([createdById])
+  @@index([userId])
+}
+
+model Order {
+  id                     String      @id
+  merchantId             String
+  externalOrderId        String?
+  trackingNumber         String      @unique
+  customerName           String
+  customerAddress        String
+  customerPhone          String
+  orderDate              DateTime
+  status                 OrderStatus @default(NEW)
+  totalAmount            Float
+  fulfillmentWarehouseId String?
+  assignedLogisticsId    String?
+  User                   User?       @relation(fields: [assignedLogisticsId], references: [id])
+  Warehouse              Warehouse?  @relation(fields: [fulfillmentWarehouseId], references: [id])
+  Business               Business    @relation(fields: [merchantId], references: [id])
+  OrderItem              OrderItem[]
+  Shipment               Shipment?
+
+  @@index([merchantId])
+  @@index([status])
+}
+
+model OrderItem {
+  id        String  @id
+  orderId   String
+  productId String
+  quantity  Int
+  Order     Order   @relation(fields: [orderId], references: [id])
+  Product   Product @relation(fields: [productId], references: [id])
+
+  @@unique([orderId, productId])
+}
+
+model PricingTier {
+  id             String    @id
+  merchantId     String?
+  serviceType    String
+  baseRate       Float
+  negotiatedRate Float
+  rateUnit       String
+  createdAt      DateTime  @default(now())
+  currency       String    @default("USD")
+  updatedAt      DateTime
+  Business       Business? @relation(fields: [merchantId], references: [id])
+
+  @@index([merchantId])
+}
+
 model Product {
-  id               String            @id @default(uuid())
-  businessId       String
-  sku              String
-  name             String
-  weightKg         Float
-  dimensions       Json
-  imageUrl         String?
-  orderItems       OrderItem[]
-  business         Business          @relation(fields: [businessId], references: [id])
-  images           ProductImage[]
-  stockAllocations StockAllocation[]
-  stockTransfers   StockTransfer[]   @relation("ProductStockTransfers")
+  id              String            @id
+  businessId      String
+  sku             String
+  name            String
+  weightKg        Float
+  dimensions      Json
+  imageUrl        String?
+  OrderItem       OrderItem[]
+  Business        Business          @relation(fields: [businessId], references: [id])
+  ProductImage    ProductImage[]
+  StockAllocation StockAllocation[]
+  StockTransfer   StockTransfer[]
 
   @@unique([businessId, sku])
 }
 
 model ProductImage {
-  id                 String   @id @default(uuid())
+  id                 String   @id
   productId          String
   cloudinaryPublicId String   @unique
   imageUrl           String
@@ -131,181 +208,218 @@ model ProductImage {
   format             String?
   uploadedById       String
   createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  product            Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  uploadedBy         User     @relation("ProductImageUploads", fields: [uploadedById], references: [id])
+  updatedAt          DateTime
+  Product            Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  User               User     @relation(fields: [uploadedById], references: [id])
 
-  @@index([productId])
   @@index([isPrimary])
+  @@index([productId])
+}
+
+model Report {
+  id              String    @id
+  title           String
+  name            String?
+  description     String?
+  type            String?
+  category        String?
+  status          String?   @default("DRAFT")
+  format          String?   @default("PDF")
+  frequency       String?   @default("ONCE")
+  filePath        String?
+  fileSize        String?
+  configuration   Json?
+  scheduledFor    DateTime?
+  lastGeneratedAt DateTime?
+  nextScheduledAt DateTime?
+  generationCount Int?      @default(0)
+  metadata        Json?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime
+  createdById     String?
+  User            User?     @relation(fields: [createdById], references: [id])
+
+  @@index([createdById])
+  @@index([status])
+}
+
+model Setting {
+  id              String   @id
+  key             String   @unique
+  value           String
+  description     String?
+  category        String?  @default("GENERAL")
+  createdAt       DateTime @default(now())
+  defaultValue    String?
+  isEditable      Boolean? @default(true)
+  isPublic        Boolean? @default(false)
+  isRequired      Boolean? @default(false)
+  name            String?
+  scope           String?  @default("GLOBAL")
+  type            String?  @default("STRING")
+  updatedAt       DateTime
+  updatedById     String?
+  validationRules Json?
+  User            User?    @relation(fields: [updatedById], references: [id])
+
+  @@index([category])
+  @@index([updatedById])
+}
+
+model Shipment {
+  id               String   @id
+  orderId          String   @unique
+  trackingNumber   String?
+  carrierName      String?
+  labelUrl         String?
+  deliveryAttempts Int      @default(1)
+  lastStatusUpdate DateTime
+  Order            Order    @relation(fields: [orderId], references: [id])
 }
 
 model StockAllocation {
-  id                String    @id @default(uuid())
+  id                String    @id
   productId         String
   warehouseId       String
   allocatedQuantity Int       @default(0)
   safetyStock       Int       @default(0)
-  product           Product   @relation(fields: [productId], references: [id])
-  warehouse         Warehouse @relation(fields: [warehouseId], references: [id])
+  Product           Product   @relation(fields: [productId], references: [id])
+  Warehouse         Warehouse @relation(fields: [warehouseId], references: [id])
 
   @@unique([productId, warehouseId])
   @@index([warehouseId])
 }
 
 model StockTransfer {
-  id              String   @id @default(uuid())
-  productId       String
-  fromWarehouseId String
-  toWarehouseId   String
-  quantity        Int
-  status          String   @default("PENDING") // PENDING, IN_TRANSIT, COMPLETED, CANCELED
-  requestedBy     String
-  approvedBy      String?
-  notes           String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  completedAt     DateTime?
-  
-  product         Product   @relation("ProductStockTransfers", fields: [productId], references: [id])
-  fromWarehouse   Warehouse @relation("TransfersFrom", fields: [fromWarehouseId], references: [id])
-  toWarehouse     Warehouse @relation("TransfersTo", fields: [toWarehouseId], references: [id])
-  requestedByUser User     @relation("RequestedTransfers", fields: [requestedBy], references: [id])
-  approvedByUser  User?    @relation("ApprovedTransfers", fields: [approvedBy], references: [id])
+  id                                                 String    @id
+  productId                                          String
+  fromWarehouseId                                    String
+  toWarehouseId                                      String
+  quantity                                           Int
+  status                                             String    @default("PENDING")
+  requestedBy                                        String
+  approvedBy                                         String?
+  notes                                              String?
+  createdAt                                          DateTime  @default(now())
+  updatedAt                                          DateTime
+  completedAt                                        DateTime?
+  User_StockTransfer_approvedByToUser                User?     @relation("StockTransfer_approvedByToUser", fields: [approvedBy], references: [id])
+  Warehouse_StockTransfer_fromWarehouseIdToWarehouse Warehouse @relation("StockTransfer_fromWarehouseIdToWarehouse", fields: [fromWarehouseId], references: [id])
+  Product                                            Product   @relation(fields: [productId], references: [id])
+  User_StockTransfer_requestedByToUser               User      @relation("StockTransfer_requestedByToUser", fields: [requestedBy], references: [id])
+  Warehouse_StockTransfer_toWarehouseIdToWarehouse   Warehouse @relation("StockTransfer_toWarehouseIdToWarehouse", fields: [toWarehouseId], references: [id])
 
-  @@index([productId])
   @@index([fromWarehouseId])
+  @@index([productId])
+  @@index([status])
   @@index([toWarehouseId])
-  @@index([status])
 }
 
-model Order {
-  id                     String      @id @default(uuid())
-  merchantId             String
-  externalOrderId        String?
-  customerName           String
-  customerAddress        String
-  customerPhone          String
-  orderDate              DateTime
-  status                 OrderStatus @default(NEW)
-  totalAmount            Float
-  fulfillmentWarehouseId String?
-  assignedLogisticsId    String?
-  assignedLogistics      User?       @relation("AssignedLogistics", fields: [assignedLogisticsId], references: [id])
-  fulfillmentWarehouse   Warehouse?  @relation("FulfillmentWarehouse", fields: [fulfillmentWarehouseId], references: [id])
-  Business               Business    @relation(fields: [merchantId], references: [id])
-  items                  OrderItem[]
-  shipments              Shipment?
+model User {
+  id                                            String              @id
+  email                                         String              @unique
+  passwordHash                                  String
+  role                                          UserRole
+  isVerified                                    Boolean             @default(false)
+  mfaEnabled                                    Boolean             @default(false)
+  mfaSecret                                     String?
+  businessId                                    String?
+  createdAt                                     DateTime            @default(now())
+  firstName                                     String
+  lastLoginAt                                   DateTime?
+  lastName                                      String
+  loginCount                                    Int                 @default(0)
+  updatedAt                                     DateTime
+  bio                                           String?
+  department                                    String?
+  emailNotifications                            Boolean             @default(true)
+  language                                      String?             @default("en")
+  location                                      String?
+  phone                                         String?
+  position                                      String?
+  profileImage                                  String?
+  smsNotifications                              Boolean             @default(false)
+  timezone                                      String?             @default("UTC")
+  twoFactorEnabled                              Boolean             @default(false)
+  AuditLog                                      AuditLog[]
+  Business_Business_ownerIdToUser               Business?           @relation("Business_ownerIdToUser")
+  LogisticsRegion                               LogisticsRegion[]
+  Notification_Notification_createdByIdToUser   Notification[]      @relation("Notification_createdByIdToUser")
+  Notification_Notification_userIdToUser        Notification[]      @relation("Notification_userIdToUser")
+  Order                                         Order[]
+  ProductImage                                  ProductImage[]
+  Report                                        Report[]
+  Setting                                       Setting[]
+  StockTransfer_StockTransfer_approvedByToUser  StockTransfer[]     @relation("StockTransfer_approvedByToUser")
+  StockTransfer_StockTransfer_requestedByToUser StockTransfer[]     @relation("StockTransfer_requestedByToUser")
+  Business_User_businessIdToBusiness            Business?           @relation("User_businessIdToBusiness", fields: [businessId], references: [id])
+  VerificationToken                             VerificationToken[]
 
-  @@index([merchantId])
-  @@index([status])
-}
-
-model OrderItem {
-  id        String  @id @default(uuid())
-  orderId   String
-  productId String
-  quantity  Int
-  order     Order   @relation(fields: [orderId], references: [id])
-  product   Product @relation(fields: [productId], references: [id])
-
-  @@unique([orderId, productId])
-}
-
-model Shipment {
-  id               String   @id @default(uuid())
-  orderId          String   @unique
-  trackingNumber   String?
-  carrierName      String?
-  labelUrl         String?
-  deliveryAttempts Int      @default(1)
-  lastStatusUpdate DateTime @updatedAt
-  order            Order    @relation(fields: [orderId], references: [id])
-}
-
-model PricingTier {
-  id             String    @id @default(uuid())
-  merchantId     String?
-  serviceType    String
-  baseRate       Float
-  negotiatedRate Float
-  rateUnit       String
-  createdAt      DateTime  @default(now())
-  currency       String    @default("USD")
-  updatedAt      DateTime  @updatedAt
-  merchant       Business? @relation(fields: [merchantId], references: [id])
-
-  @@index([merchantId])
-}
-
-model Invoice {
-  id              String        @id @default(uuid())
-  merchantId      String
-  billingPeriod   String
-  issueDate       DateTime      @default(now())
-  dueDate         DateTime
-  totalDue        Float
-  status          InvoiceStatus @default(DRAFT)
-  storageCharges  Float         @default(0)
-  fulfillmentFees Float         @default(0)
-  receivingFees   Float         @default(0)
-  otherFees       Float         @default(0)
-  amountPaid      Float         @default(0)
-  merchant        Business      @relation(fields: [merchantId], references: [id])
-
-  @@index([merchantId])
-  @@index([status])
-}
-
-model Notification {
-  id        String  @id @default(uuid())
-  userId    String
-  message   String
-  linkUrl   String?
-  isRead    Boolean @default(false)
-  sendEmail Boolean @default(true)
-  user      User    @relation(fields: [userId], references: [id])
-}
-
-model AuditLog {
-  id          String   @id @default(uuid())
-  entityType  String
-  entityId    String
-  action      String
-  details     Json?
-  changedById String
-  timestamp   DateTime @default(now())
-  changedBy   User     @relation(fields: [changedById], references: [id])
-
-  @@index([entityId])
-  @@index([changedById])
+  @@index([businessId])
 }
 
 model VerificationToken {
-  id        String   @id @default(uuid())
+  id        String   @id
   userId    String
   token     String   @unique
   type      String
   expiresAt DateTime
   createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
-  @@index([token])
   @@index([expiresAt])
+  @@index([token])
+  @@index([userId])
 }
 
-model Setting {
-  id          String  @id @default(uuid())
-  key         String  @unique
-  value       String
-  description String?
+model Warehouse {
+  id                                                     String            @id
+  name                                                   String
+  region                                                 String
+  code                                                   String?           @unique
+  address                                                String?
+  capacity                                               Int?              @default(0)
+  city                                                   String?
+  contactEmail                                           String?
+  contactPhone                                           String?
+  country                                                String?
+  createdAt                                              DateTime          @default(now())
+  currentStock                                           Int?              @default(0)
+  description                                            String?
+  manager                                                String?
+  state                                                  String?
+  status                                                 String?           @default("ACTIVE")
+  type                                                   String?           @default("STORAGE")
+  updatedAt                                              DateTime
+  zipCode                                                String?
+  LogisticsRegion                                        LogisticsRegion[]
+  Order                                                  Order[]
+  StockAllocation                                        StockAllocation[]
+  StockTransfer_StockTransfer_fromWarehouseIdToWarehouse StockTransfer[]   @relation("StockTransfer_fromWarehouseIdToWarehouse")
+  StockTransfer_StockTransfer_toWarehouseIdToWarehouse   StockTransfer[]   @relation("StockTransfer_toWarehouseIdToWarehouse")
 }
 
-enum UserRole {
-  ADMIN
-  MERCHANT
-  MERCHANT_STAFF
-  LOGISTICS
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  OVERDUE
+}
+
+enum NotificationPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum NotificationType {
+  INFO
+  WARNING
+  ERROR
+  SUCCESS
+  PROMOTIONAL
+  SYSTEM
 }
 
 enum OrderStatus {
@@ -320,9 +434,9 @@ enum OrderStatus {
   ON_HOLD
 }
 
-enum InvoiceStatus {
-  DRAFT
-  ISSUED
-  PAID
-  OVERDUE
+enum UserRole {
+  ADMIN
+  MERCHANT
+  MERCHANT_STAFF
+  LOGISTICS
 }

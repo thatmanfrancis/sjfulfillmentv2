@@ -1,6 +1,6 @@
 import { generateMerchantWelcomeEmail, generateEmailVerificationEmail, generatePasswordResetEmail } from "./email-templates";
 import prisma from "./prisma";
-import { sendEmail } from "./sendMail";
+import { sendEmail } from "./email";
 import type { AuditLogModel } from "../app/generated/prisma/models/AuditLog";
 import type { NotificationModel } from "../app/generated/prisma/models/Notification";
 
@@ -34,10 +34,13 @@ export async function createNotification(
   // 1. Create In-App Notification Record
   const notification = await prisma.notification.create({
     data: {
+      id: `notif_${Date.now()}_${Math.random().toString(36).substring(2)}`,
       userId,
+      title: 'SJFulfillment Notification',
       message,
       linkUrl,
-      sendEmail: true, // Default to true for email notifications
+      sendEmail: true,
+      updatedAt: new Date(), // Default to true for email notifications
     },
   });
 
@@ -60,10 +63,6 @@ export async function createNotification(
         subject = `Reset Your Password - SJFulfillment`;
         htmlContent = generatePasswordResetEmail(emailData);
         break;
-      case "PASSWORD_RESET":
-        subject = `Reset Your Password - SJFulfillment`;
-        htmlContent = generatePasswordResetEmail(emailData);
-        break;
       // Add other cases here (e.g., ORDER_DISPATCHED, INVOICE_ISSUED)
       default:
         console.warn(
@@ -75,11 +74,7 @@ export async function createNotification(
     }
 
     try {
-      await sendEmail({
-        to: user.email,
-        subject: subject,
-        html: htmlContent,
-      });
+      await sendEmail({ to: user.email, subject, html: htmlContent });
       console.log(
         `Email sent for notification ${notification.id} to ${user.email}`
       );
@@ -89,6 +84,16 @@ export async function createNotification(
         `Failed to send email for notification ${notification.id}:`,
         error
       );
+      
+      // Log email details for manual retry
+      console.log('EMAIL QUEUED FOR RETRY:', {
+        notificationId: notification.id,
+        to: user.email,
+        subject,
+        htmlContent: htmlContent.substring(0, 200) + '...', // Truncated for logs
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      });
     }
   }
 
@@ -112,11 +117,32 @@ export async function createAuditLog(
 ): Promise<AuditLogModel> {
   return prisma.auditLog.create({
     data: {
+      id: `audit_${Date.now()}_${Math.random().toString(36).substring(2)}`,
       changedById: userId,
       entityType,
       entityId,
       action,
-      details: details ? JSON.stringify(details) : undefined,
+      details: details ? JSON.stringify(details) : undefined
     },
   });
+}
+
+// Utility to send a notification to a merchant by merchantId
+export async function sendNotificationToMerchant(
+  merchantId: string,
+  { title, message, linkUrl }: { title: string; message: string; linkUrl?: string }
+) {
+  // Find the merchant's user (owner)
+  const business = await prisma.business.findUnique({
+    where: { id: merchantId },
+    select: { ownerId: true }
+  });
+  if (!business?.ownerId) return;
+  await createNotification(
+    business.ownerId,
+    message,
+    linkUrl || null,
+    "ORDER_DISPATCHED",
+    { message, linkUrl, title }
+  );
 }

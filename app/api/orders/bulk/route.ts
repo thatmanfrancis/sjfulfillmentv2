@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import prisma from "@/lib/prisma";
-import { verifyAuth } from "@/lib/auth";
+import { getCurrentSession } from "@/lib/session";
 
 const orderItemSchema = z.object({
   productSku: z.string().min(1),
@@ -141,9 +141,25 @@ function validateOrderData(rawOrder: any, orderIndex: number) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authResult = await verifyAuth(request);
-    if (!authResult.success) {
-      return NextResponse.json({ error: authResult.error }, { status: 401 });
+    const session = await getCurrentSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: {
+        id: true,
+        role: true,
+        businessId: true
+      }
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "User not found" },
+        { status: 401 }
+      );
     }
 
     const contentType = request.headers.get("content-type");
@@ -175,10 +191,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Role-based business logic
-    if (authResult.user.role === "MERCHANT" || authResult.user.role === "MERCHANT_STAFF") {
+    if (user.role === "MERCHANT" || user.role === "MERCHANT_STAFF") {
       // Merchants can only create orders for their own business
       if (isCSV) {
-        if (merchantId !== authResult.user.businessId) {
+        if (merchantId !== user.businessId) {
           return NextResponse.json(
             { error: "Can only create orders for your own business" },
             { status: 403 }
@@ -186,7 +202,7 @@ export async function POST(request: NextRequest) {
         }
       } else {
         // Validate all orders belong to merchant's business
-        const hasInvalidMerchant = orders.some(o => o.merchantId !== authResult.user.businessId);
+        const hasInvalidMerchant = orders.some(o => o.merchantId !== user.businessId);
         if (hasInvalidMerchant) {
           return NextResponse.json(
             { error: "Can only create orders for your own business" },
@@ -194,7 +210,7 @@ export async function POST(request: NextRequest) {
           );
         }
       }
-    } else if (authResult.user.role === "ADMIN") {
+    } else if (user.role === "ADMIN") {
       // Admin needs to verify all merchants exist
       const merchantIds = [...new Set(orders.map(o => o.merchantId))];
       const existingMerchants = await prisma.business.findMany({
@@ -325,11 +341,14 @@ export async function POST(request: NextRequest) {
       
       for (const orderData of batch) {
         try {
+          const { randomUUID } = await import('crypto');
+          const trackingNumber = `TRK-${randomUUID().slice(0, 8)}`;
           const result = await prisma.$transaction(async (tx) => {
-            // Create the order
+            // Create the order with required id and trackingNumber
             const newOrder = await tx.order.create({
               data: {
-                merchantId: authResult.user.businessId!,
+                id: randomUUID(),
+                merchantId: user.businessId!,
                 externalOrderId: orderData.externalOrderId,
                 customerName: orderData.customerName,
                 customerAddress: orderData.customerAddress,
@@ -337,20 +356,22 @@ export async function POST(request: NextRequest) {
                 orderDate: orderData.orderDate,
                 status: 'NEW',
                 totalAmount: orderData.totalAmount,
+                trackingNumber,
               },
             });
 
-            // Create order items
+            // Create order items with required id
             const orderItems = [];
             for (const item of orderData.items) {
               const orderItem = await tx.orderItem.create({
                 data: {
+                  id: randomUUID(),
                   orderId: newOrder.id,
                   productId: item.product.id,
                   quantity: item.quantity,
                 },
                 include: {
-                  product: {
+                  Product: {
                     select: { name: true, sku: true }
                   }
                 }
@@ -373,8 +394,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Create audit log for bulk operation
+    const { randomUUID } = await import('crypto');
     await prisma.auditLog.create({
       data: {
+        id: randomUUID(),
         entityType: "Order",
         entityId: "BULK_OPERATION",
         action: "ORDERS_BULK_UPLOAD",
@@ -386,7 +409,7 @@ export async function POST(request: NextRequest) {
           options,
           merchantIds: [...new Set(validOrders.map(o => o.merchantId))],
         },
-        changedById: authResult.user.id,
+        changedById: user.id,
       },
     });
 

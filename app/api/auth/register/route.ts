@@ -94,6 +94,7 @@ export async function POST(request: NextRequest) {
       // 1. Create business first (without owner initially)
       const business = await tx.business.create({
         data: {
+          id: crypto.randomUUID(),
           name: businessName,
           contactPhone,
           address,
@@ -101,20 +102,23 @@ export async function POST(request: NextRequest) {
           state,
           country,
           isActive: false, // Requires admin approval
-          onboardingStatus: 'PENDING_VERIFICATION'
+          onboardingStatus: 'PENDING_VERIFICATION',
+          updatedAt: new Date()
         }
       });
 
       // 2. Create user with business relationship
       const user = await tx.user.create({
         data: {
+          id: crypto.randomUUID(),
           email: email.toLowerCase(),
           passwordHash: hashedPassword,
           role: 'MERCHANT',
           businessId: business.id,
           isVerified: false,
           firstName,
-          lastName
+          lastName,
+          updatedAt: new Date()
         }
       });
 
@@ -133,34 +137,40 @@ export async function POST(request: NextRequest) {
 
       await tx.pricingTier.create({
         data: {
+          id: crypto.randomUUID(),
           merchantId: business.id,
           serviceType: 'WAREHOUSING_MONTHLY',
           baseRate: baseStorageFeeUSD,
           negotiatedRate: baseStorageFeeUSD,
           rateUnit: 'PER_UNIT_MONTH',
-          currency: 'USD'
+          currency: 'USD',
+          updatedAt: new Date()
         }
       });
 
       await tx.pricingTier.create({
         data: {
+          id: crypto.randomUUID(),
           merchantId: business.id,
           serviceType: 'FULFILLMENT_PER_ORDER',
           baseRate: baseFulfillmentFeeUSD,
           negotiatedRate: baseFulfillmentFeeUSD,
           rateUnit: 'PER_ORDER',
-          currency: 'USD'
+          currency: 'USD',
+          updatedAt: new Date()
         }
       });
 
       await tx.pricingTier.create({
         data: {
+          id: crypto.randomUUID(),
           merchantId: business.id,
           serviceType: 'RECEIVING_FEE',
           baseRate: baseReceivingFeeUSD,
           negotiatedRate: baseReceivingFeeUSD,
           rateUnit: 'PER_UNIT',
-          currency: 'USD'
+          currency: 'USD',
+          updatedAt: new Date()
         }
       });
 
@@ -168,28 +178,34 @@ export async function POST(request: NextRequest) {
       await tx.pricingTier.createMany({
         data: [
           {
+            id: crypto.randomUUID(),
             merchantId: business.id,
             serviceType: 'WAREHOUSING_MONTHLY',
             baseRate: baseStorageFeeUSD * USD_TO_NGN_RATE,
             negotiatedRate: baseStorageFeeUSD * USD_TO_NGN_RATE,
             rateUnit: 'PER_UNIT_MONTH',
-            currency: 'NGN'
+            currency: 'NGN',
+            updatedAt: new Date()
           },
           {
+            id: crypto.randomUUID(),
             merchantId: business.id,
             serviceType: 'FULFILLMENT_PER_ORDER',
             baseRate: baseFulfillmentFeeUSD * USD_TO_NGN_RATE,
             negotiatedRate: baseFulfillmentFeeUSD * USD_TO_NGN_RATE,
             rateUnit: 'PER_ORDER',
-            currency: 'NGN'
+            currency: 'NGN',
+            updatedAt: new Date()
           },
           {
+            id: crypto.randomUUID(),
             merchantId: business.id,
             serviceType: 'RECEIVING_FEE',
             baseRate: baseReceivingFeeUSD * USD_TO_NGN_RATE,
             negotiatedRate: baseReceivingFeeUSD * USD_TO_NGN_RATE,
             rateUnit: 'PER_UNIT',
-            currency: 'NGN'
+            currency: 'NGN',
+            updatedAt: new Date()
           }
         ]
       });
@@ -212,7 +228,7 @@ export async function POST(request: NextRequest) {
       {
         firstName,
         businessName,
-        verificationUrl: `${process.env.NEXT_PUBLIC_APP_URL}/auth/verify-email?token=${verificationToken}`,
+        verificationUrl: `${process.env.NEXT_PUBLIC_APP_URL}/auth/verify-email?token=${verificationToken}&email=${encodeURIComponent(email)}`,
         supportEmail: 'support@sjfulfillment.com'
       }
     );

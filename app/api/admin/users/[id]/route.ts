@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import prisma from "@/lib/prisma";
-import { verifyAuth } from "@/lib/auth";
+import { getCurrentSession } from "@/lib/session";
 
 const userUpdateSchema = z.object({
   firstName: z.string().min(1).max(100).optional(),
@@ -9,22 +9,26 @@ const userUpdateSchema = z.object({
   email: z.string().email().optional(),
   role: z.enum(['ADMIN', 'MERCHANT', 'MERCHANT_STAFF', 'LOGISTICS']).optional(),
   businessId: z.string().uuid().optional().nullable(),
-  isActive: z.boolean().optional(),
+  isVerified: z.boolean().optional(), // Changed from isActive to isVerified
 });
 
-// GET /api/admin/users/[id] - Get specific user details
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = await verifyAuth(request);
-    if (!authResult.success) {
-      return NextResponse.json({ error: authResult.error }, { status: 401 });
+    const session = await getCurrentSession();
+    if (!session?.userId) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
     // Only admins can view user details
-    if (authResult.user.role !== "ADMIN") {
+    const adminUser = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: { role: true },
+    });
+
+    if (!adminUser || adminUser.role !== "ADMIN") {
       return NextResponse.json(
         { error: "Only administrators can access user details" },
         { status: 403 }
@@ -38,7 +42,7 @@ export async function GET(
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: {
-        business: {
+        Business_User_businessIdToBusiness: {
           select: {
             id: true,
             name: true,
@@ -50,7 +54,7 @@ export async function GET(
         },
         // logistics regions disabled until schema is fixed
         // Recent activity via audit logs
-        auditLogs: {
+        AuditLog: {
           select: {
             id: true,
             entityType: true,
@@ -137,19 +141,23 @@ export async function GET(
   }
 }
 
-// PUT /api/admin/users/[id] - Update user
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = await verifyAuth(request);
-    if (!authResult.success) {
-      return NextResponse.json({ error: authResult.error }, { status: 401 });
+    const session = await getCurrentSession();
+    if (!session?.userId) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
     // Only admins can update users
-    if (authResult.user.role !== "ADMIN") {
+    const adminUser = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: { role: true },
+    });
+
+    if (!adminUser || adminUser.role !== "ADMIN") {
       return NextResponse.json(
         { error: "Only administrators can update users" },
         { status: 403 }
@@ -183,7 +191,7 @@ export async function PUT(
     }
 
     // Prevent admin from deactivating themselves
-    if (userId === authResult.user.id && validatedData.isActive === false) {
+    if (userId === session.userId && validatedData.isVerified === false) {
       return NextResponse.json(
         { error: "Cannot deactivate your own account" },
         { status: 400 }
@@ -235,7 +243,7 @@ export async function PUT(
         isVerified: validatedData.email !== existingUser.email ? false : undefined,
       },
       include: {
-        business: {
+        Business_User_businessIdToBusiness: {
           select: {
             id: true,
             name: true,
@@ -249,6 +257,7 @@ export async function PUT(
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "User",
         entityId: userId,
         action: "UPDATE",
@@ -264,7 +273,9 @@ export async function PUT(
           newValues: validatedData,
           changedFields: Object.keys(validatedData),
         },
-        changedById: authResult.user.id,
+        changedById: session.userId,
+        timestamp: new Date(),
+        User: { connect: { id: session.userId } },
       },
     });
 
@@ -288,19 +299,27 @@ export async function PUT(
   }
 }
 
+// PATCH /api/admin/users/[id] - Update user (same as PUT for compatibility)
+export const PATCH = PUT;
+
 // DELETE /api/admin/users/[id] - Deactivate user (soft delete)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = await verifyAuth(request);
-    if (!authResult.success) {
-      return NextResponse.json({ error: authResult.error }, { status: 401 });
+    const session = await getCurrentSession();
+    if (!session?.userId) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
     // Only admins can delete users
-    if (authResult.user.role !== "ADMIN") {
+    const adminUser = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: { role: true },
+    });
+
+    if (!adminUser || adminUser.role !== "ADMIN") {
       return NextResponse.json(
         { error: "Only administrators can delete users" },
         { status: 403 }
@@ -311,7 +330,7 @@ export async function DELETE(
     const userId = resolvedParams.id;
 
     // Prevent admin from deleting themselves
-    if (userId === authResult.user.id) {
+    if (userId === session.userId) {
       return NextResponse.json(
         { error: "Cannot delete your own account" },
         { status: 400 }
@@ -388,13 +407,16 @@ export async function DELETE(
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "User",
         entityId: userId,
         action: "DEACTIVATE",
         details: {
           deactivatedUser: existingUser,
         },
-        changedById: authResult.user.id,
+        changedById: session.userId,
+        timestamp: new Date(),
+        User: { connect: { id: session.userId } },
       },
     });
 

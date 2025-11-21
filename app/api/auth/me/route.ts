@@ -1,19 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentSession } from '@/lib/session';
 import prisma from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getCurrentSession();
+    const sessionToken = request.cookies.get('session')?.value;
     
-    if (!session) {
+    if (!sessionToken) {
       return NextResponse.json(
         { error: 'Not authenticated' },
         { status: 401 }
       );
     }
 
-    // Get fresh user data
+    // Verify JWT token
+    let session;
+    try {
+      const jwt = require('jsonwebtoken');
+      const JWT_SECRET = process.env.JWT_SECRET || 'your-jwt-secret';
+      session = jwt.verify(sessionToken, JWT_SECRET);
+    } catch (error) {
+      console.log('❌ Invalid JWT token');
+      return NextResponse.json(
+        { error: 'Invalid session' },
+        { status: 401 }
+      );
+    }
+
+    // Get user data
     const user = await prisma.user.findUnique({
       where: { id: session.userId },
       select: {
@@ -23,20 +36,12 @@ export async function GET(request: NextRequest) {
         lastName: true,
         role: true,
         isVerified: true,
-        mfaEnabled: true,
-        lastLoginAt: true,
-        createdAt: true,
         businessId: true,
-        business: {
+        Business_User_businessIdToBusiness: {
           select: {
             id: true,
             name: true,
-            isActive: true,
-            onboardingStatus: true,
-            contactPhone: true,
-            city: true,
-            state: true,
-            country: true
+            isActive: true
           }
         }
       }
@@ -52,68 +57,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       user: user
-    }, { status: 200 });
+    });
 
   } catch (error) {
     console.error('Get user error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
-}
-
-export async function PUT(request: NextRequest) {
-  try {
-    const session = await getCurrentSession();
-    
-    if (!session) {
-      return NextResponse.json(
-        { error: 'Not authenticated' },
-        { status: 401 }
-      );
-    }
-
-    const body = await request.json();
-    const { firstName, lastName, contactPhone } = body;
-
-    // Update user profile
-    const updatedUser = await prisma.user.update({
-      where: { id: session.userId },
-      data: {
-        firstName: firstName || undefined,
-        lastName: lastName || undefined,
-        updatedAt: new Date()
-      },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-        updatedAt: true
-      }
-    });
-
-    // If user has a business and provided contact phone, update business too
-    if (session.businessId && contactPhone) {
-      await prisma.business.update({
-        where: { id: session.businessId },
-        data: {
-          contactPhone,
-          updatedAt: new Date()
-        }
-      });
-    }
-
-    return NextResponse.json({
-      success: true,
-      user: updatedUser,
-      message: 'Profile updated successfully'
-    }, { status: 200 });
-
-  } catch (error) {
-    console.error('Update profile error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

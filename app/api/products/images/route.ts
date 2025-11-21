@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
         name: true,
         sku: true,
         businessId: true,
-        business: {
+        Business: {
           select: { name: true }
         }
       }
@@ -103,6 +103,7 @@ export async function POST(request: NextRequest) {
       // Save image record to database
       const productImage = await prisma.productImage.create({
         data: {
+          id: crypto.randomUUID(),
           productId,
           cloudinaryPublicId: upload.public_id,
           imageUrl: upload.secure_url,
@@ -116,7 +117,8 @@ export async function POST(request: NextRequest) {
           width: upload.width,
           height: upload.height,
           format: upload.format,
-          uploadedById: authResult.user.id
+          uploadedById: authResult.user.id,
+          updatedAt: new Date(),
         }
       });
 
@@ -131,6 +133,7 @@ export async function POST(request: NextRequest) {
       // Create audit log
       await prisma.auditLog.create({
         data: {
+          id: crypto.randomUUID(),
           entityType: "Product",
           entityId: productId,
           action: "IMAGE_UPLOADED",
@@ -223,14 +226,7 @@ export async function GET(request: NextRequest) {
         { isPrimary: 'desc' },
         { createdAt: 'asc' }
       ],
-      include: {
-        uploadedBy: {
-          select: {
-            firstName: true,
-            lastName: true
-          }
-        }
-      }
+      // No uploadedBy relation, remove this include
     });
 
     return NextResponse.json({
@@ -249,9 +245,7 @@ export async function GET(request: NextRequest) {
         height: img.height,
         format: img.format,
         createdAt: img.createdAt,
-        uploadedBy: img.uploadedBy ? {
-          name: `${img.uploadedBy.firstName} ${img.uploadedBy.lastName}`
-        } : null
+        // uploadedBy removed
       }))
     });
 

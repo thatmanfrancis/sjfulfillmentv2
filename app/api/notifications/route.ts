@@ -1,26 +1,58 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import prisma from "@/lib/prisma";
-import { verifyAuth } from "@/lib/auth";
+import { getCurrentSession } from "@/lib/session";
 
-const updateNotificationSchema = z.object({
-  isRead: z.boolean().optional(),
-});
+// Helper function to get notification titles
+function getNotificationTitle(type: string, message: string): string {
+  switch (type) {
+    case 'ORDER_CREATED':
+      return 'New Order Created';
+    case 'ORDER_STATUS_UPDATED':
+      return 'Order Status Updated';
+    case 'ORDER_ASSIGNED':
+      return 'Order Assigned';
+    case 'ORDER_DISPATCHED':
+      return 'Order Dispatched';
+    case 'ORDER_CANCELLED':
+      return 'Order Cancelled';
+    case 'PAYMENT_RECEIVED':
+      return 'Payment Received';
+    case 'PAYMENT_FAILED':
+      return 'Payment Failed';
+    case 'INVOICE_GENERATED':
+      return 'Invoice Generated';
+    case 'STOCK_LOW':
+      return 'Low Stock Alert';
+    case 'STOCK_ALERT':
+      return 'Stock Alert';
+    case 'WAREHOUSE_ASSIGNED':
+      return 'Warehouse Assigned';
+    case 'ACCOUNT_CREATED':
+      return 'Account Created';
+    case 'ACCOUNT_SUSPENDED':
+      return 'Account Suspended';
+    case 'PASSWORD_CHANGED':
+      return 'Password Changed';
+    case 'REGION_ASSIGNED':
+      return 'Region Assigned';
+    case 'REGION_UPDATED':
+      return 'Region Updated';
+    case 'REGION_REMOVED':
+      return 'Region Removed';
+    case 'SYSTEM_MAINTENANCE':
+      return 'System Maintenance';
+    case 'SYSTEM_ALERT':
+      return 'System Alert';
+    default:
+      return message.length > 30 ? message.substring(0, 30) + '...' : message;
+  }
+}
 
-const notificationPreferencesSchema = z.object({
-  emailNotifications: z.boolean().optional(),
-  smsNotifications: z.boolean().optional(),
-  pushNotifications: z.boolean().optional(),
-  orderUpdates: z.boolean().optional(),
-  systemAlerts: z.boolean().optional(),
-  marketingEmails: z.boolean().optional(),
-});
-
-// GET /api/notifications - Get user notifications
 export async function GET(request: NextRequest) {
   try {
-    const authResult = await verifyAuth(request);
-    if (!authResult.success || !authResult.user) {
+    const session = await getCurrentSession();
+    if (!session?.userId) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -30,19 +62,14 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "20");
-    const type = searchParams.get("type");
     const isRead = searchParams.get("isRead");
 
     const skip = (page - 1) * limit;
 
     // Build where clause
     let where: any = {
-      userId: authResult.user.id,
+      userId: session.userId,
     };
-
-    if (type) {
-      where.type = type;
-    }
 
     if (isRead !== null) {
       where.isRead = isRead === "true";
@@ -53,32 +80,45 @@ export async function GET(request: NextRequest) {
         where,
         skip,
         take: limit,
-        orderBy: { id: "desc" },
+        select: {
+          id: true,
+          message: true,
+          linkUrl: true,
+          isRead: true,
+          sendEmail: true,
+          userId: true
+        }
       }),
       prisma.notification.count({ where }),
       prisma.notification.count({
         where: {
-          userId: authResult.user.id,
+          userId: session.userId,
           isRead: false,
         },
       }),
     ]);
 
+    const formattedNotifications = notifications.map((notif: any) => ({
+      ...notif,
+      title: getNotificationTitle('general', notif.message),
+      type: 'general',
+      createdAt: new Date().toISOString(), // Use current date since we don't have createdAt
+    }));
+
     return NextResponse.json({
-      notifications: notifications,
+      notifications: formattedNotifications,
       pagination: {
         page,
         limit,
         total,
         pages: Math.ceil(total / limit),
       },
-      summary: {
+      meta: {
         unreadCount,
-        totalNotifications: total,
       },
     });
   } catch (error) {
-    console.error("Error fetching notifications:", error);
+    console.error("GET /api/notifications error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -86,71 +126,102 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/notifications - Create notification (Admin/System only)
-export async function POST(request: NextRequest) {
+export async function PATCH(request: NextRequest) {
   try {
-    const authResult = await verifyAuth(request);
-    if (!authResult.success || !authResult.user) {
+    const session = await getCurrentSession();
+    if (!session?.userId) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    // Only admins can create notifications manually
-    if (authResult.user.role !== "ADMIN") {
-      return NextResponse.json(
-        { error: "Insufficient permissions" },
-        { status: 403 }
-      );
-    }
-
-    const createNotificationSchema = z.object({
-      userId: z.string().uuid(),
-      message: z.string().min(1).max(500),
-      link: z.string().max(200).optional(),
-      type: z.enum([
-        'ORDER_CREATED', 'ORDER_STATUS_UPDATED', 'ORDER_ASSIGNED', 'ORDER_DISPATCHED', 'ORDER_CANCELLED',
-        'PAYMENT_RECEIVED', 'PAYMENT_FAILED', 'INVOICE_GENERATED',
-        'STOCK_LOW', 'STOCK_ALERT', 'WAREHOUSE_ASSIGNED',
-        'ACCOUNT_CREATED', 'ACCOUNT_SUSPENDED', 'PASSWORD_CHANGED',
-        'REGION_ASSIGNED', 'REGION_UPDATED', 'REGION_REMOVED',
-        'SYSTEM_MAINTENANCE', 'SYSTEM_ALERT', 'GENERAL'
-      ]),
-      metadata: z.record(z.string(), z.any()).optional(),
-    });
-
     const body = await request.json();
-    const validatedData = createNotificationSchema.parse(body);
+    const { id, isRead, notificationIds, markAsRead } = body;
 
-    // Verify target user exists
-    const targetUser = await prisma.user.findUnique({
-      where: { id: validatedData.userId },
-      select: { id: true, firstName: true, lastName: true, isVerified: true },
-    });
+    // Support both single and bulk operations
+    if (notificationIds && Array.isArray(notificationIds)) {
+      // Bulk operation
+      const updateData = {
+        isRead: markAsRead ?? true
+      };
 
-    if (!targetUser) {
+      await prisma.notification.updateMany({
+        where: {
+          id: { in: notificationIds },
+          userId: session.userId,
+        },
+        data: updateData,
+      });
+
+      return NextResponse.json({
+        message: `${notificationIds.length} notifications updated successfully`,
+        updated: notificationIds.length,
+      });
+    } else if (id) {
+      // Single operation
+      const notification = await prisma.notification.update({
+        where: {
+          id,
+          userId: session.userId,
+        },
+        data: {
+          isRead: isRead ?? true,
+        },
+      });
+
+      return NextResponse.json({
+        message: "Notification updated successfully",
+        notification,
+      });
+    } else {
       return NextResponse.json(
-        { error: "Target user not found" },
-        { status: 404 }
-      );
-    }
-
-    if (!targetUser.isVerified) {
-      return NextResponse.json(
-        { error: "Cannot send notification to unverified user" },
+        { error: "Either 'id' or 'notificationIds' is required" },
         { status: 400 }
       );
     }
+  } catch (error) {
+    console.error("PATCH /api/notifications error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getCurrentSession();
+    if (!session?.userId) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json();
+    
+    const createSchema = z.object({
+      userId: z.string(),
+      title: z.string().min(1),
+      message: z.string().min(1),
+      linkUrl: z.string().optional(),
+      sendEmail: z.boolean().default(true),
+    });
+
+    const validatedData = createSchema.parse(body);
 
     const notification = await prisma.notification.create({
-      data: validatedData,
+      data: {
+        id: `notif_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+        ...validatedData,
+        updatedAt: new Date()
+      }
     });
 
     return NextResponse.json({
-      ...notification,
-      timeAgo: "Just now",
-      isRecent: true,
+      message: "Notification created successfully",
+      notification,
     }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -159,8 +230,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    console.error("Error creating notification:", error);
+    
+    console.error("POST /api/notifications error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

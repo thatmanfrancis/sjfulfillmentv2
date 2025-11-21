@@ -1,0 +1,16 @@
+customerName,customerPhone,customerAddress,businessName,productSku,quantity
+"John Doe","+234-800-123-4567","123 Main Street, Lagos, Nigeria","Benson Enterprises","BTS050",5
+"Jane Smith","+234-800-987-6543","456 Victoria Island, Lagos, Nigeria","Benson Enterprises","LDL200",2
+"Mike Johnson","+234-800-555-0123","789 Ikeja, Lagos, Nigeria","Benson Enterprises","PCM001",5
+"Sarah Williams","+234-800-444-5678","321 Abuja, FCT, Nigeria","Benson Enterprises","SFT100",4
+"David Brown","+234-800-333-2222","654 Port Harcourt, Rivers, Nigeria","Benson Enterprises","SKU-GD_01",4
+"Mary Wilson","+234-800-777-8888","987 Kano, Kano State, Nigeria","Benson Enterprises","SKU-LD_01",1
+"James Davis","+234-800-666-9999","246 Ibadan, Oyo State, Nigeria","Benson Enterprises","SKU-OG_01",5
+"Linda Miller","+234-800-555-4444","135 Kaduna, Kaduna State, Nigeria","Benson Enterprises","SKU-SE_01",5
+"John Doe","+234-800-123-4567","123 Main Street, Lagos, Nigeria","Benson Enterprises","SKU-UM_01",2
+"Jane Smith","+234-800-987-6543","456 Victoria Island, Lagos, Nigeria","Benson Enterprises","WBH001",4
+"David Brown","+234-800-333-2222","654 Port Harcourt, Rivers, Nigeria","Benson Enterprises","SKU-OG_01",2
+"Sarah Williams","+234-800-444-5678","321 Abuja, FCT, Nigeria","Benson Enterprises","SFT100",2
+"John Doe","+234-800-123-4567","123 Main Street, Lagos, Nigeria","Benson Enterprises","SFT100",1
+"Jane Smith","+234-800-987-6543","456 Victoria Island, Lagos, Nigeria","Benson Enterprises","SKU-LD_01",2
+"Jane Smith","+234-800-987-6543","456 Victoria Island, Lagos, Nigeria","Benson Enterprises","BTS050",1

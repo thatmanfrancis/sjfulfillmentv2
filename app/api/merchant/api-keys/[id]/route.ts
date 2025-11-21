@@ -23,7 +23,7 @@ export async function GET(
     const apiKey = await prisma.merchantApiKey.findUnique({
       where: { id },
       include: {
-        business: {
+        Business: {
           select: {
             id: true,
             name: true,
@@ -80,7 +80,7 @@ export async function PUT(
     const existingApiKey = await prisma.merchantApiKey.findUnique({
       where: { id },
       include: {
-        business: {
+        Business: {
           select: { id: true, name: true },
         },
       },
@@ -105,7 +105,7 @@ export async function PUT(
       where: { id },
       data: validatedData,
       include: {
-        business: {
+        Business: {
           select: {
             id: true,
             name: true,
@@ -118,12 +118,13 @@ export async function PUT(
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "MerchantApiKey",
         entityId: updatedApiKey.id,
         action: validatedData.isRevoked === true ? "API_KEY_REVOKED" : "API_KEY_UPDATED",
         details: {
           merchantId: updatedApiKey.merchantId,
-          merchantName: existingApiKey.business.name,
+          merchantName: existingApiKey.Business?.name,
           changes: validatedData,
           oldName: existingApiKey.name,
           newName: validatedData.name || existingApiKey.name,
@@ -168,7 +169,7 @@ export async function DELETE(
     const existingApiKey = await prisma.merchantApiKey.findUnique({
       where: { id },
       include: {
-        business: {
+        Business: {
           select: { name: true },
         },
       },
@@ -196,12 +197,13 @@ export async function DELETE(
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "MerchantApiKey",
         entityId: id,
         action: "API_KEY_DELETED",
         details: {
           merchantId: existingApiKey.merchantId,
-          merchantName: existingApiKey.business.name,
+          merchantName: existingApiKey.Business?.name,
           apiKeyName: existingApiKey.name,
         },
         changedById: authResult.user.id,

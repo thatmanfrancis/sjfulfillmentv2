@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import prisma from "@/lib/prisma";
-import { verifyAuth } from "@/lib/auth";
+import { getCurrentSession } from "@/lib/session";
 import { createAuditLog, createNotification } from "@/lib/notifications";
+import { generateUniqueTrackingNumber } from "@/lib/tracking";
 
 const orderItemSchema = z.object({
   productId: z.string().uuid(),
@@ -33,10 +34,26 @@ const updateOrderSchema = z.object({
 // GET /api/orders - List orders with filtering
 export async function GET(request: NextRequest) {
   try {
-    const authResult = await verifyAuth(request);
-    if (!authResult.success || !authResult.user) {
+    const session = await getCurrentSession();
+    if (!session) {
       return NextResponse.json(
         { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: {
+        id: true,
+        role: true,
+        businessId: true
+      }
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "User not found" },
         { status: 401 }
       );
     }
@@ -56,24 +73,25 @@ export async function GET(request: NextRequest) {
     let where: any = {};
 
     // Role-based filtering
-    if (authResult.user.role === "MERCHANT" || authResult.user.role === "MERCHANT_STAFF") {
-      where.merchantId = authResult.user.businessId;
-    } else if (businessId && authResult.user.role === "ADMIN") {
+    if (user.role === "MERCHANT" || user.role === "MERCHANT_STAFF") {
+      where.merchantId = user.businessId;
+    } else if (businessId && user.role === "ADMIN") {
       where.merchantId = businessId;
-    } else if (authResult.user.role === "LOGISTICS") {
+    } else if (user.role === "LOGISTICS") {
       if (assignedToMe) {
-        where.assignedLogisticsId = authResult.user.id;
+        where.assignedLogisticsId = user.id;
       } else {
         // Show orders in user's assigned warehouse regions
         const userRegions = await prisma.logisticsRegion.findMany({
-          where: { userId: authResult.user.id },
+          where: { userId: user.id },
           select: {
             warehouseId: true
           }
         });
 
-        const warehouseIds = userRegions.map((ur) => ur.warehouseId);        where.OR = [
-          { assignedLogisticsId: authResult.user.id },
+        const warehouseIds = userRegions.map((ur) => ur.warehouseId);
+        where.OR = [
+            { assignedLogisticsId: user.id },
           {
             fulfillmentWarehouseId: {
               in: warehouseIds,
@@ -93,11 +111,22 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      where.OR = [
+      const searchConditions = [
         { customerName: { contains: search, mode: "insensitive" } },
         { customerPhone: { contains: search, mode: "insensitive" } },
         { externalOrderId: { contains: search, mode: "insensitive" } },
       ];
+
+      if (where.OR) {
+        // If OR already exists (logistics filtering), combine with AND
+        where.AND = [
+          { OR: where.OR },
+          { OR: searchConditions }
+        ];
+        delete where.OR;
+      } else {
+        where.OR = searchConditions;
+      }
     }
 
     const [orders, total] = await Promise.all([
@@ -111,9 +140,9 @@ export async function GET(request: NextRequest) {
               baseCurrency: true,
             },
           },
-          items: {
+          OrderItem: {
             include: {
-              product: {
+              Product: {
                 select: {
                   name: true,
                   weightKg: true,
@@ -122,14 +151,14 @@ export async function GET(request: NextRequest) {
               }
             }
           },
-          fulfillmentWarehouse: {
+          Warehouse: {
             select: {
               id: true,
               name: true,
               region: true,
             },
           },
-          assignedLogistics: {
+          User: {
             select: {
               id: true,
               firstName: true,
@@ -137,7 +166,7 @@ export async function GET(request: NextRequest) {
               email: true,
             },
           },
-          shipments: {
+          Shipment: {
             select: {
               id: true,
               trackingNumber: true,
@@ -154,14 +183,14 @@ export async function GET(request: NextRequest) {
     ]);
 
     return NextResponse.json({
-      orders: orders.map(order => ({
+      orders: orders.map((order: any) => ({
         ...order,
-        totalWeight: order.items.reduce(
-          (sum, item) => sum + (item.product.weightKg * item.quantity),
+        totalWeight: order.OrderItem.reduce(
+          (sum: any, item: any) => sum + (item.Product.weightKg * item.quantity),
           0
         ),
-        itemCount: order.items.reduce((sum, item) => sum + item.quantity, 0),
-        uniqueProducts: order.items.length,
+        itemCount: order.OrderItem.reduce((sum: any, item: any) => sum + item.quantity, 0),
+        uniqueProducts: order.OrderItem.length,
       })),
       pagination: {
         page,
@@ -182,16 +211,32 @@ export async function GET(request: NextRequest) {
 // POST /api/orders - Create new order
 export async function POST(request: NextRequest) {
   try {
-    const authResult = await verifyAuth(request);
-    if (!authResult.success || !authResult.user) {
+    const session = await getCurrentSession();
+    if (!session) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
       );
     }
 
+    const user = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: {
+        id: true,
+        role: true,
+        businessId: true
+      }
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "User not found" },
+        { status: 401 }
+      );
+    }
+
     // Only merchants, merchant staff, and admins can create orders
-    if (!["MERCHANT", "MERCHANT_STAFF", "ADMIN"].includes(authResult.user.role)) {
+    if (!["MERCHANT", "MERCHANT_STAFF", "ADMIN"].includes(user.role)) {
       return NextResponse.json(
         { error: "Insufficient permissions" },
         { status: 403 }
@@ -203,14 +248,14 @@ export async function POST(request: NextRequest) {
 
     // Determine merchant ID
     let merchantId: string;
-    if (authResult.user.role === "MERCHANT" || authResult.user.role === "MERCHANT_STAFF") {
-      if (!authResult.user.businessId) {
+    if (user.role === "MERCHANT" || user.role === "MERCHANT_STAFF") {
+      if (!user.businessId) {
         return NextResponse.json(
           { error: "No business associated with user" },
           { status: 400 }
         );
       }
-      merchantId = authResult.user.businessId;
+      merchantId = user.businessId;
     } else {
       // Admin can specify merchantId in the request
       if (!body.merchantId) {
@@ -230,7 +275,7 @@ export async function POST(request: NextRequest) {
         businessId: merchantId,
       },
       include: {
-        stockAllocations: {
+        StockAllocation: {
           select: {
             warehouseId: true,
             allocatedQuantity: true,
@@ -264,9 +309,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Generate unique tracking number
+    const trackingNumber = await generateUniqueTrackingNumber();
+
     // Create order with items
     const order = await prisma.order.create({
       data: {
+        id: `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        trackingNumber: trackingNumber,
         merchantId,
         externalOrderId: validatedData.externalOrderId,
         customerName: validatedData.customerName,
@@ -274,8 +324,9 @@ export async function POST(request: NextRequest) {
         customerPhone: validatedData.customerPhone,
         orderDate: validatedData.orderDate,
         totalAmount: validatedData.totalAmount,
-        items: {
+        OrderItem: {
           create: validatedData.items.map(item => ({
+            id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             productId: item.productId,
             quantity: item.quantity,
           })),
@@ -289,9 +340,9 @@ export async function POST(request: NextRequest) {
             baseCurrency: true,
           },
         },
-        items: {
+        OrderItem: {
           include: {
-            product: {
+            Product: {
               select: {
                 id: true,
                 sku: true,
@@ -306,14 +357,14 @@ export async function POST(request: NextRequest) {
 
     // Create audit log
     await createAuditLog(
-      authResult.user.id,
+      user.id,
       "Order",
       order.id,
       "ORDER_CREATED",
       {
         customerName: order.customerName,
         totalAmount: order.totalAmount,
-        itemCount: order.items.length,
+        itemCount: order.OrderItem.length,
         externalOrderId: order.externalOrderId,
       }
     );
@@ -340,12 +391,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       ...order,
-      totalWeight: order.items.reduce(
-        (sum, item) => sum + (item.product.weightKg * item.quantity),
+      totalWeight: order.OrderItem.reduce(
+        (sum: number, item: any) => sum + (item.Product.weightKg * item.quantity),
         0
       ),
-      itemCount: order.items.reduce((sum, item) => sum + item.quantity, 0),
-      uniqueProducts: order.items.length,
+      itemCount: order.OrderItem.reduce((sum: number, item: any) => sum + item.quantity, 0),
+      uniqueProducts: order.OrderItem.length,
     }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {

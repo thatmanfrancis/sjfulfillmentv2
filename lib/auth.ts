@@ -3,6 +3,7 @@ import prisma from './prisma';
 import { hash, compare } from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { addDays, addMinutes } from 'date-fns';
+import crypto from 'crypto';
 
 const secretKey = process.env.JWT_SECRET || 'secret';
 const key = new TextEncoder().encode(secretKey);
@@ -65,7 +66,7 @@ export async function createSession(userId: string) {
 // Cookie configuration
 export const sessionCookieConfig = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
+  secure: false, // Set to false for development
   maxAge: 60 * 60 * 24, // 24 hours
   path: '/',
   sameSite: 'lax' as const
@@ -106,19 +107,73 @@ export function generateMFABackupCodes(): string[] {
 
 // Email verification tokens
 export async function generateVerificationToken(userId: string): Promise<string> {
+  console.log('🎯 Starting token generation for user:', userId);
+  
+  // Verify the user exists first
+  const userExists = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true }
+  });
+  
+  if (!userExists) {
+    console.error('❌ User not found during token generation:', userId);
+    throw new Error('User not found');
+  }
+  
+  console.log('✅ User found for token generation:', userExists.email);
+  
   const token = randomBytes(32).toString('hex');
   const expiresAt = addDays(new Date(), 1); // 24 hours
 
-  await prisma.verificationToken.create({
-    data: {
-      userId,
-      token,
-      type: 'EMAIL_VERIFICATION',
-      expiresAt,
-    }
+  console.log('🎯 Token details before creation:', {
+    userId,
+    token: token.substring(0, 16) + '...',
+    fullToken: token,
+    expiresAt,
+    timestamp: new Date().toISOString()
   });
 
-  return token;
+  try {
+    console.log('🔄 About to create verification token in database...');
+    const verificationToken = await prisma.verificationToken.create({
+      data: {
+        id: crypto.randomUUID(),
+        userId,
+        token,
+        type: 'EMAIL_VERIFICATION',
+        expiresAt,
+      }
+    });
+
+    console.log('✅ Verification token created successfully:', {
+      tokenId: verificationToken.id,
+      userId: verificationToken.userId,
+      type: verificationToken.type,
+      storedToken: verificationToken.token.substring(0, 16) + '...',
+      expiresAt: verificationToken.expiresAt
+    });
+
+    // Verify the token was actually stored by trying to read it back
+    const verifyStorage = await prisma.verificationToken.findFirst({
+      where: { id: verificationToken.id }
+    });
+    
+    if (verifyStorage) {
+      console.log('✅ Token storage verified - token exists in database');
+    } else {
+      console.error('❌ CRITICAL: Token not found after creation!');
+    }
+
+    return token;
+  } catch (error) {
+    console.error('❌ Failed to create verification token:', {
+      error: error instanceof Error ? error.message : error,
+      stack: error instanceof Error ? error.stack : undefined,
+      userId,
+      tokenLength: token.length
+    });
+    throw error;
+  }
 }
 
 export async function generatePasswordResetToken(email: string): Promise<string> {
@@ -140,6 +195,7 @@ export async function generatePasswordResetToken(email: string): Promise<string>
 
   await prisma.verificationToken.create({
     data: {
+      id: crypto.randomUUID(),
       userId: user.id,
       token,
       type: 'PASSWORD_RESET',
@@ -151,6 +207,12 @@ export async function generatePasswordResetToken(email: string): Promise<string>
 }
 
 export async function verifyToken(token: string, type: 'EMAIL_VERIFICATION' | 'PASSWORD_RESET') {
+  console.log('🔍 Verifying token:', {
+    token: token.substring(0, 10) + '...',
+    type,
+    timestamp: new Date().toISOString()
+  });
+
   const verificationToken = await prisma.verificationToken.findFirst({
     where: {
       token,
@@ -160,12 +222,50 @@ export async function verifyToken(token: string, type: 'EMAIL_VERIFICATION' | 'P
       }
     },
     include: {
-      user: true
+      User: true
     }
   });
 
+  console.log('🔍 Token lookup result:', {
+    found: !!verificationToken,
+    expired: verificationToken ? verificationToken.expiresAt < new Date() : null,
+    userId: verificationToken?.userId,
+    type: verificationToken?.type
+  });
+
   if (!verificationToken) {
-    throw new Error('Invalid or expired token');
+    // Check if token exists but is expired
+    const expiredToken = await prisma.verificationToken.findFirst({
+      where: { token, type }
+    });
+    
+    if (expiredToken) {
+      console.log('❌ Token found but expired:', {
+        expiresAt: expiredToken.expiresAt,
+        now: new Date()
+      });
+      throw new Error('TOKEN_EXPIRED');
+    }
+
+    // Check if user is already verified (token may have been deleted after successful verification)
+    if (type === 'EMAIL_VERIFICATION') {
+      // Extract potential user info from token pattern (if we can identify the user)
+      // For now, we'll check if this might be a case of already verified user
+      console.log('❌ Token not found - checking if user might already be verified');
+      throw new Error('TOKEN_NOT_FOUND_OR_ALREADY_USED');
+    }
+    
+    console.log('❌ Token not found in database');
+    throw new Error('INVALID_TOKEN');
+  }
+
+  // Additional check: if this is email verification and user is already verified
+  if (type === 'EMAIL_VERIFICATION' && verificationToken.User.isVerified) {
+    console.log('🔍 User is already verified, deleting token');
+    await prisma.verificationToken.delete({
+      where: { id: verificationToken.id }
+    });
+    throw new Error('ALREADY_VERIFIED');
   }
 
   return verificationToken;
@@ -266,15 +366,35 @@ export function generateBackupCodes(): string[] {
 // Auth verification for API routes
 export async function verifyAuth(request: Request): Promise<{success: boolean, user?: any, error?: string}> {
   try {
+    // Try Authorization header first
+    let token: string | undefined;
     const authHeader = request.headers.get('authorization');
-    
-    if (!authHeader?.startsWith('Bearer ')) {
+    if (authHeader?.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    }
+
+    // If no Bearer token, try session cookie
+    if (!token) {
+      // NextRequest (from next/server) has cookies API, plain Request does not
+      // Try both for compatibility
+      let cookieHeader = '';
+      if ('cookies' in request && typeof (request as any).cookies.get === 'function') {
+        // NextRequest
+        const sessionCookie = (request as any).cookies.get('session');
+        if (sessionCookie) token = sessionCookie.value || sessionCookie;
+      } else if (request.headers.get('cookie')) {
+        // Standard Request
+        cookieHeader = request.headers.get('cookie') || '';
+        const match = cookieHeader.match(/(?:^|; )session=([^;]*)/);
+        if (match) token = decodeURIComponent(match[1]);
+      }
+    }
+
+    if (!token) {
       return { success: false, error: 'No token provided' };
     }
 
-    const token = authHeader.substring(7);
     const payload = await decrypt(token);
-    
     // Verify user still exists and is active
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },

@@ -352,6 +352,7 @@ export async function POST(request: NextRequest) {
     // Create audit log for bulk operation
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "Product",
         entityId: "BULK_OPERATION",
         action: "PRODUCTS_BULK_UPLOAD",

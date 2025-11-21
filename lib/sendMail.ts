@@ -1,101 +1,13 @@
-import axios from "axios";
+// Legacy module name retained for compatibility.
+// The project now uses `lib/email.ts` (ZeptoMail). To avoid changing many
+// call-sites across the codebase we provide a thin wrapper that re-exports
+// the modern `sendEmail` function under the historical `sendMail` name.
 
-type SendEmailParams = {
-  to: string | string[];
-  subject: string;
-  html: string;
-};
+import { sendEmail } from "./email";
 
-// Send using ZeptoMail HTTP API
-async function sendViaZeptoMail({
-  to,
-  subject,
-  html,
-  from,
-}: SendEmailParams & { from: string }) {
-  // It's assumed these are loaded from .env/process.env
-  const apiKey = process.env.ZEPTOMAIL_API_KEY?.trim();
-  const apiUrl =
-    process.env.ZEPTOMAIL_API_URL || "https://api.zeptomail.com/v1.1/email";
-
-  if (!apiKey) {
-    throw new Error("ZeptoMail API key not set (ZEPTOMAIL_API_KEY)");
-  }
-
-  // Use the email specified in the 'from' field, falling back to a default if parsing fails
-  let fromEmail = from;
-  let fromName = "SJFulfillment";
-  const fromMatch = from.match(/^(.+?)\s*<([^>]+)>$/);
-  if (fromMatch) {
-    fromName = fromMatch[1].trim();
-    fromEmail = fromMatch[2].trim();
-  }
-
-  // ZeptoMail API v1.1 requires this exact structure
-  const recipients = Array.isArray(to) ? to : [to];
-  const payload = {
-    from: {
-      address: fromEmail,
-      name: fromName,
-    },
-    to: recipients.map((email) => ({
-      email_address: {
-        address: email,
-        name: email.split("@")[0], // simple fallback name
-      },
-    })),
-    subject,
-    htmlbody: html,
-  };
-
-  try {
-    console.log("Sending email via ZeptoMail...", {
-      to: recipients,
-      subject,
-      from: fromEmail,
-      fromName,
-      apiUrl,
-      apiKeyPrefix: apiKey.substring(0, 5) + "...", // Log prefix for debugging
-    });
-
-    const res = await axios.post(apiUrl, payload, {
-      headers: {
-        Authorization: apiKey, // ZeptoMail uses the key directly, not "Bearer"
-        "Content-Type": "application/json",
-      },
-      timeout: 15000,
-    });
-
-    console.log("✅ ZeptoMail response status:", res.status);
-    console.log("✅ Email sent successfully");
-    return res.data;
-  } catch (err: any) {
-    console.error("❌ Error sending email via ZeptoMail:", {
-      status: err?.response?.status,
-      statusText: err?.response?.statusText,
-      data: err?.response?.data,
-      message: err?.message,
-      code: err?.code,
-    });
-
-    // Re-throw to allow caller to handle failure
-    throw new Error("Failed to send email via ZeptoMail API.");
-  }
+export async function sendMail({ to, subject, html }: { to: string | string[]; subject: string; html: string }) {
+  // keep shape similar to the old sendMail and return the underlying result
+  return await sendEmail({ to, subject, html });
 }
 
-/**
- * Public function to send an email using the configured provider (ZeptoMail).
- * @param to Recipient email address(es).
- * @param subject Email subject line.
- * @param html HTML body content.
- */
-export async function sendEmail({
-  to,
-  subject,
-  html,
-}: SendEmailParams): Promise<void> {
-  const from =
-    process.env.EMAIL_FROM || "SJFulfillment <no-reply@sjfulfillment.com>";
-
-  await sendViaZeptoMail({ to, subject, html, from });
-}
+export default sendMail;

@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
         mfaEnabled: true,
         firstName: true,
         lastName: true,
-        business: {
+        Business_User_businessIdToBusiness: {
           select: { name: true }
         }
       },
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
       'MFA_ENABLED',
       { 
         email: user.email,
-        businessName: user.business?.name,
+        businessName: user.Business_User_businessIdToBusiness?.name,
         timestamp: new Date().toISOString()
       }
     );
@@ -134,7 +134,7 @@ export async function GET() {
         mfaEnabled: true,
         firstName: true,
         lastName: true,
-        business: {
+        Business_User_businessIdToBusiness: {
           select: { name: true }
         }
       },
@@ -156,7 +156,7 @@ export async function GET() {
 
     // Generate temporary TOTP secret for setup
     const totpSecret = generateTOTPSecret();
-    const businessName = user.business?.name || 'SJFulfillment';
+    const businessName = user.Business_User_businessIdToBusiness?.name || 'SJFulfillment';
     
     // Generate QR code URL
     const qrCodeUrl = `otpauth://totp/${encodeURIComponent(businessName)}:${encodeURIComponent(user.email)}?secret=${totpSecret}&issuer=${encodeURIComponent('SJFulfillment')}`;

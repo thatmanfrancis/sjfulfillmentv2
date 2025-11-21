@@ -1,0 +1,11 @@
+name,sku,weightKg,length,width,height,quantity,warehouseCode
+"Wireless Bluetooth Headphones",WBH001,0.25,20,18,8,50,MAIN
+"Organic Coffee Beans 1kg",,1.0,25,15,8,100,WEST
+"Smart Fitness Tracker",SFT100,0.05,4,2,1,75,EAST
+"Stainless Steel Water Bottle",,0.35,27,7,7,200,MAIN
+"LED Desk Lamp",LDL200,0.8,45,15,15,30,CENTRAL
+"Gaming Mouse Pad",,0.15,35,25,0.3,150,MAIN
+"Bluetooth Speaker",BTS050,0.6,18,8,8,80,WEST
+"Laptop Stand",,1.2,28,25,3,25,CENTRAL
+"Phone Car Mount",PCM001,0.2,12,8,6,60,EAST
+"USB-C Charging Cable 2m",,0.1,15,10,2,300,MAIN

@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
         mfaSecret: true,
         firstName: true,
         lastName: true,
-        business: {
+        Business_User_businessIdToBusiness: {
           select: { name: true }
         }
       },
@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
       'MFA_DISABLED',
       { 
         email: user.email,
-        businessName: user.business?.name,
+        businessName: user.Business_User_businessIdToBusiness?.name,
         timestamp: new Date().toISOString()
       }
     );

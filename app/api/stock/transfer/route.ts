@@ -97,9 +97,7 @@ export async function POST(request: NextRequest) {
       }),
       prisma.product.findUnique({
         where: { id: validatedData.productId },
-        include: {
-          business: { select: { id: true, name: true } },
-        },
+        select: { id: true, name: true, sku: true },
       }),
       prisma.warehouse.findUnique({
         where: { id: validatedData.fromWarehouseId },
@@ -174,6 +172,7 @@ export async function POST(request: NextRequest) {
           allocatedQuantity: (destAllocation?.allocatedQuantity || 0) + validatedData.quantity,
         },
         create: {
+              id: crypto.randomUUID(),
           productId: validatedData.productId,
           warehouseId: validatedData.toWarehouseId,
           allocatedQuantity: validatedData.quantity,
@@ -184,6 +183,7 @@ export async function POST(request: NextRequest) {
       // Create audit log for the transfer
       await tx.auditLog.create({
         data: {
+          id: crypto.randomUUID(),
           entityType: "StockAllocation",
           entityId: "TRANSFER_OPERATION",
           action: "STOCK_TRANSFER",
@@ -216,6 +216,7 @@ export async function POST(request: NextRequest) {
             },
           },
           changedById: authResult.user.id,
+          User: { connect: { id: authResult.user.id } },
         },
       });
 

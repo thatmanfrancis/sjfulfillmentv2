@@ -27,7 +27,7 @@ export async function GET(
     const token = await prisma.verificationToken.findUnique({
       where: { id },
       include: {
-        user: {
+        User: {
           select: {
             id: true,
             firstName: true,
@@ -37,137 +37,6 @@ export async function GET(
             isVerified: true,
           },
         },
-      },
-    });
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Verification token not found" },
-        { status: 404 }
-      );
-    }
-
-    // Check permissions
-    if (authResult.user.role !== "ADMIN" && token.userId !== authResult.user.id) {
-      return NextResponse.json(
-        { error: "Insufficient permissions" },
-        { status: 403 }
-      );
-    }
-
-    const isExpired = token.expiresAt < new Date();
-    const timeUntilExpiry = token.expiresAt.getTime() - new Date().getTime();
-
-    return NextResponse.json({
-      token: {
-        ...token,
-        token: `${token.token.substring(0, 8)}...`, // Mask the actual token for security
-        isExpired,
-        timeUntilExpiry,
-        canBeUsed: !isExpired,
-      },
-    });
-  } catch (error) {
-    console.error("Error fetching verification token:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
-  }
-}
-
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const authResult = await verifyAuth(request);
-    if (!authResult.success) {
-      return NextResponse.json({ error: authResult.error }, { status: 401 });
-    }
-
-    const { id } = await params;
-    const body = await request.json();
-    const validatedData = updateTokenSchema.parse(body);
-
-    const existingToken = await prisma.verificationToken.findUnique({
-      where: { id },
-      include: {
-        user: {
-          select: { id: true, email: true },
-        },
-      },
-    });
-
-    if (!existingToken) {
-      return NextResponse.json(
-        { error: "Verification token not found" },
-        { status: 404 }
-      );
-    }
-
-    // Check permissions
-    if (authResult.user.role !== "ADMIN" && existingToken.userId !== authResult.user.id) {
-      return NextResponse.json(
-        { error: "Insufficient permissions" },
-        { status: 403 }
-      );
-    }
-
-    const updateData: any = {};
-    
-    if (validatedData.type) {
-      updateData.type = validatedData.type;
-    }
-    
-    if (validatedData.expiresAt) {
-      updateData.expiresAt = new Date(validatedData.expiresAt);
-    }
-
-    const updatedToken = await prisma.verificationToken.update({
-      where: { id },
-      data: updateData,
-      include: {
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            role: true,
-          },
-        },
-      },
-    });
-
-    // Create audit log
-    await prisma.auditLog.create({
-      data: {
-        entityType: "VerificationToken",
-        entityId: id,
-        action: "VERIFICATION_TOKEN_UPDATED",
-        details: {
-          changes: validatedData,
-          previousValues: {
-            type: existingToken.type,
-            expiresAt: existingToken.expiresAt,
-          },
-          userEmail: existingToken.user.email,
-        },
-        changedById: authResult.user.id,
-      },
-    });
-
-    const isExpired = updatedToken.expiresAt < new Date();
-    const timeUntilExpiry = updatedToken.expiresAt.getTime() - new Date().getTime();
-
-    return NextResponse.json({
-      token: {
-        ...updatedToken,
-        token: `${updatedToken.token.substring(0, 8)}...`, // Mask the actual token
-        isExpired,
-        timeUntilExpiry,
-        canBeUsed: !isExpired,
       },
     });
   } catch (error) {
@@ -200,7 +69,7 @@ export async function DELETE(
     const token = await prisma.verificationToken.findUnique({
       where: { id },
       include: {
-        user: {
+        User: {
           select: { email: true },
         },
       },
@@ -228,15 +97,17 @@ export async function DELETE(
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "VerificationToken",
         entityId: id,
         action: "VERIFICATION_TOKEN_DELETED",
         details: {
           tokenType: token.type,
-          userEmail: token.user.email,
+          userEmail: token.User.email,
           wasExpired: token.expiresAt < new Date(),
         },
         changedById: authResult.user.id,
+        User: { connect: { id: authResult.user.id } },
       },
     });
 
@@ -265,7 +136,7 @@ export async function POST(
     const storedToken = await prisma.verificationToken.findUnique({
       where: { id },
       include: {
-        user: {
+        User: {
           select: {
             id: true,
             firstName: true,
@@ -307,7 +178,7 @@ export async function POST(
 
     switch (storedToken.type) {
       case "EMAIL_VERIFICATION":
-        if (storedToken.user.isVerified) {
+        if (storedToken.User.isVerified) {
           return NextResponse.json(
             { error: "Email is already verified" },
             { status: 400 }
@@ -331,7 +202,7 @@ export async function POST(
 
         actionDetails = {
           action: "EMAIL_VERIFIED",
-          userEmail: storedToken.user.email,
+          userEmail: storedToken.User.email,
           verifiedAt: new Date(),
         };
         break;
@@ -341,7 +212,7 @@ export async function POST(
         // The actual password change should happen in a separate endpoint
         actionDetails = {
           action: "PASSWORD_RESET_TOKEN_VERIFIED",
-          userEmail: storedToken.user.email,
+          userEmail: storedToken.User.email,
           verifiedAt: new Date(),
         };
         break;
@@ -349,7 +220,7 @@ export async function POST(
       case "MFA_SETUP":
         actionDetails = {
           action: "MFA_SETUP_TOKEN_VERIFIED",
-          userEmail: storedToken.user.email,
+          userEmail: storedToken.User.email,
           verifiedAt: new Date(),
         };
         break;
@@ -369,12 +240,13 @@ export async function POST(
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "VerificationToken",
         entityId: id,
         action: "VERIFICATION_TOKEN_USED",
         details: {
           tokenType: storedToken.type,
-          userEmail: storedToken.user.email,
+          userEmail: storedToken.User.email,
           ...actionDetails,
         },
         changedById: storedToken.userId, // User verified their own token
@@ -385,10 +257,10 @@ export async function POST(
       message: "Verification token successfully verified",
       tokenType: storedToken.type,
       user: updateResult || {
-        id: storedToken.user.id,
-        firstName: storedToken.user.firstName,
-        lastName: storedToken.user.lastName,
-        email: storedToken.user.email,
+        id: storedToken.User.id,
+        firstName: storedToken.User.firstName,
+        lastName: storedToken.User.lastName,
+        email: storedToken.User.email,
       },
       action: actionDetails.action,
     });

@@ -1,3 +1,14 @@
 {
-    "WillLuke.nextjs.hasPrompted": true
+  "WillLuke.nextjs.hasPrompted": true,
+  "editor.suggest.localityBonus": true, // Prioritize local/member suggestions
+  "editor.suggest.matchOnWordStartOnly": false,
+
+  // Reorder suggestion types
+  "editor.suggest.statusBar.visible": true,
+
+  // Specific to TypeScript
+  "typescript.suggest.completeFunctionCalls": true,
+  "typescript.suggest.paths": false, // Don't suggest file paths
+  "typescript.suggest.autoImports": false, // KEY: Disable auto imports
+  "typescript.preferences.includePackageJsonAutoImports": "off"
 }

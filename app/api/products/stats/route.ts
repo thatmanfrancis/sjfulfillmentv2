@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentSession } from '@/lib/session';
+import prisma from '@/lib/prisma';
 
 export async function GET(req: NextRequest) {
   try {
@@ -8,30 +9,53 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // This endpoint is currently disabled due to schema limitations:
-    // 1. Product model doesn't have stockLevel field (only stockQuantity)
-    // 2. Product model doesn't have direct orderItems relation
-    // 3. OrderItem model doesn't have price field (price comes from Product)
-    // 4. Need to calculate stats through proper relations
-    
-    return NextResponse.json({ 
-      error: 'Product stats not available - schema limitations',
-      details: {
-        message: 'Product stats require schema updates or proper relation queries',
-        missingFields: ['stockLevel (use stockQuantity)', 'price in OrderItem'],
-        missingRelations: ['direct orderItems relation (use through Order)'],
-        availableFields: ['stockQuantity', 'price', 'weightKg', 'dimensions']
-      },
-      stats: {
-        total: 0,
-        lowStock: 0,
-        outOfStock: 0,
-        totalValue: 0,
-        topSelling: 0,
-        newThisMonth: 0,
-        categories: []
+    // Get basic product statistics using available fields from the schema
+    const [
+      totalProducts,
+      totalStockAllocations,
+      lowStockAllocations
+    ] = await Promise.all([
+      prisma.product.count(),
+      prisma.stockAllocation.aggregate({
+        _sum: {
+          allocatedQuantity: true
+        }
+      }),
+      prisma.stockAllocation.count({
+        where: {
+          allocatedQuantity: {
+            gt: 0,
+            lte: 10 // Consider low stock threshold as 10
+          }
+        }
+      })
+    ]);
+
+    // Count out of stock allocations
+    const outOfStockAllocations = await prisma.stockAllocation.count({
+      where: {
+        allocatedQuantity: 0
       }
-    }, { status: 501 });
+    });
+
+    // Calculate total value using order data
+    const totalValue = await prisma.order.aggregate({
+      _sum: {
+        totalAmount: true
+      }
+    });
+
+    return NextResponse.json({
+      stats: {
+        total: totalProducts,
+        lowStock: lowStockAllocations,
+        outOfStock: outOfStockAllocations,
+        totalValue: totalValue._sum?.totalAmount || 0,
+        topSelling: 0, // Would need more complex query to calculate
+        newThisMonth: 0, // Would need createdAt field on Product
+        totalStock: totalStockAllocations._sum?.allocatedQuantity || 0,
+      }
+    });
   } catch (error) {
     console.error('Product stats error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

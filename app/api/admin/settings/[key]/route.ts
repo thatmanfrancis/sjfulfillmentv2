@@ -78,6 +78,7 @@ export async function PUT(
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "Setting",
         entityId: updatedSetting.id,
         action: "SETTING_UPDATED",
@@ -89,6 +90,8 @@ export async function PUT(
           newDescription: updatedSetting.description,
         },
         changedById: authResult.user.id,
+        timestamp: new Date(),
+        User: { connect: { id: authResult.user.id } },
       },
     });
 
@@ -141,6 +144,7 @@ export async function DELETE(
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "Setting",
         entityId: existingSetting.id,
         action: "SETTING_DELETED",
@@ -150,6 +154,8 @@ export async function DELETE(
           description: existingSetting.description,
         },
         changedById: authResult.user.id,
+        timestamp: new Date(),
+        User: { connect: { id: authResult.user.id } },
       },
     });
 

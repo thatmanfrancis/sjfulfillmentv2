@@ -82,9 +82,9 @@ export async function GET(request: NextRequest) {
     const allocations = await prisma.stockAllocation.findMany({
       where,
       include: {
-        product: {
+        Product: {
           include: {
-            business: {
+            Business: {
               select: {
                 id: true,
                 name: true,
@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
             },
           },
         },
-        warehouse: {
+        Warehouse: {
           select: {
             id: true,
             name: true,
@@ -101,8 +101,8 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: [
-        { warehouse: { name: "asc" } },
-        { product: { name: "asc" } },
+        { Warehouse: { name: "asc" } },
+        { Product: { name: "asc" } },
       ],
     });
 
@@ -174,7 +174,7 @@ export async function POST(request: NextRequest) {
       prisma.product.findUnique({
         where: { id: validatedData.productId },
         include: {
-          business: { select: { name: true } },
+          Business: { select: { name: true } },
         },
       }),
       prisma.warehouse.findUnique({
@@ -190,11 +190,17 @@ export async function POST(request: NextRequest) {
     }
 
     const allocation = await prisma.stockAllocation.create({
-      data: validatedData,
+      data: {
+        id: crypto.randomUUID(),
+        productId: validatedData.productId,
+        warehouseId: validatedData.warehouseId,
+        allocatedQuantity: validatedData.allocatedQuantity,
+        safetyStock: validatedData.safetyStock,
+      },
       include: {
-        product: {
+        Product: {
           include: {
-            business: {
+            Business: {
               select: {
                 id: true,
                 name: true,
@@ -202,7 +208,7 @@ export async function POST(request: NextRequest) {
             },
           },
         },
-        warehouse: {
+        Warehouse: {
           select: {
             id: true,
             name: true,
@@ -287,19 +293,20 @@ export async function PUT(request: NextRequest) {
             safetyStock: allocation.safetyStock,
           },
           create: {
+            id: crypto.randomUUID(),
             productId: allocation.productId,
             warehouseId: allocation.warehouseId,
             allocatedQuantity: allocation.allocatedQuantity,
             safetyStock: allocation.safetyStock,
           },
           include: {
-            product: {
+            Product: {
               select: {
                 sku: true,
                 name: true,
               },
             },
-            warehouse: {
+            Warehouse: {
               select: {
                 name: true,
                 region: true,
@@ -317,8 +324,8 @@ export async function PUT(request: NextRequest) {
           updated.id,
           "STOCK_ALLOCATION_BULK_UPDATED",
           {
-            productSku: updated.product.sku,
-            warehouseName: updated.warehouse.name,
+            productSku: updated.Product.sku,
+            warehouseName: updated.Warehouse.name,
             allocatedQuantity: updated.allocatedQuantity,
             safetyStock: updated.safetyStock,
           }

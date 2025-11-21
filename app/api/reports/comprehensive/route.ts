@@ -45,15 +45,15 @@ export async function GET(request: NextRequest) {
           orderDate: { gte: startDate }
         },
         include: {
-          items: {
+          OrderItem: {
             include: {
-              product: {
+              Product: {
                 select: { name: true, sku: true }
               }
             }
           },
           Business: { select: { name: true } },
-          fulfillmentWarehouse: { select: { name: true, region: true } }
+          Warehouse: { select: { name: true, region: true } }
         },
         orderBy: { orderDate: 'desc' }
       });
@@ -102,24 +102,24 @@ export async function GET(request: NextRequest) {
       const stockAllocations = await prisma.stockAllocation.findMany({
         where: warehouseFilter,
         include: {
-          product: {
+          Product: {
             include: {
-              business: { select: { name: true } }
+              Business: { select: { name: true } }
             }
           },
-          warehouse: { select: { name: true, region: true } }
+          Warehouse: { select: { name: true, region: true } }
         }
       });
 
       const stockTransfers = await prisma.stockTransfer.findMany({
         where: {
           createdAt: { gte: startDate },
-          product: businessFilter.businessId ? { businessId: businessFilter.businessId } : undefined
+          Product: businessFilter.businessId ? { businessId: businessFilter.businessId } : undefined
         },
         include: {
-          product: { select: { name: true, sku: true } },
-          fromWarehouse: { select: { name: true } },
-          toWarehouse: { select: { name: true } }
+          Product: { select: { name: true, sku: true } },
+          Warehouse_StockTransfer_fromWarehouseIdToWarehouse: { select: { name: true } },
+          Warehouse_StockTransfer_toWarehouseIdToWarehouse: { select: { name: true } }
         }
       });
 
@@ -166,11 +166,11 @@ export async function GET(request: NextRequest) {
     if (reportType === 'comprehensive' || reportType === 'financial') {
       const invoices = await prisma.invoice.findMany({
         where: {
-          merchant: businessFilter.businessId ? { id: businessFilter.businessId } : undefined,
+          merchantId: businessFilter.businessId ? businessFilter.businessId : undefined,
           issueDate: { gte: startDate }
         },
         include: {
-          merchant: { select: { name: true } }
+          Business: { select: { name: true } }
         }
       });
 

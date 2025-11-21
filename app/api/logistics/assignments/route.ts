@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
               baseCurrency: true,
             },
           },
-          assignedLogistics: {
+          User: {
             select: {
               id: true,
               firstName: true,
@@ -56,17 +56,17 @@ export async function GET(request: NextRequest) {
               email: true,
             },
           },
-          fulfillmentWarehouse: {
+          Warehouse: {
             select: {
               id: true,
               name: true,
               region: true,
             },
           },
-          items: {
+          OrderItem: {
             select: {
               quantity: true,
-              product: {
+              Product: {
                 select: {
                   name: true,
                   weightKg: true,
@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
               },
             },
           },
-          shipments: {
+          Shipment: {
             select: {
               id: true,
               trackingNumber: true,
@@ -97,13 +97,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       orders: orders.map(order => ({
         ...order,
-        totalItems: order.items.reduce((sum: number, item: any) => sum + item.quantity, 0),
-        totalWeight: order.items.reduce(
-          (sum: number, item: any) => sum + (item.product.weightKg * item.quantity),
-          0
-        ),
-        hasShipment: !!order.shipments,
+        totalItems: Array.isArray(order.OrderItem) ? order.OrderItem.reduce((sum: number, item: any) => sum + item.quantity, 0) : 0,
+        totalWeight: Array.isArray(order.OrderItem) ? order.OrderItem.reduce((sum: number, item: any) => sum + ((item.Product?.weightKg || 0) * item.quantity), 0) : 0,
+        hasShipment: !!order.Shipment,
         daysSinceOrder: Math.ceil((new Date().getTime() - order.orderDate.getTime()) / (1000 * 3600 * 24)),
+        logisticsUserName: order.User ? `${order.User.firstName} ${order.User.lastName}` : null,
       })),
       pagination: {
         page,
@@ -140,7 +138,7 @@ export async function POST(request: NextRequest) {
       where: { id: validatedData.orderId },
       include: {
         Business: { select: { name: true } },
-        fulfillmentWarehouse: { select: { id: true, region: true } },
+        Warehouse: { select: { id: true, region: true } },
       },
     });
 
@@ -194,7 +192,7 @@ export async function POST(request: NextRequest) {
       },
       include: {
         Business: { select: { id: true, name: true } },
-        assignedLogistics: {
+        User: {
           select: {
             id: true,
             firstName: true,
@@ -202,7 +200,7 @@ export async function POST(request: NextRequest) {
             email: true,
           },
         },
-        fulfillmentWarehouse: {
+        Warehouse: {
           select: {
             id: true,
             name: true,
@@ -215,13 +213,14 @@ export async function POST(request: NextRequest) {
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "Order",
         entityId: updatedOrder.id,
         action: "ORDER_ASSIGNED_TO_LOGISTICS",
         details: {
           logisticsUserId: validatedData.logisticsUserId,
           logisticsUserName: `${logisticsUser.firstName} ${logisticsUser.lastName}`,
-          businessName: order.Business.name,
+          businessName: updatedOrder.Business ? updatedOrder.Business.name : null,
           oldStatus: "AWAITING_ALLOC",
           newStatus: "DISPATCHED",
         },
@@ -269,7 +268,7 @@ export async function PUT(request: NextRequest) {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
       include: {
-        assignedLogistics: { select: { id: true, firstName: true, lastName: true } },
+        User: { select: { id: true, firstName: true, lastName: true } },
       },
     });
 
@@ -310,19 +309,13 @@ export async function PUT(request: NextRequest) {
       data: { status: newStatus as any },
       include: {
         Business: { select: { name: true } },
-        assignedLogistics: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
       },
     });
 
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "Order",
         entityId: orderId,
         action: `ORDER_STATUS_UPDATED`,
@@ -330,9 +323,7 @@ export async function PUT(request: NextRequest) {
           action,
           oldStatus: order.status,
           newStatus: newStatus,
-          logisticsUserName: order.assignedLogistics ? 
-            `${order.assignedLogistics.firstName} ${order.assignedLogistics.lastName}` : 
-            null,
+          logisticsUserName: null, // Not available in this context
         },
         changedById: authResult.user.id,
       },

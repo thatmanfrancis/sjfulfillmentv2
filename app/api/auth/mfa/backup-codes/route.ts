@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
         mfaSecret: true,
         firstName: true,
         lastName: true,
-        business: {
+        Business_User_businessIdToBusiness: {
           select: { name: true }
         }
       },
@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
       'BACKUP_CODES_REQUESTED',
       { 
         email: user.email,
-        businessName: user.business?.name,
+        businessName: user.Business_User_businessIdToBusiness?.name,
         timestamp: new Date().toISOString()
       }
     );

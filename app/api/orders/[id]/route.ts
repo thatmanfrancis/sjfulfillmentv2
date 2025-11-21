@@ -59,23 +59,23 @@ export async function GET(
             contactPhone: true,
           }
         },
-        fulfillmentWarehouse: {
+        Warehouse: {
           select: {
             id: true,
             name: true,
             region: true,
           }
         },
-        assignedLogistics: {
+        User: {
           select: {
             id: true,
             firstName: true,
             lastName: true,
           }
         },
-        items: {
+        OrderItem: {
           include: {
-            product: {
+            Product: {
               select: {
                 id: true,
                 name: true,
@@ -86,7 +86,7 @@ export async function GET(
             }
           }
         },
-        shipments: {
+        Shipment: {
           select: {
             id: true,
             trackingNumber: true,
@@ -107,8 +107,8 @@ export async function GET(
     }
 
     // Calculate order metrics
-    const totalQuantity = order.items.reduce((sum, item) => sum + item.quantity, 0);
-    const totalWeight = order.items.reduce((sum, item) => sum + (item.product.weightKg || 0) * item.quantity, 0);
+    const totalQuantity = order.OrderItem?.reduce((sum: number, item: any) => sum + item.quantity, 0) || 0;
+    const totalWeight = order.OrderItem?.reduce((sum: number, item: any) => sum + (item.Product.weightKg || 0) * item.quantity, 0) || 0;
 
     // Get order history/audit trail
     const orderHistory = await prisma.auditLog.findMany({
@@ -119,7 +119,7 @@ export async function GET(
       orderBy: { timestamp: "desc" },
       take: 20,
       include: {
-        changedBy: {
+        User: {
           select: {
             firstName: true,
             lastName: true,
@@ -133,7 +133,7 @@ export async function GET(
       order: {
         ...order,
         summary: {
-          totalItems: order.items.length,
+          totalItems: order.OrderItem?.length || 0,
           totalQuantity,
           totalWeight,
           estimatedValue: order.totalAmount,
@@ -261,12 +261,12 @@ export async function PUT(
             contactPhone: true,
           }
         },
-        fulfillmentWarehouse: {
+        Warehouse: {
           select: {
             name: true,
           }
         },
-        assignedLogistics: {
+        User: {
           select: {
             firstName: true,
             lastName: true,
@@ -279,6 +279,7 @@ export async function PUT(
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "Order",
         entityId: id,
         action: "ORDER_UPDATED",
@@ -293,7 +294,7 @@ export async function PUT(
           businessName: existingOrder.Business?.name || 'Unknown',
         },
         changedById: authResult.user.id,
-      },
+      } as any, // Use UncheckedCreateInput
     });
 
     return NextResponse.json({ order: updatedOrder });
@@ -377,6 +378,7 @@ export async function DELETE(
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "Order",
         entityId: id,
         action: "ORDER_DELETED",
@@ -388,7 +390,7 @@ export async function DELETE(
           deletedAt: new Date(),
         },
         changedById: authResult.user.id,
-      },
+      } as any, // Use UncheckedCreateInput
     });
 
     return NextResponse.json({

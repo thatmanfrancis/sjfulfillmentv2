@@ -111,6 +111,7 @@ export async function POST(
       // Create audit log
       await prisma.auditLog.create({
         data: {
+          id: crypto.randomUUID(),
           entityType: "Business",
           entityId: businessId,
           action: "LOGO_UPLOADED",
@@ -123,6 +124,7 @@ export async function POST(
             oldLogoUrl: business.logoUrl
           },
           changedById: authResult.user.id,
+          User: { connect: { id: authResult.user.id } }
         },
       });
 
@@ -234,6 +236,7 @@ export async function DELETE(
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "Business",
         entityId: businessId,
         action: "LOGO_DELETED",
@@ -241,6 +244,7 @@ export async function DELETE(
           deletedLogoUrl: business.logoUrl
         },
         changedById: authResult.user.id,
+        User: { connect: { id: authResult.user.id } }
       },
     });
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAuth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { z } from "zod";
+import { randomUUID } from "crypto";
 
 const transferSchema = z.object({
   fromWarehouseId: z.string().uuid(),
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
     const [product, fromWarehouse, toWarehouse, fromStock, toStock] = await Promise.all([
       prisma.product.findUnique({
         where: { id: productId },
-        include: { business: { select: { name: true } } }
+        include: { Business: { select: { name: true } } }
       }),
       prisma.warehouse.findUnique({
         where: { id: fromWarehouseId },
@@ -117,16 +118,23 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await prisma.$transaction(async (tx) => {
+      // For admin users, auto-approve and complete the transfer
+      const isAdmin = authResult.user.role === "ADMIN";
+      
       // Create transfer record
       const transfer = await tx.stockTransfer.create({
         data: {
+          id: randomUUID(),
           productId,
           fromWarehouseId,
           toWarehouseId,
           quantity,
           notes,
-          status: "PENDING",
+          status: isAdmin ? "COMPLETED" : "PENDING",
           requestedBy: authResult.user.id,
+          approvedBy: isAdmin ? authResult.user.id : null,
+          completedAt: isAdmin ? new Date() : null,
+          updatedAt: new Date()
         }
       });
 
@@ -163,6 +171,7 @@ export async function POST(request: NextRequest) {
       } else {
         await tx.stockAllocation.create({
           data: {
+            id: randomUUID(),
             productId,
             warehouseId: toWarehouseId,
             allocatedQuantity: quantity,
@@ -178,21 +187,21 @@ export async function POST(request: NextRequest) {
     const completeTransfer = await prisma.stockTransfer.findUnique({
       where: { id: result.id },
       include: {
-        product: {
+        Product: {
           select: {
             id: true,
             name: true,
             sku: true,
-            business: { select: { name: true } }
+            Business: { select: { name: true } }
           }
         },
-        fromWarehouse: {
+        Warehouse_StockTransfer_fromWarehouseIdToWarehouse: {
           select: { id: true, name: true, region: true }
         },
-        toWarehouse: {
+        Warehouse_StockTransfer_toWarehouseIdToWarehouse: {
           select: { id: true, name: true, region: true }
         },
-        requestedByUser: {
+        User_StockTransfer_requestedByToUser: {
           select: { firstName: true, lastName: true, role: true }
         }
       }
@@ -201,7 +210,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       transfer: completeTransfer,
-      message: "Stock transfer initiated successfully"
+      message: authResult.user.role === "ADMIN" 
+        ? "Stock transfer completed successfully" 
+        : "Stock transfer initiated successfully"
     });
 
   } catch (error) {
@@ -279,24 +290,24 @@ export async function GET(request: NextRequest) {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          product: {
+          Product: {
             select: {
               id: true,
               name: true,
               sku: true,
-              business: { select: { name: true } }
+              Business: { select: { name: true } }
             }
           },
-          fromWarehouse: {
+          Warehouse_StockTransfer_fromWarehouseIdToWarehouse: {
             select: { id: true, name: true, region: true }
           },
-          toWarehouse: {
+          Warehouse_StockTransfer_toWarehouseIdToWarehouse: {
             select: { id: true, name: true, region: true }
           },
-          requestedByUser: {
+          User_StockTransfer_requestedByToUser: {
             select: { firstName: true, lastName: true, role: true }
           },
-          approvedByUser: {
+          User_StockTransfer_approvedByToUser: {
             select: { firstName: true, lastName: true, role: true }
           }
         }

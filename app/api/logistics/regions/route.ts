@@ -123,11 +123,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create logistics region assignment
+    // Create logistics region assignment (include required id field)
+    const { randomUUID } = await import('crypto');
     const logisticsRegion = await prisma.logisticsRegion.create({
       data: {
+        id: randomUUID(),
         userId,
-        warehouseId
+        warehouseId,
+        User: {
+          connect: { id: userId }
+        },
+        Warehouse: {
+          connect: { id: warehouseId }
+        }
       },
       include: {
         User: {

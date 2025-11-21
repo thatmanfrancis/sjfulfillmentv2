@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
         passwordHash: true,
         firstName: true,
         lastName: true,
-        business: {
+        Business_User_businessIdToBusiness: {
           select: { name: true }
         }
       },
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
       'PASSWORD_CHANGED',
       { 
         email: user.email,
-        businessName: user.business?.name,
+        businessName: user.Business_User_businessIdToBusiness?.name,
         timestamp: new Date().toISOString()
       }
     );

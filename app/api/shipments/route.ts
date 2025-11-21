@@ -40,11 +40,11 @@ export async function GET(request: NextRequest) {
 
     // Role-based filtering
     if (authResult.user.role === "MERCHANT" || authResult.user.role === "MERCHANT_STAFF") {
-      where.order = {
+      where.Order = {
         merchantId: authResult.user.businessId,
       };
     } else if (authResult.user.role === "LOGISTICS") {
-      where.order = {
+      where.Order = {
         assignedLogisticsId: authResult.user.id,
       };
     }
@@ -56,32 +56,15 @@ export async function GET(request: NextRequest) {
         take: limit,
         orderBy: { lastStatusUpdate: "desc" },
         include: {
-          order: {
+          Order: {
             include: {
-              Business: {
-                select: {
-                  id: true,
-                  name: true,
-                },
-              },
-              items: {
+              Business: { select: { id: true, name: true } },
+              OrderItem: {
                 include: {
-                  product: {
-                    select: {
-                      weightKg: true,
-                      name: true
-                    }
-                  }
+                  Product: { select: { weightKg: true, name: true } }
                 }
               },
-              assignedLogistics: {
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                  email: true,
-                },
-              },
+              User: { select: { id: true, firstName: true, lastName: true, email: true } },
             },
           },
         },
@@ -92,9 +75,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       shipments: shipments.map(shipment => ({
         ...shipment,
-        totalItems: shipment.order.items.reduce((sum, item) => sum + item.quantity, 0),
-        totalWeight: shipment.order.items.reduce((sum, item) => sum + (item.product.weightKg * item.quantity), 0),
-        daysInTransit: Math.ceil((new Date().getTime() - shipment.lastStatusUpdate.getTime()) / (1000 * 3600 * 24)),
+        totalItems: shipment.Order?.OrderItem?.reduce((sum, item) => sum + item.quantity, 0) || 0,
+        totalWeight: shipment.Order?.OrderItem?.reduce((sum, item) => sum + ((item.Product?.weightKg || 0) * item.quantity), 0) || 0,
+        daysInTransit: shipment.lastStatusUpdate ? Math.ceil((new Date().getTime() - new Date(shipment.lastStatusUpdate).getTime()) / (1000 * 3600 * 24)) : 0,
         canRetry: shipment.deliveryAttempts < 3,
       })),
       pagination: {
@@ -131,7 +114,7 @@ export async function POST(request: NextRequest) {
       where: { id: validatedData.orderId },
       include: {
         Business: { select: { id: true, name: true } },
-        assignedLogistics: { select: { id: true, firstName: true, lastName: true } },
+        User: { select: { id: true, firstName: true, lastName: true } },
       },
     });
 
@@ -165,19 +148,21 @@ export async function POST(request: NextRequest) {
     // Create shipment
     const shipment = await prisma.shipment.create({
       data: {
+        id: crypto.randomUUID(),
         orderId: validatedData.orderId,
         trackingNumber: validatedData.trackingNumber,
-        carrierName: validatedData.carrierName || "St. John Logistics",
+        carrierName: validatedData.carrierName,
         labelUrl: validatedData.labelUrl,
+        lastStatusUpdate: new Date(),
       },
       include: {
-        order: {
+        Order: {
           include: {
             Business: { select: { id: true, name: true } },
-            assignedLogistics: { select: { id: true, firstName: true, lastName: true } },
-            items: {
+            User: { select: { id: true, firstName: true, lastName: true } },
+            OrderItem: {
               include: {
-                product: { select: { name: true, weightKg: true } },
+                Product: { select: { name: true, weightKg: true } },
               },
             },
           },
@@ -194,6 +179,7 @@ export async function POST(request: NextRequest) {
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "Shipment",
         entityId: shipment.id,
         action: "SHIPMENT_CREATED",
@@ -209,8 +195,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       shipment: {
         ...shipment,
-        totalItems: shipment.order?.items?.reduce((sum: number, item: any) => sum + item.quantity, 0) || 0,
-        totalWeight: shipment.order?.items?.reduce((sum: number, item: any) => sum + (item.product.weightKg * item.quantity), 0) || 0,
+        totalItems: shipment.Order?.OrderItem?.reduce((sum: number, item: any) => sum + item.quantity, 0) || 0,
+        totalWeight: shipment.Order?.OrderItem?.reduce((sum: number, item: any) => sum + ((item.Product?.weightKg || 0) * item.quantity), 0) || 0,
         daysInTransit: 0,
         canRetry: true,
       },

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -9,24 +9,89 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, CheckCircle2, XCircle, Mail, ArrowLeft } from 'lucide-react';
 
 function VerifyEmailContent() {
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [status, setStatus] = useState<'loading' | 'success' | 'error' | 'already_verified' | 'password_setup'>('loading');
   const [message, setMessage] = useState('');
   const [isResending, setIsResending] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
   
   const searchParams = useSearchParams();
   const router = useRouter();
   const token = searchParams.get('token');
   const email = searchParams.get('email');
 
+
+  // Prevent double verification
+  const hasVerified = useRef(false);
+
+  // Only run verification on first client-side mount, never on hot reload or re-render
   useEffect(() => {
+    if (typeof window === 'undefined') return; // SSR safety
+    if (hasVerified.current) return;
+    hasVerified.current = true;
+
+    if (email) {
+      setUserEmail(email);
+    }
+
     if (!token) {
       setStatus('error');
       setMessage('Invalid verification link. Please check your email for a valid link.');
       return;
     }
 
+    // Only verify if not already attempted in this browser session
+    if (window.sessionStorage.getItem(`verified-email-token:${token}`)) {
+      // Already verified in this session, do not re-verify
+      return;
+    }
+    window.sessionStorage.setItem(`verified-email-token:${token}`, '1');
+
+    const verifyEmail = async () => {
+      try {
+        const response = await fetch('/api/auth/verify-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ token }),
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          setStatus(result.requiresPasswordSetup ? 'password_setup' : 'success');
+          if (result.requiresPasswordSetup) {
+            setMessage('Email verified successfully! Please set your password to continue.');
+          } else {
+            setMessage('Email verified successfully! You can now sign in to your account.');
+            setTimeout(() => {
+              router.replace('/auth/login?message=Email verified! You can now sign in.');
+            }, 2000);
+          }
+        } else {
+          // Check for specific error types
+          if (result.error?.includes('already verified')) {
+            setStatus('already_verified');
+            setMessage('Your email is already verified! You can proceed to login.');
+          } else if (result.error?.includes('expired')) {
+            setStatus('error');
+            setMessage('Verification link has expired. Please request a new verification email.');
+          } else if (result.error?.includes('already been used')) {
+            setStatus('already_verified');
+            setMessage('This verification link has already been used. If your email is verified, you can login. Otherwise, request a new verification email.');
+          } else {
+            setStatus('error');
+            setMessage(result.error || 'Email verification failed. Please try again.');
+          }
+        }
+      } catch (error) {
+        setStatus('error');
+        setMessage('Network error. Please check your connection and try again.');
+      }
+    };
+
     verifyEmail();
-  }, [token]);
+  }, [token, email, router]);
 
   const verifyEmail = async () => {
     try {
@@ -42,48 +107,81 @@ function VerifyEmailContent() {
 
       if (response.ok) {
         setStatus('success');
-        setMessage('Email verified successfully! You can now sign in to your account.');
         
-        // Redirect to login after 3 seconds
-        setTimeout(() => {
-          router.push('/auth/login?message=Email verified! You can now sign in.');
-        }, 3000);
+        // Check if password setup is required
+        if (result.requiresPasswordSetup) {
+          setMessage('Email verified successfully! Please set your password to continue.');
+          // Redirect to set-password after 2 seconds, passing token and email if available
+          setTimeout(() => {
+            const params = [];
+            if (token) params.push(`token=${encodeURIComponent(token)}`);
+            if (email) params.push(`email=${encodeURIComponent(email)}`);
+            const query = params.length ? `?${params.join('&')}` : '';
+            router.push(`/auth/set-password${query}`);
+          }, 2000);
+        } else {
+          setMessage('Email verified successfully! You can now sign in to your account.');
+          // Redirect to login after 3 seconds
+          setTimeout(() => {
+            router.push('/auth/login?message=Email verified! You can now sign in.');
+          }, 3000);
+        }
       } else {
-        setStatus('error');
-        setMessage(result.error || 'Email verification failed. Please try again.');
+        // Check for specific error types
+        if (result.error?.includes('already verified')) {
+          setStatus('already_verified');
+          setMessage('Your email is already verified! You can proceed to login.');
+        } else if (result.error?.includes('expired')) {
+          setStatus('error');
+          setMessage('Verification link has expired. Please request a new verification email.');
+        } else if (result.error?.includes('already been used')) {
+          setStatus('already_verified');
+          setMessage('This verification link has already been used. If your email is verified, you can login. Otherwise, request a new verification email.');
+        } else {
+          setStatus('error');
+          setMessage(result.error || 'Email verification failed. Please try again.');
+        }
       }
     } catch (error) {
       setStatus('error');
-      setMessage('Network error. Please check your connection.');
+      setMessage('Network error. Please check your connection and try again.');
     }
   };
 
   const resendVerification = async () => {
-    if (!email) {
-      setMessage('Email address not found. Please register again.');
+    const emailToUse = userEmail || email;
+    
+    if (!emailToUse) {
+      setMessage('Email address not found. Please register again or contact support.');
       return;
     }
 
     setIsResending(true);
 
     try {
-      const response = await fetch('/api/auth/resend-verification', {
-        method: 'POST',
+      const response = await fetch('/api/auth/verify-email', {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: emailToUse }),
       });
 
       const result = await response.json();
 
       if (response.ok) {
-        setMessage('Verification email sent! Please check your inbox.');
+        setMessage('New verification email sent! Please check your inbox and spam folder.');
+        setStatus('loading'); // Reset to loading state for better UX
       } else {
-        setMessage(result.error || 'Failed to resend verification email.');
+        if (result.error?.includes('already verified')) {
+          setStatus('already_verified');
+          setMessage('Your email is already verified! You can proceed to login.');
+        } else {
+          setMessage(result.error || 'Failed to resend verification email. Please try again.');
+        }
       }
     } catch (error) {
-      setMessage('Network error. Please try again.');
+      setMessage('Network error. Please try again later.');
     } finally {
       setIsResending(false);
     }
@@ -95,6 +193,8 @@ function VerifyEmailContent() {
         return <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />;
       case 'success':
         return <CheckCircle2 className="w-12 h-12 text-green-600" />;
+      case 'already_verified':
+        return <CheckCircle2 className="w-12 h-12 text-blue-600" />;
       case 'error':
         return <XCircle className="w-12 h-12 text-red-600" />;
       default:
@@ -108,6 +208,8 @@ function VerifyEmailContent() {
         return 'Verifying your email...';
       case 'success':
         return 'Email verified!';
+      case 'already_verified':
+        return 'Already verified';
       case 'error':
         return 'Verification failed';
       default:
@@ -118,6 +220,7 @@ function VerifyEmailContent() {
   const getVariant = () => {
     switch (status) {
       case 'success':
+      case 'already_verified':
         return 'default';
       case 'error':
         return 'destructive';
@@ -161,7 +264,32 @@ function VerifyEmailContent() {
             </div>
           )}
 
-          {status === 'error' && email && (
+          {status === 'password_setup' && (
+            <div className="text-center text-sm text-gray-600 space-y-2">
+              <p>Your email is verified! Please set your password to continue.</p>
+              <Button
+                className="w-full"
+                onClick={() => {
+                  const params = [];
+                  if (token) params.push(`token=${encodeURIComponent(token)}`);
+                  if (email) params.push(`email=${encodeURIComponent(email)}`);
+                  const query = params.length ? `?${params.join('&')}` : '';
+                  router.push(`/auth/set-password${query}`);
+                }}
+              >
+                Setup Password
+              </Button>
+            </div>
+          )}
+
+          {status === 'already_verified' && (
+            <div className="text-center text-sm text-gray-600 space-y-2">
+              <p>Your account is ready to use!</p>
+              <p>You can now sign in to access your dashboard.</p>
+            </div>
+          )}
+
+          {status === 'error' && (userEmail || email) && (
             <div className="text-center text-sm text-gray-600">
               <p>Need a new verification email?</p>
             </div>
@@ -169,7 +297,7 @@ function VerifyEmailContent() {
         </CardContent>
 
         <CardFooter className="flex flex-col space-y-4">
-          {status === 'success' && (
+          {(status === 'success' || status === 'already_verified') && (
             <Button
               onClick={() => router.push('/auth/login')}
               className="w-full"
@@ -178,7 +306,7 @@ function VerifyEmailContent() {
             </Button>
           )}
 
-          {status === 'error' && email && (
+          {status === 'error' && (userEmail || email) && (
             <Button
               onClick={resendVerification}
               disabled={isResending}
@@ -191,9 +319,24 @@ function VerifyEmailContent() {
                   Sending...
                 </>
               ) : (
-                'Resend verification email'
+                'Request new verification email'
               )}
             </Button>
+          )}
+
+          {status === 'error' && !(userEmail || email) && (
+            <div className="text-center space-y-2">
+              <p className="text-sm text-gray-600">
+                Don't have an account yet?
+              </p>
+              <Button
+                onClick={() => router.push('/auth/register')}
+                variant="outline"
+                className="w-full"
+              >
+                Create account
+              </Button>
+            </div>
           )}
 
           <div className="text-center">

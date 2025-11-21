@@ -10,6 +10,8 @@ interface EmailVerificationParams {
   businessName: string;
   verificationUrl: string;
   supportEmail: string;
+  temporaryPassword?: string; // Optional temporary password for merchant accounts
+  email?: string; // Optional email for merchant accounts
 }
 
 interface PasswordResetParams {
@@ -106,7 +108,10 @@ export function generateEmailVerificationEmail({
   businessName,
   verificationUrl,
   supportEmail,
+  temporaryPassword,
+  email,
 }: EmailVerificationParams): string {
+  const isMerchantAccount = !!(temporaryPassword && email);
   return `
     <!DOCTYPE html>
     <html lang="en">
@@ -120,16 +125,32 @@ export function generateEmailVerificationEmail({
             
             <!-- Header -->
             <div style="background-color: #007bff; color: #ffffff; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
-                <h1 style="margin: 0; font-size: 24px;">Verify Your Email</h1>
+                <h1 style="margin: 0; font-size: 24px;">${isMerchantAccount ? 'Welcome to SJFulfillment!' : 'Verify Your Email'}</h1>
             </div>
 
             <!-- Body Content -->
             <div style="padding: 30px;">
                 <h2 style="color: #333333; font-size: 20px; margin-top: 0;">Hello ${firstName},</h2>
                 
+                ${isMerchantAccount ? `
+                <p style="color: #555555; line-height: 1.6;">
+                    Your merchant account for <strong>${businessName}</strong> has been created! Please verify your email address to complete the setup and activate your account.
+                </p>
+
+                <!-- Account Details Box -->
+                <div style="background-color: #f8f9fa; border-left: 4px solid #007bff; padding: 20px; margin: 25px 0; border-radius: 4px;">
+                    <h3 style="color: #333; margin-top: 0; font-size: 16px;">Your Account Details:</h3>
+                    <p style="margin: 5px 0; color: #555;"><strong>Email:</strong> ${email}</p>
+                    <p style="margin: 5px 0; color: #555;"><strong>Temporary Password:</strong> <code style="background-color: #e9ecef; padding: 2px 6px; border-radius: 3px; color: #495057;">${temporaryPassword}</code></p>
+                    <p style="color: #777; font-size: 13px; margin-top: 15px; margin-bottom: 0;">
+                        ⚠️ Please change your password after your first login for security.
+                    </p>
+                </div>
+                ` : `
                 <p style="color: #555555; line-height: 1.6;">
                     Thank you for registering <strong>${businessName}</strong> with SJFulfillment! To complete your registration and secure your account, please verify your email address.
                 </p>
+                `}
 
                 <p style="color: #555555; line-height: 1.6;">
                     Click the button below to verify your email address:
@@ -153,7 +174,7 @@ export function generateEmailVerificationEmail({
                 </p>
 
                 <p style="color: #555555; line-height: 1.6;">
-                    Once verified, your account will be reviewed by our team and you'll be notified when it's approved.
+                    ${isMerchantAccount ? 'Once verified, your merchant account will be reviewed by our team and you\'ll be notified when it\'s approved for use.' : 'Once verified, your account will be reviewed by our team and you\'ll be notified when it\'s approved.'}
                 </p>
 
                 <p style="color: #555555; line-height: 1.6; margin-top: 30px;">

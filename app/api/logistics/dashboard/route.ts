@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
     // Get user's assigned warehouse regions
     const userRegions = await prisma.logisticsRegion.findMany({
-      where: { userId: session.id },
+      where: { userId: session.userId },
       select: { warehouseId: true }
     });
     
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       prisma.shipment.count({
         where: {
           ...(assignedWarehouseIds.length > 0 && {
-            order: {
+            Order: {
               fulfillmentWarehouseId: { in: assignedWarehouseIds }
             }
           })
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
             gte: new Date(new Date().setHours(0, 0, 0, 0))
           },
           ...(assignedWarehouseIds.length > 0 && {
-            order: {
+            Order: {
               fulfillmentWarehouseId: { in: assignedWarehouseIds }
             }
           })
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
         take: 10,
         orderBy: { lastStatusUpdate: 'desc' },
         include: {
-          order: {
+          Order: {
             include: {
               Business: {
                 select: { name: true }
@@ -135,7 +135,7 @@ export async function GET(request: NextRequest) {
         id: shipment.id,
         trackingNumber: shipment.trackingNumber,
         orderId: shipment.orderId,
-        businessName: shipment.order?.Business?.name || 'Unknown',
+        businessName: shipment.Order?.Business?.name || 'Unknown',
         deliveryAttempts: shipment.deliveryAttempts,
         lastStatusUpdate: shipment.lastStatusUpdate
       })),

@@ -62,20 +62,20 @@ export async function GET(request: NextRequest) {
         orderDate: { gte: startDate }
       },
       include: {
-        items: {
+        OrderItem: {
           include: {
-            product: {
+            Product: {
               select: {
                 id: true,
                 name: true,
                 sku: true,
-                business: { select: { name: true } }
+                Business: { select: { name: true } }
               }
             }
           }
         },
         Business: { select: { name: true } },
-        fulfillmentWarehouse: { select: { name: true, region: true } }
+        Warehouse: { select: { name: true, region: true } }
       },
       orderBy: { orderDate: 'asc' }
     });
@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
 
       acc[dateGroup].orders += 1;
       acc[dateGroup].revenue += order.totalAmount * exchangeRate;
-      acc[dateGroup].items += order.items.reduce((sum: number, item: any) => sum + item.quantity, 0);
+      acc[dateGroup].items += order.OrderItem.reduce((sum: number, item: any) => sum + item.quantity, 0);
 
       if (order.status === 'NEW') acc[dateGroup].newOrders += 1;
       if (order.status === 'DELIVERED') acc[dateGroup].deliveredOrders += 1;
@@ -116,12 +116,12 @@ export async function GET(request: NextRequest) {
     const productSales = orders.reduce((acc: any, order: any) => {
       const dateGroup = getDateGroup(order.orderDate);
       
-      order.items.forEach((item: any) => {
-        const key = `${item.product.id}-${dateGroup}`;
+      order.OrderItem.forEach((item: any) => {
+        const key = `${item.Product.id}-${dateGroup}`;
         if (!acc[key]) {
           acc[key] = {
-            productId: item.product.id,
-            product: item.product,
+            productId: item.Product.id,
+            product: item.Product,
             date: dateGroup,
             quantity: 0,
             revenue: 0

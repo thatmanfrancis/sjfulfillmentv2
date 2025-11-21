@@ -3,7 +3,7 @@ import { z } from "zod";
 import { randomBytes } from "crypto";
 import { hash } from "bcryptjs";
 import prisma from "@/lib/prisma";
-import { verifyAuth } from "@/lib/auth";
+import { getCurrentSession } from '@/lib/session';
 
 const createApiKeySchema = z.object({
   name: z.string().min(1).max(100),
@@ -21,9 +21,30 @@ function generateApiKey(): string {
 
 export async function GET(request: NextRequest) {
   try {
-    const authResult = await verifyAuth(request);
-    if (!authResult.success) {
-      return NextResponse.json({ error: authResult.error }, { status: 401 });
+    const session = await getCurrentSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get user with business info
+      const user = await prisma.user.findUnique({
+        where: { id: session.userId },
+        select: {
+          id: true,
+          role: true,
+          businessId: true,
+        }
+      });
+      let business = null;
+      if (user?.businessId) {
+        business = await prisma.business.findUnique({
+          where: { id: user.businessId },
+          select: { id: true, name: true }
+        });
+      }
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -33,11 +54,14 @@ export async function GET(request: NextRequest) {
     let where: any = {};
 
     // Role-based filtering
-    if (authResult.user.role === "ADMIN") {
+    if (user.role === "ADMIN") {
       if (merchantId) where.merchantId = merchantId;
     } else {
       // Merchant users can only see their own API keys
-      where.merchantId = authResult.user.businessId;
+      if (!user.businessId) {
+        return NextResponse.json({ error: 'User not associated with a business' }, { status: 400 });
+      }
+      where.merchantId = user.businessId;
     }
 
     // Filter out revoked keys unless explicitly requested
@@ -49,7 +73,7 @@ export async function GET(request: NextRequest) {
       where,
       orderBy: { id: "desc" },
       include: {
-        business: {
+        Business: {
           select: {
             id: true,
             name: true,
@@ -83,9 +107,30 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authResult = await verifyAuth(request);
-    if (!authResult.success) {
-      return NextResponse.json({ error: authResult.error }, { status: 401 });
+    const session = await getCurrentSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get user with business info
+      const user = await prisma.user.findUnique({
+        where: { id: session.userId },
+        select: {
+          id: true,
+          role: true,
+          businessId: true,
+        }
+      });
+      let business = null;
+      if (user?.businessId) {
+        business = await prisma.business.findUnique({
+          where: { id: user.businessId },
+          select: { id: true, name: true }
+        });
+      }
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
     const body = await request.json();
@@ -93,7 +138,7 @@ export async function POST(request: NextRequest) {
 
     let merchantId: string;
 
-    if (authResult.user.role === "ADMIN") {
+    if (user.role === "ADMIN") {
       // Admin must specify merchantId
       const { merchantId: reqMerchantId } = body;
       if (!reqMerchantId) {
@@ -105,13 +150,13 @@ export async function POST(request: NextRequest) {
       merchantId = reqMerchantId;
     } else {
       // Merchant users can only create keys for their own business
-      if (!authResult.user.businessId) {
+      if (!user.businessId) {
         return NextResponse.json(
           { error: "User is not associated with a business" },
           { status: 400 }
         );
       }
-      merchantId = authResult.user.businessId;
+      merchantId = user.businessId;
     }
 
     // Verify merchant exists
@@ -155,12 +200,13 @@ export async function POST(request: NextRequest) {
 
     const apiKey = await prisma.merchantApiKey.create({
       data: {
+        id: crypto.randomUUID(),
         merchantId,
         apiKey: hashedApiKey,
         name: validatedData.name,
       },
       include: {
-        business: {
+        Business: {
           select: {
             id: true,
             name: true,
@@ -172,6 +218,7 @@ export async function POST(request: NextRequest) {
     // Create audit log
     await prisma.auditLog.create({
       data: {
+        id: crypto.randomUUID(),
         entityType: "MerchantApiKey",
         entityId: apiKey.id,
         action: "API_KEY_CREATED",
@@ -181,7 +228,7 @@ export async function POST(request: NextRequest) {
           apiKeyName: validatedData.name,
           keyPrefix: rawApiKey.substring(0, 12),
         },
-        changedById: authResult.user.id,
+        changedById: session.userId,
       },
     });
 

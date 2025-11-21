@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     let where: any = {};
 
     if (authResult.user.role === "MERCHANT" || authResult.user.role === "MERCHANT_STAFF") {
-      where.product = { businessId: authResult.user.businessId };
+      where.Product = { businessId: authResult.user.businessId };
     } else if (authResult.user.role === "LOGISTICS") {
       // Get logistics user's warehouses
       const userRegions = await prisma.logisticsRegion.findMany({
@@ -37,14 +37,14 @@ export async function GET(request: NextRequest) {
     const stockAllocations = await prisma.stockAllocation.findMany({
       where,
       include: {
-        product: {
+        Product: {
           select: {
             id: true,
             name: true,
             sku: true,
             weightKg: true,
             dimensions: true,
-            business: {
+            Business: {
               select: {
                 name: true,
                 baseCurrency: true,
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
             }
           }
         },
-        warehouse: {
+        Warehouse: {
           select: {
             id: true,
             name: true,
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
       },
       orderBy: [
         { allocatedQuantity: 'asc' },
-        { product: { name: 'asc' } }
+        { Product: { name: 'asc' } }
       ]
     });
 
@@ -89,13 +89,13 @@ export async function GET(request: NextRequest) {
       const estimatedValue = availableStock * estimatedUnitValue * exchangeRate;
 
       return {
-        productId: stock.product.id,
-        productName: stock.product.name,
-        sku: stock.product.sku,
-        businessName: stock.product.business.name,
-        businessCurrency: stock.product.business.baseCurrency,
-        warehouseName: stock.warehouse.name,
-        warehouseRegion: stock.warehouse.region,
+        productId: stock.Product.id,
+        productName: stock.Product.name,
+        sku: stock.Product.sku,
+        businessName: stock.Product.Business.name,
+        businessCurrency: stock.Product.Business.baseCurrency,
+        warehouseName: stock.Warehouse.name,
+        warehouseRegion: stock.Warehouse.region,
         allocatedQuantity: stock.allocatedQuantity,
         safetyStock: stock.safetyStock,
         availableStock,
@@ -104,8 +104,8 @@ export async function GET(request: NextRequest) {
         isLowStock,
         isOutOfStock,
         reorderSuggested: isLowStock && !isOutOfStock,
-        weightKg: stock.product.weightKg,
-        dimensions: stock.product.dimensions,
+        weightKg: stock.Product.weightKg,
+        dimensions: stock.Product.dimensions,
         estimatedValue,
         currency,
         exchangeRate: currency !== 'NGN' ? exchangeRate : undefined

@@ -16,11 +16,11 @@ export async function GET(
     const resolvedParams = await params;
     const invoiceId = resolvedParams.id;
 
-    // Get invoice with merchant data
+    // Get invoice with business (merchant) data
     const invoice = await prisma.invoice.findUnique({
       where: { id: invoiceId },
       include: {
-        merchant: {
+        Business: {
           select: {
             name: true,
             contactPhone: true,
@@ -53,16 +53,16 @@ export async function GET(
     return new Promise<NextResponse>((resolve) => {
       doc.on('end', async () => {
         const pdfBuffer = Buffer.concat(chunks);
-        
         // Create audit log
         await prisma.auditLog.create({
           data: {
+            id: crypto.randomUUID(),
             entityType: "Invoice",
             entityId: invoiceId,
             action: "INVOICE_PDF_GENERATED",
             details: {
               billingPeriod: invoice.billingPeriod,
-              merchantName: invoice.merchant.name,
+              merchantName: invoice.Business?.name,
               totalDue: invoice.totalDue
             },
             changedById: authResult.user.id,
@@ -80,11 +80,9 @@ export async function GET(
       // PDF Content
       doc.fontSize(20).text('SendJon 3PL Invoice', 50, 50);
       doc.fontSize(12);
-      
       // Company header
       doc.text('SendJon Fulfillment Services', 350, 50);
       doc.text('Lagos, Nigeria', 350, 65);
-      
       // Invoice details
       doc.text(`Invoice ID: ${invoice.id}`, 50, 120);
       doc.text(`Billing Period: ${invoice.billingPeriod}`, 50, 140);
@@ -94,15 +92,15 @@ export async function GET(
 
       // Merchant details
       doc.text('Bill To:', 50, 240);
-      doc.text(invoice.merchant.name, 50, 260);
-      if (invoice.merchant.address) {
-        doc.text(`${invoice.merchant.address}`, 50, 280);
+      doc.text(invoice.Business?.name || '', 50, 260);
+      if (invoice.Business?.address) {
+        doc.text(`${invoice.Business.address}`, 50, 280);
       }
-      if (invoice.merchant.city) {
-        doc.text(`${invoice.merchant.city}, ${invoice.merchant.state}`, 50, 300);
+      if (invoice.Business?.city) {
+        doc.text(`${invoice.Business.city}, ${invoice.Business.state}`, 50, 300);
       }
-      if (invoice.merchant.contactPhone) {
-        doc.text(`Phone: ${invoice.merchant.contactPhone}`, 50, 320);
+      if (invoice.Business?.contactPhone) {
+        doc.text(`Phone: ${invoice.Business.contactPhone}`, 50, 320);
       }
 
       // Charges breakdown
@@ -111,21 +109,17 @@ export async function GET(
       doc.text(`Fulfillment Fees: ₦${invoice.fulfillmentFees.toFixed(2)}`, 70, 400);
       doc.text(`Receiving Fees: ₦${invoice.receivingFees.toFixed(2)}`, 70, 420);
       doc.text(`Other Fees: ₦${invoice.otherFees.toFixed(2)}`, 70, 440);
-      
       // Total
       doc.fontSize(14)
          .text(`Total Amount Due: ₦${invoice.totalDue.toFixed(2)}`, 50, 480);
-      
       if (invoice.amountPaid > 0) {
         doc.text(`Amount Paid: ₦${invoice.amountPaid.toFixed(2)}`, 50, 500);
         doc.text(`Balance Due: ₦${(invoice.totalDue - invoice.amountPaid).toFixed(2)}`, 50, 520);
       }
-
       // Payment terms
       doc.fontSize(10)
          .text('Payment Terms: Net 30 days', 50, 580)
          .text('Late payments may incur additional charges.', 50, 595);
-
       doc.end();
     });
 

@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
         take: limit,
         orderBy: { timestamp: "desc" },
         include: {
-          changedBy: {
+          User: {
             select: {
               id: true,
               firstName: true,
