@@ -10,6 +10,7 @@ const createProductSchema = z.object({
   sku: z.string().min(1).max(100).optional(), // Make SKU optional for auto-generation
   weightKg: z.number().positive('Weight must be a positive number'),
   businessId: z.string().min(1, 'Business ID is required'), // Remove UUID validation for custom format
+  price: z.number().positive('Price must be positive').optional(),
   dimensions: z.object({
     length: z.number().positive().optional(),
     width: z.number().positive().optional(),
@@ -319,6 +320,7 @@ export async function POST(request: NextRequest) {
         weightKg: validatedData.weightKg,
         businessId: validatedData.businessId,
         dimensions: validatedData.dimensions || {},
+        ...(validatedData.price !== undefined ? { price: validatedData.price } : {}),
       },
       include: {
         Business: {

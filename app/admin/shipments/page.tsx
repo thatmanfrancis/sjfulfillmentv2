@@ -37,6 +37,24 @@ type Shipment = {
 
 
 export default function AdminShipmentsPage() {
+    // Logistics analytics state
+    const [logisticsPeople, setLogisticsPeople] = useState<any[]>([]);
+
+    useEffect(() => {
+      fetchLogistics();
+    }, []);
+
+    const fetchLogistics = async () => {
+      try {
+        const res = await fetch('/api/admin/logistics');
+        if (res.ok) {
+          const data = await res.json();
+          setLogisticsPeople(Array.isArray(data) ? data : data.users || []);
+        }
+      } catch (err) {
+        setLogisticsPeople([]);
+      }
+    };
   // State hooks at the top level
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [stats, setStats] = useState<any>(null);
@@ -201,6 +219,40 @@ export default function AdminShipmentsPage() {
   return (
     <>
     <div className="space-y-6 bg-black min-h-screen p-6">
+      {/* Logistics Analytics Section */}
+      <div className="mb-6">
+        <h2 className="text-xl font-bold text-white mb-2">Logistics Personnel Status</h2>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {logisticsPeople.length === 0 && (
+            <div className="text-gray-400">No logistics personnel found.</div>
+          )}
+          {logisticsPeople.map((person: any) => {
+            let status = 'Inactive';
+            let color = 'bg-gray-700 text-gray-300';
+            if (person.isActive) {
+              if (person.activeOrders && person.activeOrders.length > 0) {
+                status = 'Working';
+                color = 'bg-yellow-900 text-yellow-300';
+              } else {
+                status = 'Free';
+                color = 'bg-emerald-900 text-emerald-300';
+              }
+            }
+            return (
+              <Card key={person.id} className="bg-[#181818] border border-[#f8c017]/20">
+                <CardContent className="p-4 flex flex-col gap-2">
+                  <div className="font-semibold text-white">{person.name}</div>
+                  <div className="text-sm text-gray-400">{person.email}</div>
+                  <div className={`inline-block px-3 py-1 rounded ${color} text-xs font-bold`}>{status}</div>
+                  {status === 'Working' && (
+                    <div className="text-xs text-yellow-300 mt-1">Active Orders: {person.activeOrders.length}</div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

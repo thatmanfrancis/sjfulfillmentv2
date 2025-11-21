@@ -182,6 +182,7 @@ model Product {
   weightKg        Float
   dimensions      Json
   imageUrl        String?
+  price           Float?            // Optional price field
   OrderItem       OrderItem[]
   Business        Business          @relation(fields: [businessId], references: [id])
   ProductImage    ProductImage[]

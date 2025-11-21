@@ -73,7 +73,7 @@ export default function AddMerchantModal({ isOpen, onClose, onMerchantAdded }: A
     email: '',
     
     // Business Settings
-    currency: 'USD' as 'USD' | 'NGN'
+    currency: 'USD' as 'USD' | 'NGN' | 'GBP' | 'EUR' | 'CAD'
   });
 
   // Fetch countries on component mount
@@ -293,6 +293,9 @@ export default function AddMerchantModal({ isOpen, onClose, onMerchantAdded }: A
                 >
                   <option value="USD">USD - US Dollar</option>
                   <option value="NGN">NGN - Nigerian Naira</option>
+                  <option value="GBP">GBP - British Pound</option>
+                  <option value="EUR">EUR - Euro</option>
+                  <option value="CAD">CAD - Canadian Dollar</option>
                 </select>
               </div>
             </div>

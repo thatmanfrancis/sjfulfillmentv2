@@ -3,10 +3,21 @@ import prisma from '@/lib/prisma';
 import { getCurrentSession } from '@/lib/session';
 import { z } from 'zod';
 
-// Validation schema for warehouse creation
+// Validation schema for warehouse creation (all fields)
 const CreateWarehouseSchema = z.object({
   name: z.string().min(1, 'Warehouse name is required'),
+  address: z.string().min(1, 'Address is required'),
+  city: z.string().min(1, 'City is required'),
+  state: z.string().min(1, 'State is required'),
+  zipCode: z.string().min(1, 'ZIP code is required'),
+  country: z.string().min(1, 'Country is required'),
   region: z.string().min(1, 'Region is required'),
+  capacity: z.coerce.number().min(1, 'Capacity must be greater than 0'),
+  manager: z.string().min(1, 'Manager name is required'),
+  contactEmail: z.string().email('Invalid email format'),
+  contactPhone: z.string().min(1, 'Contact phone is required'),
+  type: z.enum(['FULFILLMENT', 'STORAGE', 'DISTRIBUTION', 'CROSS_DOCK']),
+  description: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -45,25 +56,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { name, region } = validationResult.data;
 
-    // Create the warehouse
+    // Create the warehouse with all fields
     const warehouse = await prisma.warehouse.create({
       data: {
         id: `wh_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        name,
-        region,
+        name: body.name,
+        address: body.address,
+        city: body.city,
+        state: body.state,
+        zipCode: body.zipCode,
+        country: body.country,
+        region: body.region,
+        capacity: body.capacity,
+        manager: body.manager,
+        contactEmail: body.contactEmail,
+        contactPhone: body.contactPhone,
+        type: body.type,
+        description: body.description,
         updatedAt: new Date(),
       },
     });
 
     return NextResponse.json({
       message: 'Warehouse created successfully',
-      warehouse: {
-        id: warehouse.id,
-        name: warehouse.name,
-        region: warehouse.region,
-      },
+      warehouse,
     }, { status: 201 });
 
   } catch (error) {

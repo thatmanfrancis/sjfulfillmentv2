@@ -167,7 +167,7 @@ export async function POST(request: NextRequest) {
               customerAddress: orderData.customerAddress,
               orderDate: new Date(),
               status: 'NEW',
-              totalAmount: totalAmount,
+              totalAmount: orderData.amount !== undefined ? orderData.amount : totalAmount,
               // Admin created orders go directly through - no allocation waiting
               fulfillmentWarehouseId: fulfillmentWarehouseId,
               OrderItem: {

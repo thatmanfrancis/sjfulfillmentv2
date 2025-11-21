@@ -68,12 +68,13 @@ export default function AddProductModal({ isOpen, onClose, onProductAdded }: Add
     name: '',
     sku: '',
     weightKg: '',
-    dimensions: {
-      length: '',
-      width: '',
-      height: '',
-    }
-  });
+      price: '', // Optional price field
+      dimensions: {
+        length: '',
+        width: '',
+        height: '',
+      }
+    });
 
   // Stock allocation form
   const [stockAllocations, setStockAllocations] = useState<StockAllocation[]>([]);
@@ -170,9 +171,37 @@ export default function AddProductModal({ isOpen, onClose, onProductAdded }: Add
       return;
     }
 
+    // Validate at least one valid warehouse allocation or assign to default
+    let validStockAllocations = stockAllocations.filter(sa =>
+      sa.warehouseId && sa.allocatedQuantity > 0
+    );
+
+    // If no valid allocations, assign to default warehouse
+    if (validStockAllocations.length === 0) {
+      const defaultWarehouse = warehouses.find(w => w.name.toLowerCase() === 'default' && w.status === 'ACTIVE');
+      if (defaultWarehouse) {
+        validStockAllocations = [{
+          warehouseId: defaultWarehouse.id,
+          allocatedQuantity: 1,
+          safetyStock: 0
+        }];
+        toast.info('No valid warehouse allocation found. Assigned to Default warehouse.');
+      } else {
+        toast.error('No valid warehouse allocation and no Default warehouse found. Please allocate stock.');
+        return;
+      }
+    }
+
+    // Check for duplicate warehouse allocations
+    const warehouseIds = validStockAllocations.map(sa => sa.warehouseId);
+    if (new Set(warehouseIds).size !== warehouseIds.length) {
+      toast.error('Cannot have multiple allocations for the same warehouse');
+      return;
+    }
+
     try {
       setIsCreatingProduct(true);
-      
+
       // Validate weight is a valid number
       const weight = parseFloat(singleProduct.weightKg);
       if (isNaN(weight) || weight <= 0) {
@@ -192,44 +221,29 @@ export default function AddProductModal({ isOpen, onClose, onProductAdded }: Add
         dimensions.height = parseFloat(singleProduct.dimensions.height);
       }
 
-      // Validate stock allocations if any
-      const validStockAllocations = stockAllocations.filter(sa => 
-        sa.warehouseId && (sa.allocatedQuantity > 0 || sa.safetyStock > 0)
-      );
-
-      // Check for duplicate warehouse allocations
-      const warehouseIds = validStockAllocations.map(sa => sa.warehouseId);
-      if (new Set(warehouseIds).size !== warehouseIds.length) {
-        toast.error('Cannot have multiple allocations for the same warehouse');
-        return;
-      }
-
       const productData = {
         name: singleProduct.name.trim(),
         businessId: selectedBusiness.id,
         weightKg: weight,
-        ...(singleProduct.sku.trim() ? { sku: singleProduct.sku.trim() } : {}), // Only include SKU if provided
+        ...(singleProduct.sku.trim() ? { sku: singleProduct.sku.trim() } : {}),
         ...(Object.keys(dimensions).length > 0 ? { dimensions } : {}),
-        ...(validStockAllocations.length > 0 ? { stockAllocations: validStockAllocations } : {})
+        stockAllocations: validStockAllocations
       };
 
       console.log('📦 Sending product data:', productData);
 
       const result = await post('/api/admin/products', productData) as any;
-      
+
       if (result.success) {
-        if (validStockAllocations.length > 0) {
-          toast.success('Product created with initial inventory successfully!');
-        } else {
-          toast.warning('Product created successfully! Remember to assign inventory quantities in the edit modal.');
-        }
+        toast.success('Product created and assigned to warehouse successfully!');
         onProductAdded();
-        
+
         // Reset form
         setSingleProduct({
           name: '',
           sku: '',
           weightKg: '',
+          price: '',
           dimensions: {
             length: '',
             width: '',
@@ -278,94 +292,47 @@ export default function AddProductModal({ isOpen, onClose, onProductAdded }: Add
       for (let i = 1; i < lines.length; i++) {
         const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
         const product: any = {};
-        
         headers.forEach((header, index) => {
           if (values[index] !== undefined) {
-            product[header] = values[index];
-          }
-        });
-        
-        // Validate and prepare product data
-        if (product.name && product.weightKg) {
-          const weight = parseFloat(product.weightKg);
-          if (isNaN(weight) || weight <= 0) {
-            errors.push(`Row ${i + 1}: Invalid weight value`);
-            continue;
-          }
-          
-          const dimensions: any = {};
-          if (product.length && !isNaN(parseFloat(product.length))) {
-            dimensions.length = parseFloat(product.length);
-          }
-          if (product.width && !isNaN(parseFloat(product.width))) {
-            dimensions.width = parseFloat(product.width);
-          }
-          if (product.height && !isNaN(parseFloat(product.height))) {
-            dimensions.height = parseFloat(product.height);
-          }
-          
-          const productData: any = {
-            name: product.name.trim(),
-            businessId: selectedBusiness.id,
-            weightKg: weight,
-            ...(Object.keys(dimensions).length > 0 ? { dimensions } : {})
-          };
-          
-          // Only include SKU if provided
-          if (product.sku && product.sku.trim()) {
-            productData.sku = product.sku.trim();
-          }
-          
-          // Handle quantity and warehouse allocation if quantity is provided
-          if (product.quantity) {
-            const quantity = parseInt(product.quantity);
-            if (!isNaN(quantity) && quantity > 0) {
-              let warehouseId = null;
-              
-              // First, try to find the specified warehouse
-              if (product.warehouseCode) {
-                const warehouseCode = product.warehouseCode;
-                
-                // Find warehouse by code or name (case insensitive)
-                const warehouse = warehouses.find(w => 
-                  (w.code && w.code.toLowerCase() === warehouseCode.toLowerCase()) ||
-                  w.name.toLowerCase() === warehouseCode.toLowerCase() ||
-                  w.name.toLowerCase().includes(warehouseCode.toLowerCase())
-                );
-                
-                if (warehouse && warehouse.status === 'ACTIVE') {
-                  warehouseId = warehouse.id;
-                }
-              }
-              
-              // If no warehouse found or no warehouse code specified, use/create default
-              if (!warehouseId) {
-                // Look for existing default warehouse
-                let defaultWarehouse = warehouses.find(w => 
-                  w.name.toLowerCase() === 'default' && w.status === 'ACTIVE'
-                );
-                
-                if (defaultWarehouse) {
-                  warehouseId = defaultWarehouse.id;
-                } else {
-                  // We'll handle default warehouse creation in the backend
-                  // For now, mark it for default assignment
-                  warehouseId = 'DEFAULT_WAREHOUSE';
-                }
-              }
-              
-              productData.stockAllocations = [{
-                warehouseId: warehouseId,
-                allocatedQuantity: quantity,
-                safetyStock: Math.floor(quantity * 0.1) // 10% safety stock
-              }];
-              
-            } else if (product.quantity !== '' && product.quantity !== undefined) {
-              errors.push(`Row ${i + 1}: Invalid quantity value '${product.quantity}'`);
-              continue;
+            if (header.toLowerCase() === 'price' && values[index] !== '') {
+              product.price = parseFloat(values[index]);
+            } else {
+              product[header] = values[index];
             }
           }
-          
+        });
+
+        // Validate and prepare product data
+        if (product.name && product.weightKg) {
+          // Prepare dimensions
+          const dimensions: any = {};
+          if (product.length && !isNaN(parseFloat(product.length))) dimensions.length = parseFloat(product.length);
+          if (product.width && !isNaN(parseFloat(product.width))) dimensions.width = parseFloat(product.width);
+          if (product.height && !isNaN(parseFloat(product.height))) dimensions.height = parseFloat(product.height);
+
+          // Default warehouse logic
+          let warehouseId = product.warehouseCode || '';
+          if (!warehouseId) {
+            const defaultWarehouse = warehouses.find(w => w.name.toLowerCase() === 'default' && w.status === 'ACTIVE');
+            warehouseId = defaultWarehouse ? defaultWarehouse.id : 'DEFAULT_WAREHOUSE';
+          }
+
+          // Prepare productData
+          const productData: any = {
+            name: product.name,
+            weightKg: parseFloat(product.weightKg),
+            businessId: selectedBusiness.id,
+            ...(product.sku ? { sku: product.sku } : {}),
+            ...(Object.keys(dimensions).length > 0 ? { dimensions } : {}),
+            ...(product.price !== undefined ? { price: product.price } : {}),
+          };
+          if (product.quantity && !isNaN(parseInt(product.quantity))) {
+            productData.stockAllocations = [{
+              warehouseId,
+              allocatedQuantity: parseInt(product.quantity),
+              safetyStock: Math.floor(parseInt(product.quantity) * 0.1)
+            }];
+          }
           products.push(productData);
         } else {
           errors.push(`Row ${i + 1}: Missing required fields (name or weightKg)`);
@@ -431,7 +398,7 @@ export default function AddProductModal({ isOpen, onClose, onProductAdded }: Add
     } finally {
       setIsCreatingProduct(false);
     }
-  };
+  }
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -469,10 +436,13 @@ export default function AddProductModal({ isOpen, onClose, onProductAdded }: Add
         for (let i = 1; i < Math.min(lines.length, 11); i++) { // Preview first 10 rows
           const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
           const product: any = {};
-          
           headers.forEach((header, index) => {
             if (values[index] !== undefined) {
-              product[header] = values[index];
+              if (header.toLowerCase() === 'price' && values[index] !== '') {
+                product.price = parseFloat(values[index]);
+              } else {
+                product[header] = values[index];
+              }
             }
           });
           
@@ -487,7 +457,8 @@ export default function AddProductModal({ isOpen, onClose, onProductAdded }: Add
               height: product.height || '',
               quantity: product.quantity || '',
               warehouseCode: product.warehouseCode || '',
-              description: product.description || ''
+              description: product.description || '',
+              ...(product.price !== undefined ? { price: product.price } : {})
             });
           }
         }
@@ -724,6 +695,18 @@ export default function AddProductModal({ isOpen, onClose, onProductAdded }: Add
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                  <div className="space-y-2">
+                                    <Label className="text-sm font-medium text-gray-300">Price (optional)</Label>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      placeholder="0.00"
+                                      value={singleProduct.price}
+                                      onChange={e => setSingleProduct(prev => ({ ...prev, price: e.target.value }))}
+                                      className="bg-[#2a2a2a] border-gray-600 text-white"
+                                    />
+                                  </div>
                   <div className="space-y-2">
                     <Label className="text-sm font-medium text-gray-300">Weight (kg) *</Label>
                     <Input
@@ -1043,7 +1026,12 @@ export default function AddProductModal({ isOpen, onClose, onProductAdded }: Add
                   </Button>
                   <Button
                     onClick={handleSingleProductSubmit}
-                    disabled={!singleProduct.name || !singleProduct.weightKg || isCreatingProduct}
+                    disabled={!singleProduct.name || !singleProduct.weightKg || isCreatingProduct ||
+                      (
+                        stockAllocations.length > 0 &&
+                        stockAllocations.filter(sa => sa.warehouseId && sa.allocatedQuantity > 0).length === 0
+                      )
+                    }
                     className="bg-[#f8c017] text-black hover:bg-[#f8c017]/90 disabled:opacity-50"
                   >
                     {isCreatingProduct ? (

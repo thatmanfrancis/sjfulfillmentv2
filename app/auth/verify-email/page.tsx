@@ -13,6 +13,7 @@ function VerifyEmailContent() {
   const [message, setMessage] = useState('');
   const [isResending, setIsResending] = useState(false);
   const [userEmail, setUserEmail] = useState('');
+  const [debugInfo, setDebugInfo] = useState<any>(null);
   
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -20,32 +21,16 @@ function VerifyEmailContent() {
   const email = searchParams.get('email');
 
 
-  // Prevent double verification
-  const hasVerified = useRef(false);
-
-  // Only run verification on first client-side mount, never on hot reload or re-render
   useEffect(() => {
     if (typeof window === 'undefined') return; // SSR safety
-    if (hasVerified.current) return;
-    hasVerified.current = true;
-
     if (email) {
       setUserEmail(email);
     }
-
     if (!token) {
       setStatus('error');
       setMessage('Invalid verification link. Please check your email for a valid link.');
       return;
     }
-
-    // Only verify if not already attempted in this browser session
-    if (window.sessionStorage.getItem(`verified-email-token:${token}`)) {
-      // Already verified in this session, do not re-verify
-      return;
-    }
-    window.sessionStorage.setItem(`verified-email-token:${token}`, '1');
-
     const verifyEmail = async () => {
       try {
         const response = await fetch('/api/auth/verify-email', {
@@ -55,9 +40,14 @@ function VerifyEmailContent() {
           },
           body: JSON.stringify({ token }),
         });
-
         const result = await response.json();
-
+        setDebugInfo({
+          status: response.status,
+          ok: response.ok,
+          result,
+          token,
+          email,
+        });
         if (response.ok) {
           setStatus(result.requiresPasswordSetup ? 'password_setup' : 'success');
           if (result.requiresPasswordSetup) {
@@ -87,9 +77,9 @@ function VerifyEmailContent() {
       } catch (error) {
         setStatus('error');
         setMessage('Network error. Please check your connection and try again.');
+        setDebugInfo({ error: String(error), token, email });
       }
     };
-
     verifyEmail();
   }, [token, email, router]);
 

@@ -278,7 +278,7 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    // Get merchants with their orders and revenue data
+    // Get merchants with their orders, products, and revenue data
     const [businesses, totalBusinesses] = await Promise.all([
       prisma.business.findMany({
         where,
@@ -306,6 +306,11 @@ export async function GET(request: NextRequest) {
               orderDate: true,
             },
           },
+          Product: {
+            select: {
+              id: true
+            }
+          }
         },
         orderBy: { createdAt: 'desc' },
       }),
@@ -346,7 +351,7 @@ export async function GET(request: NextRequest) {
       createdAt: business.createdAt.toISOString(),
       _count: {
         users: business.User_User_businessIdToBusiness?.length || 0,
-        products: 0, // TODO: Add product count when products table is ready
+        products: business.Product?.length || 0,
       },
     }));
 

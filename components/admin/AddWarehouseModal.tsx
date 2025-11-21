@@ -327,16 +327,13 @@ export default function AddWarehouseModal({ isOpen, onClose, onWarehouseAdded }:
 
                 <div className="space-y-2">
                   <Label htmlFor="country" className="text-gray-300">Country *</Label>
-                  <Select value={formData.country} onValueChange={(value) => setFormData(prev => ({ ...prev, country: value }))}>
-                    <SelectTrigger className="bg-[#1a1a1a] border-gray-600 text-white focus:border-[#f8c017] focus:ring-[#f8c017]">
-                      <SelectValue placeholder="Select country" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-[#1a1a1a] border-gray-600">
-                      {countries.map(country => (
-                        <SelectItem key={country} value={country}>{country}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    id="country"
+                    value={formData.country}
+                    onChange={(e) => setFormData(prev => ({ ...prev, country: e.target.value }))}
+                    className="bg-[#1a1a1a] border-gray-600 text-white focus:border-[#f8c017] focus:ring-[#f8c017]"
+                    placeholder="Enter country"
+                  />
                   {errors.country && <p className="text-red-400 text-sm">{errors.country}</p>}
                 </div>
               </CardContent>

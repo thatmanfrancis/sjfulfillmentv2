@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Papa from 'papaparse';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -22,15 +22,15 @@ interface BulkOrderModalProps {
   onOrdersCreated: () => void;
 }
 
+
 interface ParsedOrderData {
   customerName: string;
   customerPhone: string;
   customerAddress: string;
   businessName: string;
-  items: Array<{
-    sku: string;
-    quantity: number;
-  }>;
+  items: Array<{ sku: string; quantity: number }>;
+  amount?: number;
+  cost?: number;
 }
 
 interface OrderValidation {
@@ -60,8 +60,30 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
     customerPhone: '',
     customerAddress: '',
     businessName: '',
+    amount: '',
+    cost: '',
     items: [{ sku: '', quantity: 1 }]
   });
+
+  const [businessCurrency, setBusinessCurrency] = useState<string>('');
+  // Fetch merchant currency when businessName changes
+  useEffect(() => {
+    const fetchCurrency = async () => {
+      if (!manualForm.businessName) {
+        setBusinessCurrency('');
+        return;
+      }
+      try {
+        const res = await fetch(`/api/admin/businesses?search=${encodeURIComponent(manualForm.businessName)}`);
+        const data = await res.json();
+        const found = data.businesses?.find((b: any) => b.name.toLowerCase() === manualForm.businessName.toLowerCase());
+        setBusinessCurrency(found?.baseCurrency || '');
+      } catch {
+        setBusinessCurrency('');
+      }
+    };
+    fetchCurrency();
+  }, [manualForm.businessName]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -81,6 +103,7 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
       const text = await file.text();
       const result = Papa.parse(text, { header: true, skipEmptyLines: true });
       const rows = result.data as any[];
+      // Support optional 'amount' column
       const expectedHeaders = ['customername', 'customerphone', 'customeraddress', 'businessname', 'productsku', 'quantity'];
       const actualHeaders = Object.keys(rows[0] || {}).map(h => h.toLowerCase());
       const missingHeaders = expectedHeaders.filter(header => !actualHeaders.includes(header));
@@ -97,6 +120,9 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
         const businessName = (row.businessName || row.businessname || '').trim();
         const sku = (row.productSku || row.productsku || '').trim();
         const quantity = parseInt(row.quantity) || 1;
+        // Support optional amount and cost columns
+        const amount = row.amount !== undefined ? Number(row.amount) : (row.Amount !== undefined ? Number(row.Amount) : undefined);
+        const cost = row.cost !== undefined ? Number(row.cost) : (row.Cost !== undefined ? Number(row.Cost) : undefined);
         if (!customerName || !customerPhone || !customerAddress || !businessName || !sku) {
           continue;
         }
@@ -110,7 +136,9 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
             customerPhone,
             customerAddress,
             businessName,
-            items: [{ sku: sku.toLowerCase(), quantity }]
+            items: [{ sku: sku.toLowerCase(), quantity }],
+            ...(amount ? { amount } : {}),
+            ...(cost ? { cost } : {})
           };
           orderMap.set(orderKey, newOrder);
           parsedOrders.push(newOrder);
@@ -178,11 +206,17 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
       setValidationErrors(['Please fill in all required fields']);
       return;
     }
+    // Optionally validate amount
+    if (manualForm.amount && isNaN(Number(manualForm.amount))) {
+      setValidationErrors(['Amount must be a valid number']);
+      return;
+    }
 
     try {
       setUploading(true);
       const orderData = {
         ...manualForm,
+        amount: manualForm.amount ? Number(manualForm.amount) : undefined,
         items: manualForm.items.filter(item => item.sku && item.quantity > 0)
       };
 
@@ -211,6 +245,8 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
       customerPhone: '',
       customerAddress: '',
       businessName: '',
+      amount: '',
+      cost: '',
       items: [{ sku: '', quantity: 1 }]
     });
     if (fileInputRef.current) {
@@ -320,6 +356,34 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
                     className="bg-[#1a1a1a] border-gray-600 text-white focus:border-[#f8c017]"
                     placeholder="Enter business name"
                   />
+                </div>
+                <div>
+                  <Label htmlFor="amount" className="text-gray-300">Amount ({businessCurrency || 'Currency'})</Label>
+                  <div className="flex items-center gap-2 mb-2">
+                    {businessCurrency && <span className="text-gray-400 font-bold">{businessCurrency}</span>}
+                    <Input
+                      id="amount"
+                      type="number"
+                      min="0"
+                      value={manualForm.amount}
+                      onChange={(e) => setManualForm(prev => ({ ...prev, amount: e.target.value }))}
+                      className="bg-[#1a1a1a] border-gray-600 text-white focus:border-[#f8c017]"
+                      placeholder="Enter order amount"
+                    />
+                  </div>
+                  <Label htmlFor="cost" className="text-gray-300">Cost ({businessCurrency || 'Currency'})</Label>
+                  <div className="flex items-center gap-2">
+                    {businessCurrency && <span className="text-gray-400 font-bold">{businessCurrency}</span>}
+                    <Input
+                      id="cost"
+                      type="number"
+                      min="0"
+                      value={manualForm.cost}
+                      onChange={(e) => setManualForm(prev => ({ ...prev, cost: e.target.value }))}
+                      className="bg-[#1a1a1a] border-gray-600 text-white focus:border-[#f8c017]"
+                      placeholder="Enter order cost"
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -480,6 +544,8 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
                         <th className="px-4 py-3 text-left text-xs font-semibold text-foreground tracking-wider">Customer</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-foreground tracking-wider">Phone</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-foreground tracking-wider">Address</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-foreground tracking-wider">Amount</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-foreground tracking-wider">Cost</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-foreground tracking-wider">Items</th>
                       </tr>
                     </thead>
@@ -489,6 +555,8 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
                           <td className="px-4 py-3 font-medium text-foreground whitespace-nowrap">{order.customerName}</td>
                           <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{order.customerPhone}</td>
                           <td className="px-4 py-3 text-muted-foreground max-w-xs truncate">{order.customerAddress}</td>
+                          <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{order.amount !== undefined ? order.amount : '-'}</td>
+                          <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{order.cost !== undefined ? order.cost : '-'}</td>
                           <td className="px-4 py-3">
                             <div className="mb-1 text-xs text-muted-foreground">
                               <span className="font-semibold">{order.items.length}</span> product{order.items.length !== 1 ? 's' : ''} / 

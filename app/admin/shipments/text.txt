@@ -63,8 +63,8 @@ export default function AdminShipmentsPage() {
       setMoreMenuOpen(null);
     };
     if (moreMenuOpen) {
-      window.addEventListener('click', handler);
-      return () => window.removeEventListener('click', handler);
+      document.addEventListener('mousedown', handler);
+      return () => document.removeEventListener('mousedown', handler);
     }
   }, [moreMenuOpen]);
 
@@ -234,31 +234,6 @@ export default function AdminShipmentsPage() {
             <div className="text-2xl font-bold text-white">{stats?.totalShipments || 0}</div>
           </CardContent>
         </Card>
-
-        <Card className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-400">Pending</CardTitle>
-            <div className="p-2 bg-yellow-100 rounded-lg">
-              <Clock className="h-4 w-4 text-yellow-600" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-white">{stats?.pendingShipments || 0}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-400">In Transit</CardTitle>
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Truck className="h-4 w-4 text-blue-600" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-white">{stats?.inTransitShipments || 0}</div>
-          </CardContent>
-        </Card>
-
         <Card className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-gray-400">Delivered</CardTitle>
@@ -333,7 +308,7 @@ export default function AdminShipmentsPage() {
 
       {/* Shipments List */}
       <div className="space-y-4">
-        {shipments.map((shipment) => {
+        {shipments.map((shipment: any) => {
           const statusInfo = getStatusInfo(shipment.order.status);
           return (
             <Card key={shipment.id} className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
@@ -380,7 +355,7 @@ export default function AdminShipmentsPage() {
                       <div className="flex flex-wrap gap-2 items-center mt-1">
                         <span className="font-semibold text-gray-400">Products:</span>
                         {shipment.order.items.length === 0 && <span className="text-gray-400">None</span>}
-                        {shipment.order.items.map((item) => (
+                        {shipment.order.items.map((item: any) => (
                           <span key={item.id} className="inline-flex items-center gap-1 px-2 py-1 bg-gray-800 rounded text-xs text-gray-200 border border-gray-700">
                             <Box className="h-3 w-3 text-[#f8c017]" />
                             {item.product?.name || 'Unknown'}
@@ -472,10 +447,43 @@ export default function AdminShipmentsPage() {
       )}
     </div>
     {trackModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-        <div className="bg-[#181818] rounded-lg p-8 w-full max-w-md">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setTrackModal(null)}>
+        <div className="bg-[#181818] rounded-lg p-8 w-full max-w-md" onClick={e => e.stopPropagation()}>
           <h2 className="text-xl font-bold mb-4 text-white">Track Shipment</h2>
-          <p className="text-gray-300 mb-4">Tracking for <span className="font-mono">{trackModal.trackingNumber || trackModal.id.slice(0,8)}</span></p>
+          <div className="mb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-gray-400">Tracking #:</span>
+              <span className="font-mono text-white">{trackModal.trackingNumber || trackModal.id.slice(0,8)}</span>
+            </div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-gray-400">Status:</span>
+              <span className="font-semibold text-white">{trackModal.order.status}</span>
+            </div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-gray-400">Customer:</span>
+              <span className="text-white">{trackModal.order.customerName}</span>
+            </div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-gray-400">Destination:</span>
+              <span className="text-white">{trackModal.order.customerAddress}</span>
+            </div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-gray-400">Last Update:</span>
+              <span className="text-white">{trackModal.lastStatusUpdate ? formatDate(trackModal.lastStatusUpdate) : 'N/A'}</span>
+            </div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-gray-400">Carrier:</span>
+              <span className="text-white">{trackModal.carrierName || 'N/A'}</span>
+            </div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-gray-400">Products:</span>
+              <span className="text-white">{trackModal.order.items.map(i => i.product?.name).filter(Boolean).join(', ') || 'None'}</span>
+            </div>
+          </div>
+          <div className="border-t border-gray-700 pt-4">
+            <div className="text-gray-400 mb-2 font-semibold">Status History</div>
+            <div className="text-gray-300 text-sm">(Status history not implemented - backend needed)</div>
+          </div>
           <Button onClick={() => setTrackModal(null)} className="bg-[#f8c017] text-black w-full mt-4">Close</Button>
         </div>
       </div>
@@ -484,8 +492,55 @@ export default function AdminShipmentsPage() {
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
         <div className="bg-[#181818] rounded-lg p-8 w-full max-w-md">
           <h2 className="text-xl font-bold mb-4 text-white">Edit Shipment</h2>
-          <p className="text-gray-300 mb-4">Edit form for <span className="font-mono">{editModal.trackingNumber || editModal.id.slice(0,8)}</span></p>
-          <Button onClick={() => setEditModal(null)} className="bg-[#f8c017] text-black w-full mt-4">Close</Button>
+          <form
+            className="space-y-4"
+            onSubmit={e => {
+              e.preventDefault();
+              const form = e.target as HTMLFormElement;
+              const trackingNumber = (form.elements.namedItem('trackingNumber') as HTMLInputElement).value;
+              const carrierName = (form.elements.namedItem('carrierName') as HTMLInputElement).value;
+              (async () => {
+                try {
+                  const res = await fetch('/api/admin/shipments/update', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      shipmentId: editModal.id,
+                      trackingNumber,
+                      carrierName
+                    })
+                  });
+                  if (!res.ok) throw new Error('Failed to update shipment');
+                  setEditModal(null);
+                  fetchShipments();
+                } catch (err) {
+                  alert('Failed to update shipment');
+                }
+              })();
+            }}
+          >
+            <div>
+              <label className="block text-gray-300 mb-1">Tracking Number</label>
+              <Input
+                name="trackingNumber"
+                defaultValue={editModal.trackingNumber || ''}
+                className="bg-[#232323] border-gray-700 text-white"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-gray-300 mb-1">Carrier Name</label>
+              <Input
+                name="carrierName"
+                defaultValue={editModal.carrierName || ''}
+                className="bg-[#232323] border-gray-700 text-white"
+              />
+            </div>
+            <div className="flex gap-2 mt-4">
+              <Button type="button" onClick={() => setEditModal(null)} variant="outline" className="flex-1">Cancel</Button>
+              <Button type="submit" className="bg-[#f8c017] text-black flex-1">Save</Button>
+            </div>
+          </form>
         </div>
       </div>
     )}
