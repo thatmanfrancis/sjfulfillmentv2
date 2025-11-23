@@ -2,15 +2,35 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  Search, Filter, Download, Eye, Package, Plus,
-  Building, Calendar, DollarSign, Edit, MoreHorizontal,
-  Grid3x3, List, Warehouse, MapPin, Trash2, X
+  Search,
+  Filter,
+  Download,
+  Eye,
+  Package,
+  Plus,
+  Building,
+  Calendar,
+  DollarSign,
+  Edit,
+  MoreHorizontal,
+  Grid3x3,
+  List,
+  Warehouse,
+  MapPin,
+  Trash2,
+  X
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -146,14 +166,8 @@ export default function AdminProductsPage() {
     notes: ''
   });
 
-  // Bulk move state
+  // Selected product IDs for bulk actions
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
-  const [showBulkMoveModal, setShowBulkMoveModal] = useState(false);
-  const [bulkMoveStep, setBulkMoveStep] = useState(1);
-  const [bulkMoveWarehouse, setBulkMoveWarehouse] = useState('');
-  const [bulkMoveQuantities, setBulkMoveQuantities] = useState<{[id: string]: number}>({});
-  const [isBulkMoving, setIsBulkMoving] = useState(false);
-  const [bulkMoveError, setBulkMoveError] = useState('');
 
   // Debounced search effect
   useEffect(() => {
@@ -340,7 +354,7 @@ export default function AdminProductsPage() {
 
   const handleWarehouseTransfer = async () => {
     if (!transferAllocation || !selectedProduct) return;
-
+    
     try {
       const { index, fromWarehouseId } = transferAllocation;
       const { toWarehouseId, transferQuantity, notes } = transferForm;
@@ -456,23 +470,219 @@ export default function AdminProductsPage() {
     }
   };
 
-  // Search bar block
-  <div className="mb-6 flex items-center justify-between">
-    {/* ...search bar and other controls... */}
-  </div>
+  // In product card (grid view)
+  const renderProductCard = (product: Product) => (
+    <Card key={product.id} className="relative bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all group">
+      <div className="absolute top-4 left-4 z-10">
+        <input
+          type="checkbox"
+          checked={selectedProductIds.includes(product.id)}
+          onChange={e => {
+            if (e.target.checked) {
+              setSelectedProductIds(ids => [...ids, product.id]);
+            } else {
+              setSelectedProductIds(ids => ids.filter(id => id !== product.id));
+            }
+          }}
+          className="form-checkbox h-5 w-5 text-[#f8c017] border-gray-600 rounded focus:ring-[#f8c017]"
+        />
+      </div>
+      <CardContent className="p-6 space-y-4">
+        {/* Product Header */}
+        <div className="space-y-2">
+          <div className="flex items-start justify-between">
+            <h3 className="font-semibold text-white text-lg line-clamp-2 group-hover:text-[#f8c017] transition-colors">
+              {product.name}
+            </h3>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-white"
+              onClick={() => router.push(`/admin/products/${product.id}`)}
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Badge className="text-[#f8c017] border-[#f8c017]/20 bg-[#f8c017]/5">
+              Weight: {product.weightKg}kg
+            </Badge>
+            <Badge variant="outline" className="text-gray-400 border-gray-600 text-xs">
+              {product.business.city || 'Location N/A'}
+            </Badge>
+          </div>
+        </div>
 
-  // Move Products button (top, between search bar and cards)
-  {selectedProductIds.length > 0 && (
-    <div className="mb-4 flex justify-center w-full">
-      <Button
-        size="lg"
-        className="bg-[#f8c017] text-black px-8 py-3 shadow-lg"
-        onClick={() => { setShowBulkMoveModal(true); setBulkMoveStep(1); }}
-      >
-        Move Products
-      </Button>
-    </div>
-  )}
+        {/* Product Details */}
+        <div className="space-y-2 text-sm">
+          <div className="flex items-center gap-2 text-gray-400">
+            <Building className="h-4 w-4 shrink-0" />
+            <span className="truncate">{product.business?.name}</span>
+          </div>
+          {product.sku && (
+            <div className="flex items-center gap-2 text-gray-400">
+              <Package className="h-4 w-4 shrink-0" />
+              <span className="truncate">SKU: {product.sku}</span>
+            </div>
+          )}
+          <div className="flex items-center gap-2 text-gray-400">
+            <Warehouse className="h-4 w-4 shrink-0" />
+            <span className="truncate">Available: {product.inventory.available}</span>
+          </div>
+          <div className="flex items-center gap-2 text-gray-400">
+            <MapPin className="h-4 w-4 shrink-0" />
+            <span className="truncate">{product.inventory.warehouses.length} warehouse(s)</span>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center justify-between pt-2">
+          <span className="text-xs text-gray-500">
+            SKU: {product.sku}
+          </span>
+          <div className="flex gap-1">
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-gray-600 text-gray-300 hover:border-[#f8c017] hover:text-[#f8c017] h-8 px-3"
+              onClick={() => router.push(`/admin/products/${product.id}`)}
+            >
+              <Eye className="h-3 w-3 mr-1" />
+              View
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-gray-600 text-gray-300 hover:border-gray-500 h-8 w-8 p-0"
+                >
+                  <MoreHorizontal className="h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-[#1a1a1a] border border-gray-600">
+                <DropdownMenuItem
+                  onClick={() => handleEditProduct(product)}
+                  className="text-gray-300 hover:bg-gray-700 hover:text-white cursor-pointer"
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit Product
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => handleDeleteProduct(product)}
+                  className="text-red-400 hover:bg-red-600/10 hover:text-red-300 cursor-pointer"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Product
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  // In product card (list view)
+  const renderProductListItem = (product: Product) => (
+    <Card key={product.id} className="relative bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
+      <div className="absolute top-4 left-4 z-10">
+        <input
+          type="checkbox"
+          checked={selectedProductIds.includes(product.id)}
+          onChange={e => {
+            if (e.target.checked) {
+              setSelectedProductIds(ids => [...ids, product.id]);
+            } else {
+              setSelectedProductIds(ids => ids.filter(id => id !== product.id));
+            }
+          }}
+          className="form-checkbox h-5 w-5 text-[#f8c017] border-gray-600 rounded focus:ring-[#f8c017]"
+        />
+      </div>
+      <CardContent className="p-6">
+        <div className="flex items-start justify-between">
+          <div className="flex-1 space-y-3">
+            {/* Product Header */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <h3 className="font-semibold text-white text-lg hover:text-[#f8c017] transition-colors cursor-pointer"
+                onClick={() => router.push(`/admin/products/${product.id}`)}>
+                {product.name}
+              </h3>
+              <Badge className="text-[#f8c017] border-[#f8c017]/20 bg-[#f8c017]/5">
+                Weight: {product.weightKg}kg
+              </Badge>
+              <Badge variant="outline" className="text-gray-400 border-gray-600">
+                {product.business.city || 'Location N/A'}
+              </Badge>
+            </div>
+
+            {/* Product Details */}
+            <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
+              <div className="flex items-center gap-2 text-gray-400">
+                <Building className="h-4 w-4" />
+                <span className="text-sm">Merchant: {product.business?.name}</span>
+              </div>
+              {product.sku && (
+                <div className="flex items-center gap-2 text-gray-400">
+                  <Package className="h-4 w-4" />
+                  <span className="text-sm">SKU: {product.sku}</span>
+                </div>
+              )}
+              <div className="flex items-center gap-2 text-gray-400">
+                <Warehouse className="h-4 w-4" />
+                <span className="text-sm">Available: {product.inventory.available}</span>
+              </div>
+              <div className="flex items-center gap-2 text-gray-400">
+                <MapPin className="h-4 w-4" />
+                <span className="text-sm">Warehouses: {product.inventory.warehouses.length}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-gray-600 text-gray-300 hover:border-[#f8c017] hover:text-[#f8c017]"
+              onClick={() => router.push(`/admin/products/${product.id}`)}
+            >
+              <Eye className="h-4 w-4 mr-1" />
+              View
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-gray-600 text-gray-300 hover:border-gray-500"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-[#1a1a1a] border border-gray-600">
+                <DropdownMenuItem
+                  onClick={() => handleEditProduct(product)}
+                  className="text-gray-300 hover:bg-gray-700 hover:text-white cursor-pointer"
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit Product
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => handleDeleteProduct(product)}
+                  className="text-red-400 hover:bg-red-600/10 hover:text-red-300 cursor-pointer"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Product
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   if (loading && !products.length) {
     return (
@@ -661,256 +871,16 @@ export default function AdminProductsPage() {
         </CardContent>
       </Card>
 
-      {/* Move Products button (top, between search bar and cards) */}
-      {selectedProductIds.length > 0 && (
-        <div className="mb-4 flex justify-center w-full">
-          <Button
-            size="lg"
-            className="bg-[#f8c017] text-black px-8 py-3 shadow-lg"
-            onClick={() => { setShowBulkMoveModal(true); setBulkMoveStep(1); }}
-          >
-            Move Products
-          </Button>
-        </div>
-      )}
-
       {/* Products List */}
       {viewMode === 'grid' ? (
         // Grid View
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {products.map((product) => {
-            console.log(`Product:`, product)
-            return (
-              <Card key={product.id} className="relative bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all group">
-                <div className="absolute top-4 left-4 z-10">
-                  <input
-                    type="checkbox"
-                    checked={selectedProductIds.includes(product.id)}
-                    onChange={e => {
-                      if (e.target.checked) {
-                        setSelectedProductIds(ids => [...ids, product.id]);
-                      } else {
-                        setSelectedProductIds(ids => ids.filter(id => id !== product.id));
-                      }
-                    }}
-                    className="form-checkbox h-5 w-5 text-[#f8c017] border-gray-600 rounded focus:ring-[#f8c017]"
-                  />
-                </div>
-                <CardContent className="p-6 space-y-4">
-                  {/* Product Header */}
-                  <div className="space-y-2">
-                    <div className="flex items-start justify-between">
-                      <h3 className="font-semibold text-white text-lg line-clamp-2 group-hover:text-[#f8c017] transition-colors">
-                        {product.name}
-                      </h3>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-white"
-                        onClick={() => router.push(`/admin/products/${product.id}`)}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge className="text-[#f8c017] border-[#f8c017]/20 bg-[#f8c017]/5">
-                        Weight: {product.weightKg}kg
-                      </Badge>
-                      <Badge variant="outline" className="text-gray-400 border-gray-600 text-xs">
-                        {product.business.city || 'Location N/A'}
-                      </Badge>
-                    </div>
-                  </div>
-
-                  {/* Product Details */}
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center gap-2 text-gray-400">
-                      <Building className="h-4 w-4 shrink-0" />
-                      <span className="truncate">{product.business?.name}</span>
-                    </div>
-                    {product.sku && (
-                      <div className="flex items-center gap-2 text-gray-400">
-                        <Package className="h-4 w-4 shrink-0" />
-                        <span className="truncate">SKU: {product.sku}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2 text-gray-400">
-                      <Warehouse className="h-4 w-4 shrink-0" />
-                      <span className="truncate">Available: {product.inventory.available}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-gray-400">
-                      <MapPin className="h-4 w-4 shrink-0" />
-                      <span className="truncate">{product.inventory.warehouses.length} warehouse(s)</span>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center justify-between pt-2">
-                    <span className="text-xs text-gray-500">
-                      SKU: {product.sku}
-                    </span>
-                    <div className="flex gap-1">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-gray-600 text-gray-300 hover:border-[#f8c017] hover:text-[#f8c017] h-8 px-3"
-                        onClick={() => router.push(`/admin/products/${product.id}`)}
-                      >
-                        <Eye className="h-3 w-3 mr-1" />
-                        View
-                      </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-gray-600 text-gray-300 hover:border-gray-500 h-8 w-8 p-0"
-                          >
-                            <MoreHorizontal className="h-3 w-3" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent className="bg-[#1a1a1a] border border-gray-600">
-                          <DropdownMenuItem
-                            onClick={() => handleEditProduct(product)}
-                            className="text-gray-300 hover:bg-gray-700 hover:text-white cursor-pointer"
-                          >
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit Product
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleDeleteProduct(product)}
-                            className="text-red-400 hover:bg-red-600/10 hover:text-red-300 cursor-pointer"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete Product
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })}
+          {products.map((product) => renderProductCard(product))}
         </div>
       ) : (
         // List View  
         <div className="space-y-4">
-          {products.map((product) => (
-            <Card key={product.id} className="relative bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
-              <div className="absolute top-4 left-4 z-10">
-                <input
-                  type="checkbox"
-                  checked={selectedProductIds.includes(product.id)}
-                  onChange={e => {
-                    if (e.target.checked) {
-                      setSelectedProductIds(ids => [...ids, product.id]);
-                    } else {
-                      setSelectedProductIds(ids => ids.filter(id => id !== product.id));
-                    }
-                  }}
-                  className="form-checkbox h-5 w-5 text-[#f8c017] border-gray-600 rounded focus:ring-[#f8c017]"
-                />
-              </div>
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 space-y-3">
-                    {/* Product Header */}
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <h3 className="font-semibold text-white text-lg hover:text-[#f8c017] transition-colors cursor-pointer"
-                        onClick={() => router.push(`/admin/products/${product.id}`)}>
-                        {product.name}
-                      </h3>
-                      <Badge className="text-[#f8c017] border-[#f8c017]/20 bg-[#f8c017]/5">
-                        Weight: {product.weightKg}kg
-                      </Badge>
-                      <Badge variant="outline" className="text-gray-400 border-gray-600">
-                        {product.business.city || 'Location N/A'}
-                      </Badge>
-                    </div>
-
-                    {/* Product Details */}
-                    <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
-                      <div className="flex items-center gap-2 text-gray-400">
-                        <Building className="h-4 w-4" />
-                        <span className="text-sm">Merchant: {product.business?.name}</span>
-                      </div>
-                      {product.sku && (
-                        <div className="flex items-center gap-2 text-gray-400">
-                          <Package className="h-4 w-4" />
-                          <span className="text-sm">SKU: {product.sku}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2 text-gray-400">
-                        <Warehouse className="h-4 w-4" />
-                        <span className="text-sm">Available: {product.inventory.available}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-400">
-                        <MapPin className="h-4 w-4" />
-                        <span className="text-sm">Warehouses: {product.inventory.warehouses.length}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-gray-600 text-gray-300 hover:border-[#f8c017] hover:text-[#f8c017]"
-                      onClick={() => router.push(`/admin/products/${product.id}`)}
-                    >
-                      <Eye className="h-4 w-4 mr-1" />
-                      View
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-gray-600 text-gray-300 hover:border-gray-500"
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent className="bg-[#1a1a1a] border border-gray-600">
-                        <DropdownMenuItem
-                          onClick={() => handleEditProduct(product)}
-                          className="text-gray-300 hover:bg-gray-700 hover:text-white cursor-pointer"
-                        >
-                          <Edit className="h-4 w-4 mr-2" />
-                          Edit Product
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => handleDeleteProduct(product)}
-                          className="text-red-400 hover:bg-red-600/10 hover:text-red-300 cursor-pointer"
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete Product
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-
-                {/* Product card checkbox (top-left) */}
-                <div className="absolute top-4 left-4 z-10">
-                  <input
-                    type="checkbox"
-                    checked={selectedProductIds.includes(product.id)}
-                    onChange={e => {
-                      if (e.target.checked) {
-                        setSelectedProductIds(ids => [...ids, product.id]);
-                      } else {
-                        setSelectedProductIds(ids => ids.filter(id => id !== product.id));
-                      }
-                    }}
-                    className="form-checkbox h-5 w-5 text-[#f8c017] border-gray-600 rounded focus:ring-[#f8c017]"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          {products.map((product) => renderProductListItem(product))}
         </div>
       )}
 
@@ -946,6 +916,19 @@ export default function AdminProductsPage() {
             className="border-gray-600 text-gray-300 hover:border-[#f8c017] hover:text-[#f8c017]"
           >
             Next
+          </Button>
+        </div>
+      )}
+
+      {/* Move Products button (fixed at bottom) */}
+      {selectedProductIds.length > 0 && (
+        <div className="fixed bottom-8 left-0 w-full flex justify-center z-50">
+          <Button
+            size="lg"
+            className="bg-[#f8c017] text-black px-8 py-3 shadow-lg"
+            onClick={() => { setShowBulkMoveModal(true); setBulkMoveStep(1); }}
+          >
+            Move Products
           </Button>
         </div>
       )}
@@ -1101,8 +1084,8 @@ export default function AdminProductsPage() {
                         </SelectTrigger>
                         <SelectContent className="bg-white border border-gray-300">
                           {warehouses.filter(w => w.status === 'ACTIVE').map((warehouse) => (
-                            <SelectItem
-                              key={warehouse.id}
+                            <SelectItem 
+                              key={warehouse.id} 
                               value={warehouse.id}
                               className="text-black hover:bg-gray-100 focus:bg-gray-100 focus:text-black data-highlighted:bg-gray-100 data-highlighted:text-black"
                             >
@@ -1291,8 +1274,8 @@ export default function AdminProductsPage() {
                       {warehouses
                         .filter(w => w.status === 'ACTIVE' && w.id !== transferAllocation.fromWarehouseId)
                         .map((warehouse) => (
-                          <SelectItem
-                            key={warehouse.id}
+                          <SelectItem 
+                            key={warehouse.id} 
                             value={warehouse.id}
                             className="text-black hover:bg-gray-100 focus:bg-gray-100 focus:text-black data-highlighted:bg-gray-100 data-highlighted:text-black"
                           >
@@ -1344,126 +1327,6 @@ export default function AdminProductsPage() {
                 </Button>
               </div>
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Bulk Move Modal (step 1) */}
-      <Dialog open={showBulkMoveModal} onOpenChange={setShowBulkMoveModal}>
-        <DialogContent className="bg-[#1a1a1a] border border-gray-600 text-white max-w-lg">
-          {bulkMoveStep === 1 && (
-            <>
-              <DialogHeader>
-                <DialogTitle>Move Products to Warehouse</DialogTitle>
-                <DialogDescription>Select warehouse and quantity for each product.</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <Label className="text-gray-300">Warehouse</Label>
-                <select
-                  value={bulkMoveWarehouse}
-                  onChange={e => setBulkMoveWarehouse(e.target.value)}
-                  className="w-full h-10 px-3 border border-gray-600 rounded-md bg-[#1a1a1a] text-white focus:border-[#f8c017] focus:ring-[#f8c017]"
-                >
-                  <option value="">Select warehouse</option>
-                  {warehouses.map(w => (
-                    <option key={w.id} value={w.id}>{w.name} ({w.region})</option>
-                  ))}
-                </select>
-                <div className="space-y-2">
-                  {selectedProductIds.map(pid => {
-                    const product = products.find(p => p.id === pid);
-                    return product ? (
-                      <div key={pid} className="flex items-center gap-2">
-                        <span className="text-gray-300">{product.name}</span>
-                        <Input
-                          type="number"
-                          min={1}
-                          max={product.inventory.available}
-                          value={bulkMoveQuantities[pid] || ''}
-                          onChange={e => setBulkMoveQuantities(q => ({ ...q, [pid]: Number(e.target.value) }))}
-                          className="w-24 bg-[#181818] border-gray-600 text-white"
-                          placeholder="Qty"
-                        />
-                        <span className="text-xs text-gray-500">Available: {product.inventory.available}</span>
-                      </div>
-                    ) : null;
-                  })}
-                </div>
-                {bulkMoveError && <div className="text-red-500 text-sm mt-2">{bulkMoveError}</div>}
-                <div className="flex justify-end gap-3 pt-4">
-                  <Button variant="outline" onClick={() => setShowBulkMoveModal(false)} className="border-gray-600 text-gray-300">Cancel</Button>
-                  <Button
-                    onClick={() => {
-                      if (!bulkMoveWarehouse || selectedProductIds.some(pid => !bulkMoveQuantities[pid] || bulkMoveQuantities[pid] < 1)) {
-                        setBulkMoveError('Please select warehouse and enter valid quantities for all products.');
-                        return;
-                      }
-                      setBulkMoveError('');
-                      setBulkMoveStep(2);
-                    }}
-                    className="bg-[#f8c017] text-black"
-                  >Continue</Button>
-                </div>
-              </div>
-            </>
-          )}
-          {bulkMoveStep === 2 && (
-            <>
-              <DialogHeader>
-                <DialogTitle>Confirm Bulk Move</DialogTitle>
-                <DialogDescription>Are you sure you want to move these products?</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="bg-[#181818] p-4 rounded border border-gray-700">
-                  <div className="text-gray-300 mb-2">Warehouse: <span className="font-bold">{warehouses.find(w => w.id === bulkMoveWarehouse)?.name}</span></div>
-                  {selectedProductIds.map(pid => {
-                    const product = products.find(p => p.id === pid);
-                    return product ? (
-                      <div key={pid} className="flex items-center justify-between text-sm text-gray-400">
-                        <span>{product.name}</span>
-                        <span>Qty: {bulkMoveQuantities[pid]}</span>
-                      </div>
-                    ) : null;
-                  })}
-                </div>
-                {bulkMoveError && <div className="text-red-500 text-sm mt-2">{bulkMoveError}</div>}
-                <div className="flex justify-end gap-3 pt-4">
-                  <Button variant="outline" onClick={() => setShowBulkMoveModal(false)} className="border-gray-600 text-gray-300">Cancel</Button>
-                  <Button
-                    onClick={async () => {
-                      setIsBulkMoving(true);
-                      setBulkMoveError('');
-                      try {
-                        // Build moves array for backend
-                        const moves = selectedProductIds.map(pid => {
-                          const product = products.find(p => p.id === pid);
-                          // Find source warehouse for each product (first with available stock)
-                          const fromWarehouse = product?.inventory.warehouses.find(w => w.quantity > 0);
-                          return {
-                            productId: pid,
-                            fromWarehouseId: fromWarehouse?.warehouseId,
-                            toWarehouseId: bulkMoveWarehouse,
-                            quantity: bulkMoveQuantities[pid]
-                          };
-                        });
-                        await post('/api/admin/products/bulk-move', { moves });
-                        setShowBulkMoveModal(false);
-                        setSelectedProductIds([]);
-                        setBulkMoveQuantities({});
-                        toast.success('Products moved successfully!');
-                        fetchProducts();
-                      } catch (err) {
-                        setBulkMoveError('Failed to move products. Please try again.');
-                      } finally {
-                        setIsBulkMoving(false);
-                      }
-                    }}
-                    disabled={isBulkMoving}
-                    className="bg-[#f8c017] text-black"
-                  >{isBulkMoving ? 'Moving...' : 'Proceed'}</Button>
-                </div>
-              </div>
-            </>
           )}
         </DialogContent>
       </Dialog>

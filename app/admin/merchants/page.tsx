@@ -54,8 +54,15 @@ export default function AdminMerchantsPage() {
   const [showMerchantDetail, setShowMerchantDetail] = useState(false);
 
   useEffect(() => {
-    fetchMerchants();
     fetchStats();
+  }, [statusFilter, page]);
+
+  // Debounced search effect
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      fetchMerchants();
+    }, 400);
+    return () => clearTimeout(handler);
   }, [searchTerm, statusFilter, page]);
 
   const fetchMerchants = async () => {

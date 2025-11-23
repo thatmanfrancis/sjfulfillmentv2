@@ -254,7 +254,14 @@ export default function MerchantProductsPage() {
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center gap-2 text-gray-400">
                     <Warehouse className="h-4 w-4 shrink-0" />
-                    <span className="truncate">Available: {product.availableStock ?? '-'}</span>
+                    <span className="truncate">
+                      Warehouses: {product.StockAllocation ? product.StockAllocation.length : 0}
+                    </span>
+                    {product.StockAllocation && product.StockAllocation.length > 0 && (
+                      <span className="ml-2 text-xs text-gray-500">
+                        ({product.StockAllocation.map(a => a.Warehouse.name).join(', ')}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 text-gray-400">
                     <Package className="h-4 w-4 shrink-0" />
@@ -306,7 +313,14 @@ export default function MerchantProductsPage() {
                     <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
                       <div className="flex items-center gap-2 text-gray-400">
                         <Warehouse className="h-4 w-4" />
-                        <span className="text-sm">Available: {product.availableStock ?? '-'}</span>
+                        <span className="text-sm">
+                          Warehouses: {product.StockAllocation ? product.StockAllocation.length : 0}
+                        </span>
+                        {product.StockAllocation && product.StockAllocation.length > 0 && (
+                          <span className="ml-2 text-xs text-gray-500">
+                            ({product.StockAllocation.map(a => a.Warehouse.name).join(', ')}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 text-gray-400">
                         <Package className="h-4 w-4" />

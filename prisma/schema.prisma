@@ -138,6 +138,7 @@ model Order {
   totalAmount            Float
   fulfillmentWarehouseId String?
   assignedLogisticsId    String?
+  notes                  String?
   User                   User?       @relation(fields: [assignedLogisticsId], references: [id])
   Warehouse              Warehouse?  @relation(fields: [fulfillmentWarehouseId], references: [id])
   Business               Business    @relation(fields: [merchantId], references: [id])
@@ -275,6 +276,7 @@ model Shipment {
   labelUrl         String?
   deliveryAttempts Int      @default(1)
   lastStatusUpdate DateTime
+  notes            String?
   Order            Order    @relation(fields: [orderId], references: [id])
 }
 

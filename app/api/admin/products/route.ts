@@ -224,225 +224,109 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Bulk upload support: accept array or single product
     const body = await request.json();
-    console.log('🔍 Product creation request body:', JSON.stringify(body, null, 2));
-    
-    const validatedData = createProductSchema.parse(body);
-    console.log('✅ Validation passed:', JSON.stringify(validatedData, null, 2));
-
-    // Generate SKU if not provided
-    let sku = validatedData.sku;
-    if (!sku) {
-      const productName = validatedData.name.trim();
-      const firstLetter = productName.charAt(0).toUpperCase();
-      const lastLetter = productName.charAt(productName.length - 1).toUpperCase();
-      
-      // Find the next available number for this pattern
-      let counter = 1;
-      let generatedSku: string;
-      
-      do {
-        const paddedCounter = counter.toString().padStart(2, '0');
-        generatedSku = `SKU-${firstLetter}${lastLetter}_${paddedCounter}`;
-        
-        // Check if this SKU exists for any business
-        const existingSku = await prisma.product.findFirst({
-          where: { sku: generatedSku }
-        });
-        
-        if (!existingSku) {
-          sku = generatedSku;
-          break;
-        }
-        
-        counter++;
-      } while (counter <= 999); // Prevent infinite loop
-      
-      if (!sku) {
-        return NextResponse.json(
-          { 
-            success: false,
-            error: "Could not generate unique SKU",
-            message: "Unable to generate a unique SKU. Please provide a custom SKU."
-          },
-          { status: 400 }
-        );
-      }
-      
-      console.log('🏷️ Generated SKU:', sku);
-    } else {
-      // If SKU is provided, ensure it's uppercase and formatted properly
-      sku = sku.trim().toUpperCase();
-    }
-
-    // Check if SKU already exists (for any business)
-    const existingProduct = await prisma.product.findFirst({
-      where: { sku: sku },
-    });
-
-    if (existingProduct) {
-      return NextResponse.json(
-        { 
-          success: false,
-          error: "SKU already exists",
-          message: `A product with SKU "${sku}" already exists. Please use a different SKU.`
-        },
-        { status: 409 }
-      );
-    }
-
-    // Verify business exists and is active
-    const business = await prisma.business.findUnique({
-      where: { id: validatedData.businessId },
-      select: { id: true, name: true, isActive: true },
-    });
-
-    if (!business) {
-      return NextResponse.json(
-        { error: "Business not found" },
-        { status: 404 }
-      );
-    }
-
-    if (!business.isActive) {
-      return NextResponse.json(
-        { error: "Cannot add products to inactive business" },
-        { status: 400 }
-      );
-    }
-
-    // Create the product
-    const newProduct = await prisma.product.create({
-      data: {
-        id: `prod_${Date.now()}_${Math.random().toString(36).substring(2)}`,
-        name: validatedData.name,
-        sku: sku, // Use the processed SKU (generated or provided)
-        weightKg: validatedData.weightKg,
-        businessId: validatedData.businessId,
-        dimensions: validatedData.dimensions || {},
-        ...(validatedData.price !== undefined ? { price: validatedData.price } : {}),
-      },
-      include: {
-        Business: {
-          select: {
-            id: true,
-            name: true,
-            city: true,
-            state: true,
-            country: true,
-            contactPhone: true
-          }
-        }
-      }
-    });
-
-    // Create stock allocations if provided
-    if (validatedData.stockAllocations && validatedData.stockAllocations.length > 0) {
-      // Handle default warehouse creation/assignment
-      const processedAllocations = [];
-      
-      for (const allocation of validatedData.stockAllocations) {
-        let warehouseId = allocation.warehouseId;
-        
-        // Check if this is a default warehouse request
-        if (warehouseId === 'DEFAULT_WAREHOUSE') {
-          // Look for existing default warehouse
-          let defaultWarehouse = await prisma.warehouse.findFirst({
-            where: { 
-              name: 'Default',
-              status: 'ACTIVE'
+    const products = Array.isArray(body) ? body : [body];
+    const results = [];
+    for (const prod of products) {
+      try {
+        const validatedData = createProductSchema.parse(prod);
+        // Generate SKU if not provided
+        let sku = validatedData.sku;
+        if (!sku) {
+          const productName = validatedData.name.trim();
+          const firstLetter = productName.charAt(0).toUpperCase();
+          const lastLetter = productName.charAt(productName.length - 1).toUpperCase();
+          let counter = 1;
+          let generatedSku;
+          do {
+            const paddedCounter = counter.toString().padStart(2, '0');
+            generatedSku = `SKU-${firstLetter}${lastLetter}_${paddedCounter}`;
+            const existingSku = await prisma.product.findFirst({ where: { sku: generatedSku } });
+            if (!existingSku) {
+              sku = generatedSku;
+              break;
             }
-          });
-          
-          // Create default warehouse if it doesn't exist
-          if (!defaultWarehouse) {
-            defaultWarehouse = await prisma.warehouse.create({
-              data: {
-                id: `warehouse_${Date.now()}_default`,
-                name: 'Default',
-                code: 'DEFAULT',
-                region: 'Main',
-                status: 'ACTIVE',
-                address: 'Auto-generated default warehouse',
-                city: 'Default Location',
-                state: 'Default State',
-                country: 'Default Country',
-                updatedAt: new Date()
-              }
-            });
-            console.log('🏭 Created default warehouse:', defaultWarehouse.id);
-          }
-          
-          warehouseId = defaultWarehouse.id;
+            counter++;
+          } while (counter <= 999);
+          if (!sku) throw new Error("Could not generate unique SKU");
+        } else {
+          sku = sku.trim().toUpperCase();
         }
-        
-        processedAllocations.push({
-          ...allocation,
-          warehouseId
+        // Check if SKU already exists
+        const existingProduct = await prisma.product.findFirst({ where: { sku } });
+        if (existingProduct) throw new Error(`SKU already exists: ${sku}`);
+        // Verify business
+        const business = await prisma.business.findUnique({ where: { id: validatedData.businessId }, select: { id: true, name: true, isActive: true } });
+        if (!business) throw new Error("Business not found");
+        if (!business.isActive) throw new Error("Cannot add products to inactive business");
+        // Create product
+        const newProduct = await prisma.product.create({
+          data: {
+            id: `prod_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+            name: validatedData.name,
+            sku,
+            weightKg: validatedData.weightKg,
+            businessId: validatedData.businessId,
+            dimensions: validatedData.dimensions || {},
+            ...(validatedData.price !== undefined ? { price: validatedData.price } : {}),
+          },
+          include: {
+            Business: { select: { id: true, name: true, city: true, state: true, country: true, contactPhone: true } }
+          }
         });
+        // Stock allocations
+        if (validatedData.stockAllocations && validatedData.stockAllocations.length > 0) {
+          const processedAllocations = [];
+          for (const allocation of validatedData.stockAllocations) {
+            let warehouseId = allocation.warehouseId;
+            // If warehouseId is not found, or warehouse is not active, fallback to Default
+            let warehouse = await prisma.warehouse.findUnique({ where: { id: warehouseId } });
+            if (!warehouse || warehouse.status !== 'ACTIVE') {
+              // Try to resolve by name
+              warehouse = await prisma.warehouse.findFirst({ where: { name: { equals: warehouseId, mode: 'insensitive' }, status: 'ACTIVE' } });
+              if (!warehouse) {
+                warehouse = await getOrCreateDefaultWarehouse();
+              }
+              warehouseId = warehouse.id;
+            }
+            processedAllocations.push({ ...allocation, warehouseId });
+          }
+          // Create stock allocations
+          const stockAllocations = processedAllocations.map(sa => ({
+            id: `stock_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+            productId: newProduct.id,
+            warehouseId: sa.warehouseId,
+            allocatedQuantity: sa.allocatedQuantity,
+            safetyStock: sa.safetyStock,
+          }));
+          await prisma.stockAllocation.createMany({ data: stockAllocations });
+        }
+        // Audit log
+        await prisma.auditLog.create({
+          data: {
+            id: `audit_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+            entityType: 'Product',
+            entityId: newProduct.id,
+            action: 'CREATED',
+            details: {
+              productName: newProduct.name,
+              sku: newProduct.sku,
+              businessId: newProduct.businessId,
+              businessName: business.name
+            },
+            changedById: session.userId
+          }
+        });
+        results.push({ success: true, product: newProduct });
+      } catch (err: any) {
+        results.push({ success: false, error: err.message });
       }
-      
-      // Verify all final warehouses exist
-      const warehouseIds = processedAllocations.map(sa => sa.warehouseId);
-      const warehouses = await prisma.warehouse.findMany({
-        where: { id: { in: warehouseIds } },
-        select: { id: true, name: true }
-      });
-
-      if (warehouses.length !== warehouseIds.length) {
-        // Clean up the created product if warehouse validation fails
-        await prisma.product.delete({ where: { id: newProduct.id } });
-        return NextResponse.json(
-          { error: "One or more warehouses not found after processing" },
-          { status: 400 }
-        );
-      }
-
-      // Create stock allocations with processed warehouse IDs
-      const stockAllocations = processedAllocations.map(sa => ({
-        id: `stock_${Date.now()}_${Math.random().toString(36).substring(2)}`,
-        productId: newProduct.id,
-        warehouseId: sa.warehouseId,
-        allocatedQuantity: sa.allocatedQuantity,
-        safetyStock: sa.safetyStock,
-      }));
-
-      await prisma.stockAllocation.createMany({
-        data: stockAllocations
-      });
-      
-      console.log('✅ Created stock allocations:', stockAllocations.length);
     }
-
-    // Create audit log
-    await prisma.auditLog.create({
-      data: {
-        id: `audit_${Date.now()}_${Math.random().toString(36).substring(2)}`,
-        entityType: 'Product',
-        entityId: newProduct.id,
-        action: 'CREATED',
-        details: {
-          productName: newProduct.name,
-          sku: newProduct.sku,
-          businessId: newProduct.businessId,
-          businessName: business.name
-        },
-        changedById: session.userId
-      }
-    });
-
     return NextResponse.json({
       success: true,
-      product: {
-        id: newProduct.id,
-        name: newProduct.name,
-        sku: newProduct.sku,
-        weightKg: newProduct.weightKg,
-        dimensions: newProduct.dimensions,
-        businessId: newProduct.businessId,
-        business: newProduct.Business,
-      },
-      message: "Product created successfully"
+      results,
+      message: `${results.filter(r => r.success).length} products created, ${results.filter(r => !r.success).length} errors.`
     }, { status: 201 });
 
   } catch (error) {

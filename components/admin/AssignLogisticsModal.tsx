@@ -17,6 +17,7 @@ function clone(obj: any) {
 }
 
 export default function AssignLogisticsModal({ open, onClose, orderId, onAssigned }: AssignLogisticsModalProps) {
+    const [note, setNote] = useState('');
   const [logistics, setLogistics] = useState<any[]>([]);
   const [selected, setSelected] = useState<string>('');
   const [loading, setLoading] = useState(false);
@@ -121,7 +122,8 @@ export default function AssignLogisticsModal({ open, onClose, orderId, onAssigne
           warehousePicks: orderItems.map(item => ({
             productId: item.productId,
             picks: (picks[item.productId] || []).filter((p: any) => p.quantity > 0)
-          }))
+          })),
+          note: note.trim()
         })
       });
       if (!res.ok) throw new Error('Failed to assign logistics');
@@ -186,6 +188,15 @@ export default function AssignLogisticsModal({ open, onClose, orderId, onAssigne
           ))}
         </div>
         {error && <div className="text-red-500 text-sm mb-2">{error}</div>}
+        <div className="mb-4">
+          <label className="block text-white font-semibold mb-1">Add Note (optional)</label>
+          <textarea
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            className="w-full min-h-[60px] px-3 py-2 rounded bg-[#23232b] border border-gray-600 text-white focus:border-[#f8c017] focus:ring-[#f8c017]"
+            placeholder="Add any instructions or notes for logistics..."
+          />
+        </div>
         <Button onClick={handleAssign} disabled={loading || !selected || !validatePicks()} className="w-full bg-[#f8c017] text-black font-semibold hover:bg-[#e6b800]">
           {loading ? 'Assigning...' : 'Assign'}
         </Button>

@@ -416,6 +416,13 @@ export default function AdminShipmentsPage() {
                           </span>
                         ))}
                       </div>
+                      {/* Notes Section */}
+                      {(shipment.notes || shipment.order.notes) && (
+                        <div className="mt-2 p-2 rounded bg-[#23232b] border border-[#f8c017]/30">
+                          <span className="font-semibold text-[#f8c017]">Note:</span>
+                          <span className="text-white ml-2">{shipment.notes || shipment.order.notes}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">

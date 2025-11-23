@@ -9,7 +9,7 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ orderId: 
       return Response.json({ error: 'Unauthorized' }, { status: 403 });
     }
     const body = await _req.json();
-    const { logisticsId, warehousePicks } = body;
+    const { logisticsId, warehousePicks, note } = body;
     if (!logisticsId) {
       return Response.json({ error: 'Missing logisticsId' }, { status: 400 });
     }
@@ -86,6 +86,7 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ orderId: 
       data: {
         assignedLogisticsId: logisticsId,
         status: 'PICKED_UP',
+        notes: typeof note === 'string' ? note.trim() : undefined,
       },
     });
 
@@ -97,7 +98,14 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ orderId: 
           id: (globalThis.crypto ?? require('crypto')).randomUUID(),
           Order: { connect: { id: orderId } },
           lastStatusUpdate: new Date(),
+          notes: typeof note === 'string' ? note.trim() : undefined,
         },
+      });
+    } else if (typeof note === 'string' && note.trim()) {
+      // If shipment exists, update its notes
+      await prisma.shipment.update({
+        where: { orderId },
+        data: { notes: note.trim() }
       });
     }
 

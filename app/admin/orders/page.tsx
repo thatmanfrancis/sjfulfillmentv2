@@ -59,6 +59,37 @@ interface OrderStats {
 
 export default function AdminOrdersPage() {
   // Edit/Cancel state
+  // Bulk status update state
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [bulkStatus, setBulkStatus] = useState('');
+  const [bulkStatusLoading, setBulkStatusLoading] = useState(false);
+  const [bulkStatusError, setBulkStatusError] = useState('');
+
+  // Bulk status update handler
+  const handleBulkStatusUpdate = async () => {
+    if (!bulkStatus || selectedOrderIds.length === 0) return;
+    setBulkStatusLoading(true);
+    setBulkStatusError('');
+    try {
+      const res = await fetch('/api/admin/orders/bulk-update-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds: selectedOrderIds, status: bulkStatus })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Bulk update failed');
+      toast.success('Order statuses updated');
+      setSelectedOrderIds([]);
+      setBulkStatus('');
+      fetchOrders();
+    } catch (err) {
+      const errorMsg = (err instanceof Error && err.message) ? err.message : String(err);
+      setBulkStatusError(errorMsg || 'Bulk update failed');
+      toast.error(errorMsg || 'Bulk update failed');
+    } finally {
+      setBulkStatusLoading(false);
+    }
+  };
   const [showEditOrderModal, setShowEditOrderModal] = useState(false);
   const [showCancelOrderModal, setShowCancelOrderModal] = useState(false);
   const [editOrderData, setEditOrderData] = useState<any>(null);
@@ -337,6 +368,47 @@ export default function AdminOrdersPage() {
 
   return (
     <div className="space-y-6 bg-black min-h-screen p-6">
+      {/* Bulk Status Bar */}
+      {selectedOrderIds.length > 0 && (
+        <div className="fixed top-0 left-0 w-full z-40 bg-[#18181b] border-b-2 border-[#f8c017] shadow-lg flex items-center justify-between px-8 py-4">
+          <div className="flex items-center gap-4">
+            <span className="text-lg font-bold text-[#f8c017]">Bulk Update</span>
+            <span className="text-gray-300">{selectedOrderIds.length} order(s) selected</span>
+            <select
+              value={bulkStatus}
+              onChange={e => setBulkStatus(e.target.value)}
+              className="h-10 px-3 border border-gray-600 rounded-md bg-[#23232b] text-white focus:border-[#f8c017] focus:ring-[#f8c017]"
+            >
+              <option value="">Select Status...</option>
+              <option value="NEW">New</option>
+              <option value="AWAITING_ALLOC">Awaiting Allocation</option>
+              <option value="DISPATCHED">Dispatched</option>
+              <option value="PICKED_UP">Picked Up</option>
+              <option value="DELIVERING">Delivering</option>
+              <option value="DELIVERED">Delivered</option>
+              <option value="RETURNED">Returned</option>
+              <option value="CANCELED">Canceled</option>
+              <option value="ON_HOLD">On Hold</option>
+            </select>
+            <Button
+              className="bg-[#f8c017] text-black font-bold hover:bg-[#f8c017]/80"
+              disabled={bulkStatusLoading || !bulkStatus}
+              onClick={handleBulkStatusUpdate}
+            >
+              {bulkStatusLoading ? 'Updating...' : 'Update Status'}
+            </Button>
+            <Button
+              variant="outline"
+              className="border-gray-600 text-gray-300 hover:border-[#f8c017] hover:text-[#f8c017]"
+              onClick={() => { setSelectedOrderIds([]); setBulkStatus(''); }}
+              disabled={bulkStatusLoading}
+            >
+              Cancel
+            </Button>
+          </div>
+          {bulkStatusError && <span className="text-red-500 ml-4">{bulkStatusError}</span>}
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -636,9 +708,25 @@ export default function AdminOrdersPage() {
             const statusInfo = getStatusInfo(order.status);
             const isCompleted = ["DELIVERED", "RETURNED", "CANCELED"].includes(order.status);
             const isAssigned = !!order.assignedLogistics;
+            const checked = selectedOrderIds.includes(order.id);
             return (
               <Card key={order.id} className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all flex flex-col justify-between h-full">
                 <CardContent className="p-6 flex flex-col h-full">
+                  <div className="flex items-center gap-2 mb-2">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={e => {
+                        if (e.target.checked) {
+                          setSelectedOrderIds(ids => [...ids, order.id]);
+                        } else {
+                          setSelectedOrderIds(ids => ids.filter(id => id !== order.id));
+                        }
+                      }}
+                      className="accent-[#f8c017] h-4 w-4"
+                      aria-label="Select order for bulk update"
+                    />
+                  </div>
                   <div className="flex-1 space-y-3">
                     {/* Order Header */}
                     <div className="flex items-center gap-3 flex-wrap">
@@ -754,10 +842,26 @@ export default function AdminOrdersPage() {
             const statusInfo = getStatusInfo(order.status);
             const isCompleted = ["DELIVERED", "RETURNED", "CANCELED"].includes(order.status);
             const isAssigned = !!order.assignedLogistics;
+            const checked = selectedOrderIds.includes(order.id);
             return (
               <Card key={order.id} className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between">
+                    <div className="flex flex-col items-start mr-4">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={e => {
+                          if (e.target.checked) {
+                            setSelectedOrderIds(ids => [...ids, order.id]);
+                          } else {
+                            setSelectedOrderIds(ids => ids.filter(id => id !== order.id));
+                          }
+                        }}
+                        className="accent-[#f8c017] h-4 w-4 mb-2"
+                        aria-label="Select order for bulk update"
+                      />
+                    </div>
                     <div className="flex-1 space-y-3">
                       {/* Order Header */}
                       <div className="flex items-center gap-3 flex-wrap">
