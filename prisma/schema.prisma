@@ -65,6 +65,7 @@ model Invoice {
   receivingFees   Float         @default(0)
   otherFees       Float         @default(0)
   amountPaid      Float         @default(0)
+  paymentDate     DateTime?
   Business        Business      @relation(fields: [merchantId], references: [id])
 
   @@index([merchantId])
@@ -144,6 +145,7 @@ model Order {
   Business               Business    @relation(fields: [merchantId], references: [id])
   OrderItem              OrderItem[]
   Shipment               Shipment?
+  OrderWarehousePick     OrderWarehousePick[]
 
   @@index([merchantId])
   @@index([status])
@@ -189,6 +191,7 @@ model Product {
   ProductImage    ProductImage[]
   StockAllocation StockAllocation[]
   StockTransfer   StockTransfer[]
+  OrderWarehousePick     OrderWarehousePick[]
 
   @@unique([businessId, sku])
 }
@@ -374,6 +377,23 @@ model VerificationToken {
   @@index([token])
   @@index([userId])
 }
+model OrderWarehousePick {
+  id         String   @id @default(uuid())
+  orderId    String
+  productId  String
+  warehouseId String
+  quantity   Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  Order      Order    @relation(fields: [orderId], references: [id])
+  Product    Product  @relation(fields: [productId], references: [id])
+  Warehouse  Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+  @@index([warehouseId])
+}
 
 model Warehouse {
   id                                                     String            @id
@@ -400,6 +420,7 @@ model Warehouse {
   StockAllocation                                        StockAllocation[]
   StockTransfer_StockTransfer_fromWarehouseIdToWarehouse StockTransfer[]   @relation("StockTransfer_fromWarehouseIdToWarehouse")
   StockTransfer_StockTransfer_toWarehouseIdToWarehouse   StockTransfer[]   @relation("StockTransfer_toWarehouseIdToWarehouse")
+  OrderWarehousePick     OrderWarehousePick[]
 }
 
 enum InvoiceStatus {

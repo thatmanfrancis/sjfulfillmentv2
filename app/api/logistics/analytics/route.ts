@@ -55,8 +55,13 @@ export async function GET(request: NextRequest) {
       include: {
         Business: { select: { name: true } },
         Warehouse: { select: { name: true, region: true } },
-        OrderItem: true,
-        Shipment: { select: { id: true } }
+        OrderItem: { include: { Product: true } },
+        Shipment: { select: { id: true } },
+        OrderWarehousePick: {
+          include: {
+            Warehouse: { select: { name: true, region: true } }
+          }
+        }
       }
     });
 

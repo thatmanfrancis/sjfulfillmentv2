@@ -73,8 +73,22 @@ export function MerchantSidebar() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const pathname = usePathname();
 
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
+
+  const fetchNotifications = async () => {
+    try {
+      const data = await get('/api/notifications?limit=0');
+      const count = (data as { unreadCount?: number })?.unreadCount ?? 0;
+      setUnreadCount(count);
+    } catch (error) {
+      setUnreadCount(0);
+    }
+  };
   useEffect(() => {
     fetchUserProfile();
   }, []);
@@ -141,6 +155,19 @@ export function MerchantSidebar() {
                 Merchant Portal
               </span>
             </div>
+          </div>
+          {/* Notification Bell Icon */}
+          <div className="relative mr-2">
+            <Button variant="ghost" size="icon" className="relative p-0 h-8 w-8" asChild>
+              <Link href="/merchant/notifications">
+                <Bell className="h-5 w-5 text-[#f8c017]" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full flex items-center justify-center text-xs bg-[#f8c017] text-black font-bold">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </Link>
+            </Button>
           </div>
           {/* Always show trigger, but style differently when collapsed */}
           <SidebarTrigger className="text-white hover:bg-gray-800 hover:text-[#f8c017] transition-colors duration-200 group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:top-2 group-data-[collapsible=icon]:right-2 group-data-[collapsible=icon]:z-10" />
@@ -266,3 +293,4 @@ export function MerchantSidebar() {
     </Sidebar>
   );
 }
+// ...existing code...

@@ -60,7 +60,7 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ orderId: 
       }
     }
 
-    // Decrement stock allocations
+    // Decrement stock allocations and save warehouse picks
     for (const item of order.OrderItem) {
       const pick = warehousePicks.find((wp: any) => wp.productId === item.productId);
       for (const p of pick.picks || []) {
@@ -77,6 +77,19 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ orderId: 
             }
           }
         });
+      }
+      // Save all picks for this product in one go for logistics visibility
+      if (pick && Array.isArray(pick.picks)) {
+        for (const p of pick.picks) {
+          await prisma.orderWarehousePick.create({
+            data: {
+              orderId,
+              productId: item.productId,
+              warehouseId: p.warehouseId,
+              quantity: p.quantity
+            }
+          });
+        }
       }
     }
 

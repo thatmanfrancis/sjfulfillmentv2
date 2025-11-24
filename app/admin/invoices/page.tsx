@@ -10,32 +10,26 @@ import {
   Calendar, Building, Mail, Clock, CheckCircle, XCircle, 
   AlertCircle, Plus, MoreHorizontal 
 } from 'lucide-react';
-import { get } from '@/lib/api';
+import { get, patch } from '@/lib/api';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
 interface Invoice {
   id: string;
-  invoiceNumber: string;
-  businessName: string;
-  businessEmail: string;
-  businessId: string;
+  merchantId: string;
+  merchantName?: string;
+  billingPeriod: string;
   issueDate: string;
   dueDate: string;
-  amount: number;
-  tax: number;
-  totalAmount: number;
-  status: 'PENDING' | 'PAID' | 'OVERDUE' | 'CANCELLED' | 'PROCESSING';
-  items: Array<{
-    id: string;
-    description: string;
-    quantity: number;
-    unitPrice: number;
-    total: number;
-  }>;
-  paymentMethod?: string;
-  paidDate?: string;
-  notes?: string;
+  totalDue: number;
+  status: 'PENDING' | 'PAID' | 'OVERDUE' | 'CANCELLED' | 'PROCESSING' | 'ISSUED' | 'DRAFT';
+  paymentDate?: string;
+  amountPaid?: number;
+  fulfillmentFees?: number;
+  storageCharges?: number;
+  receivingFees?: number;
+  otherFees?: number;
+  Business?: { id: string; name: string };
   createdAt: string;
-  updatedAt: string;
 }
 
 interface InvoiceStats {
@@ -55,6 +49,8 @@ export default function AdminInvoicesPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     fetchInvoices();
@@ -162,6 +158,18 @@ export default function AdminInvoicesPage() {
     });
   };
 
+  const handleSelectInvoice = (invoice: Invoice) => {
+    setSelectedInvoice(invoice);
+    setShowModal(true);
+  };
+
+  const handleStatusUpdate = async (status: string) => {
+    if (!selectedInvoice) return;
+    await patch(`/api/admin/invoices`, { invoiceId: selectedInvoice.id, status });
+    setShowModal(false);
+    fetchInvoices();
+  };
+
   if (loading && !invoices.length) {
     return (
       <div className="space-y-6 bg-[#1a1a1a] min-h-screen p-6">
@@ -187,267 +195,69 @@ export default function AdminInvoicesPage() {
   }
 
   return (
-    <div className="space-y-6 bg-[#1a1a1a] min-h-screen p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Invoices Management</h1>
-          <p className="text-gray-400 mt-1">
-            Manage billing and payment tracking for all merchants
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button className="bg-[#f8c017] text-black hover:bg-[#f8c017]/90">
-            <Plus className="h-4 w-4 mr-2" />
-            Create Invoice
-          </Button>
-          <Button variant="outline" className="border-gray-600 text-gray-300 hover:border-[#f8c017] hover:text-[#f8c017]">
-            <Filter className="h-4 w-4 mr-2" />
-            Advanced Filters
-          </Button>
-          <Button className="bg-[#f8c017] text-black hover:bg-[#f8c017]/90">
-            <Download className="h-4 w-4 mr-2" />
-            Export Invoices
-          </Button>
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
-        <Card className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-400">Total Invoices</CardTitle>
-            <div className="p-2 bg-[#f8c017]/10 rounded-lg">
-              <FileText className="h-4 w-4 text-[#f8c017]" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-white">{stats?.totalInvoices || 0}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-400">Total Amount</CardTitle>
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <DollarSign className="h-4 w-4 text-blue-600" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold text-white">{formatCurrency(stats?.totalAmount || 0)}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-400">Paid</CardTitle>
-            <div className="p-2 bg-emerald-100 rounded-lg">
-              <CheckCircle className="h-4 w-4 text-emerald-600" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold text-white">{formatCurrency(stats?.paidAmount || 0)}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-400">Pending</CardTitle>
-            <div className="p-2 bg-yellow-100 rounded-lg">
-              <Clock className="h-4 w-4 text-yellow-600" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold text-white">{formatCurrency(stats?.pendingAmount || 0)}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-400">Overdue</CardTitle>
-            <div className="p-2 bg-red-100 rounded-lg">
-              <AlertCircle className="h-4 w-4 text-red-600" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold text-white">{formatCurrency(stats?.overdueAmount || 0)}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-400">This Month</CardTitle>
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <Calendar className="h-4 w-4 text-purple-600" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold text-white">{formatCurrency(stats?.thisMonthRevenue || 0)}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Search and Filters */}
+    <div className="min-h-screen bg-[#1a1a1a] p-8 space-y-6">
       <Card className="bg-[#1a1a1a] border border-[#f8c017]/20">
-        <CardContent className="p-6">
-          <div className="flex gap-4 flex-wrap">
-            <div className="flex-1 min-w-80">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Search by invoice number, business name, or email..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 bg-[#1a1a1a] border-gray-600 text-white focus:border-[#f8c017] focus:ring-[#f8c017]"
-                />
-              </div>
-            </div>
-            <div className="min-w-48">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full h-10 px-3 border border-gray-600 rounded-md bg-[#1a1a1a] text-white focus:border-[#f8c017] focus:ring-[#f8c017]"
-              >
-                <option value="all">All Status</option>
-                <option value="PENDING">Pending</option>
-                <option value="PROCESSING">Processing</option>
-                <option value="PAID">Paid</option>
-                <option value="OVERDUE">Overdue</option>
-                <option value="CANCELLED">Cancelled</option>
-              </select>
-            </div>
+        <CardHeader>
+          <CardTitle className="text-white">Invoices</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm text-left">
+              <thead>
+                <tr className="bg-[#222] text-[#f8c017]">
+                  <th className="p-2">Invoice ID</th>
+                  <th className="p-2">Merchant</th>
+                  <th className="p-2">Billing Period</th>
+                  <th className="p-2">Status</th>
+                  <th className="p-2">Total Due</th>
+                  <th className="p-2">Amount Paid</th>
+                  <th className="p-2">Payment Date</th>
+                  <th className="p-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {invoices.map(inv => (
+                  <tr key={inv.id} className="border-b border-[#f8c017]/10">
+                    <td className="p-2 text-white">{inv.id}</td>
+                    <td className="p-2 text-white">{inv.Business?.name || inv.merchantName || "Unknown"}</td>
+                    <td className="p-2 text-white">{inv.billingPeriod}</td>
+                    <td className="p-2"><Badge className={`border ${inv.status === "PAID" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-yellow-100 text-yellow-700 border-yellow-200"}`}>{inv.status}</Badge></td>
+                    <td className="p-2 text-white">{inv.totalDue}</td>
+                    <td className="p-2 text-white">{typeof inv.amountPaid === "number" ? inv.amountPaid : "-"}</td>
+                    <td className="p-2 text-white">{inv.paymentDate || "-"}</td>
+                    <td className="p-2"><Button size="sm" className="bg-[#f8c017] text-black" onClick={() => handleSelectInvoice(inv)}>View</Button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </CardContent>
       </Card>
-
-      {/* Invoices List */}
-      <div className="space-y-4">
-        {invoices.map((invoice) => {
-          const statusInfo = getStatusInfo(invoice.status);
-          return (
-            <Card key={invoice.id} className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 space-y-3">
-                    {/* Invoice Header */}
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <h3 className="font-semibold text-white text-lg">
-                        {invoice.invoiceNumber}
-                      </h3>
-                      <Badge className={`${statusInfo.color} border flex items-center gap-1`}>
-                        {statusInfo.icon}
-                        {statusInfo.label}
-                      </Badge>
-                      <Badge variant="outline" className="text-[#f8c017] border-[#f8c017]/20 bg-[#f8c017]/5">
-                        {formatCurrency(invoice.totalAmount)}
-                      </Badge>
-                    </div>
-
-                    {/* Invoice Details */}
-                    <div className="grid gap-2 md:grid-cols-2">
-                      <div className="flex items-center gap-2 text-gray-400">
-                        <Building className="h-4 w-4" />
-                        <span className="text-sm">Business: {invoice.businessName}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-400">
-                        <Mail className="h-4 w-4" />
-                        <span className="text-sm">Email: {invoice.businessEmail}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-400">
-                        <Calendar className="h-4 w-4" />
-                        <span className="text-sm">Issue Date: {formatDate(invoice.issueDate)}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-400">
-                        <Calendar className="h-4 w-4" />
-                        <span className="text-sm">Due Date: {formatDate(invoice.dueDate)}</span>
-                      </div>
-                    </div>
-
-                    {/* Additional Info */}
-                    <div className="text-sm text-gray-500">
-                      {invoice.items && invoice.items.length > 0 && (
-                        <p>Items: {invoice.items.length} line item(s)</p>
-                      )}
-                      {invoice.paidDate && (
-                        <p>Paid on: {formatDate(invoice.paidDate)}</p>
-                      )}
-                      {invoice.paymentMethod && (
-                        <p>Payment Method: {invoice.paymentMethod}</p>
-                      )}
-                      {invoice.notes && (
-                        <p>Notes: {invoice.notes}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2">
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      className="border-gray-600 text-gray-300 hover:border-[#f8c017] hover:text-[#f8c017]"
-                    >
-                      <Eye className="h-4 w-4 mr-1" />
-                      View
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      className="border-gray-600 text-gray-300 hover:border-[#f8c017] hover:text-[#f8c017]"
-                    >
-                      <Download className="h-4 w-4 mr-1" />
-                      Download
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      className="border-gray-600 text-gray-300 hover:border-gray-500"
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* Empty State */}
-      {invoices.length === 0 && !loading && (
-        <Card className="bg-[#1a1a1a] border border-[#f8c017]/20">
-          <CardContent className="p-12 text-center">
-            <FileText className="h-12 w-12 text-gray-500 mx-auto mb-4" />
-            <p className="text-gray-300 text-lg mb-2">No invoices found</p>
-            <p className="text-gray-500">Try adjusting your search or filter criteria</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2">
-          <Button
-            variant="outline"
-            disabled={page <= 1}
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            className="border-gray-600 text-gray-300 hover:border-[#f8c017] hover:text-[#f8c017]"
-          >
-            Previous
-          </Button>
-          <span className="px-4 py-2 text-gray-300">
-            Page {page} of {totalPages}
-          </span>
-          <Button
-            variant="outline"
-            disabled={page >= totalPages}
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            className="border-gray-600 text-gray-300 hover:border-[#f8c017] hover:text-[#f8c017]"
-          >
-            Next
-          </Button>
-        </div>
-      )}
+      <Dialog open={showModal} onOpenChange={setShowModal}>
+        <DialogContent className="bg-[#222] border-[#f8c017]/20">
+          <DialogHeader>
+            <DialogTitle className="text-[#f8c017]">Invoice Details</DialogTitle>
+          </DialogHeader>
+          {selectedInvoice && (
+            <div className="space-y-2">
+              <div className="text-white">Invoice ID: {selectedInvoice.id}</div>
+              <div className="text-white">Merchant: {selectedInvoice.Business?.name || selectedInvoice.merchantName || "Unknown"}</div>
+              <div className="text-white">Billing Period: {selectedInvoice.billingPeriod}</div>
+              <div className="text-white">Status: <Badge className={`border ${selectedInvoice.status === "PAID" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-yellow-100 text-yellow-700 border-yellow-200"}`}>{selectedInvoice.status}</Badge></div>
+              <div className="text-white">Total Due: {selectedInvoice.totalDue}</div>
+              <div className="text-white">Amount Paid: {typeof selectedInvoice.amountPaid === "number" ? selectedInvoice.amountPaid : "-"}</div>
+              <div className="text-white">Payment Date: {selectedInvoice.paymentDate || "-"}</div>
+              <div className="flex gap-2 mt-4">
+                <Button className="bg-emerald-600 text-white" onClick={() => handleStatusUpdate("PAID")}>Mark as Paid</Button>
+                <Button className="bg-yellow-600 text-white" onClick={() => handleStatusUpdate("OVERDUE")}>Mark as Overdue</Button>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" className="border-[#f8c017] text-[#f8c017]" onClick={() => setShowModal(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

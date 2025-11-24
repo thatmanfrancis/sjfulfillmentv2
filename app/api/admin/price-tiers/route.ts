@@ -1,14 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentSession } from '@/lib/session';
-import prisma from '@/lib/prisma';
-import { z } from 'zod';
+import { NextRequest, NextResponse } from "next/server";
+import { getCurrentSession } from "@/lib/session";
+import prisma from "@/lib/prisma";
+import { z } from "zod";
+
 
 const createPricingTierSchema = z.object({
-  serviceType: z.string().min(1, 'Service type is required').max(100),
-  baseRate: z.number().min(0, 'Base rate must be positive'),
-  negotiatedRate: z.number().min(0, 'Negotiated rate must be positive'),
-  rateUnit: z.string().min(1, 'Rate unit is required'),
-  currency: z.string().default('USD'),
+  serviceType: z.string().min(1, "Service type is required").max(100),
+  baseRate: z.number().min(0, "Base rate must be positive"),
+  negotiatedRate: z.number().min(0, "Negotiated rate must be positive"),
+  rateUnit: z.string().min(1, "Rate unit is required"),
+  currency: z.string().default("USD"),
   merchantId: z.string().optional(), // Allow admin to specify merchant
 });
 
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
     const session = await getCurrentSession();
     if (!session?.userId) {
       return NextResponse.json(
-        { error: 'Authentication required' },
+        { error: "Authentication required" },
         { status: 401 }
       );
     }
@@ -30,9 +31,9 @@ export async function GET(request: NextRequest) {
       select: { role: true },
     });
 
-    if (!adminUser || adminUser.role !== 'ADMIN') {
+    if (!adminUser || adminUser.role !== "ADMIN") {
       return NextResponse.json(
-        { error: 'Admin permissions required' },
+        { error: "Admin permissions required" },
         { status: 403 }
       );
     }
@@ -44,11 +45,11 @@ export async function GET(request: NextRequest) {
           select: { id: true, name: true },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
 
     // Transform the data to include business count
-    const transformedTiers = pricingTiers.map(tier => ({
+    const transformedTiers = pricingTiers.map((tier) => ({
       id: tier.id,
       name: tier.serviceType, // Use serviceType as name
       description: `${tier.rateUnit} pricing`,
@@ -64,11 +65,16 @@ export async function GET(request: NextRequest) {
 
     // Calculate stats
     const totalTiers = transformedTiers.length;
-    const activeTiers = transformedTiers.filter(t => t.isActive).length;
-    const averageBaseRate = totalTiers > 0 
-      ? transformedTiers.reduce((sum, tier) => sum + tier.baseRate, 0) / totalTiers 
-      : 0;
-    const totalBusinessesUsingTiers = transformedTiers.reduce((sum, tier) => sum + tier.businessCount, 0);
+    const activeTiers = transformedTiers.filter((t) => t.isActive).length;
+    const averageBaseRate =
+      totalTiers > 0
+        ? transformedTiers.reduce((sum, tier) => sum + tier.baseRate, 0) /
+          totalTiers
+        : 0;
+    const totalBusinessesUsingTiers = transformedTiers.reduce(
+      (sum, tier) => sum + tier.businessCount,
+      0
+    );
 
     return NextResponse.json({
       pricingTiers: transformedTiers,
@@ -79,11 +85,10 @@ export async function GET(request: NextRequest) {
         totalBusinessesUsingTiers,
       },
     });
-
   } catch (error) {
-    console.error('Get pricing tiers error:', error);
+    console.error("Get pricing tiers error:", error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
@@ -94,7 +99,7 @@ export async function POST(request: NextRequest) {
     const session = await getCurrentSession();
     if (!session?.userId) {
       return NextResponse.json(
-        { error: 'Authentication required' },
+        { error: "Authentication required" },
         { status: 401 }
       );
     }
@@ -105,101 +110,92 @@ export async function POST(request: NextRequest) {
       select: { role: true },
     });
 
-    if (!adminUser || adminUser.role !== 'ADMIN') {
+    if (!adminUser || adminUser.role !== "ADMIN") {
       return NextResponse.json(
-        { error: 'Admin permissions required' },
+        { error: "Admin permissions required" },
         { status: 403 }
       );
     }
 
     const body = await request.json();
-    
-    // Map frontend field names to backend schema
-    const mappedBody = {
-      serviceType: body.name || body.serviceType,
-      baseRate: typeof body.baseRate === 'string' ? parseFloat(body.baseRate) : body.baseRate,
-      negotiatedRate: typeof body.ratePerKg === 'string' ? parseFloat(body.ratePerKg) : body.ratePerKg,
-      rateUnit: 'per_kg', // Default unit
-      currency: body.currency || 'USD',
-      merchantId: body.merchantId || null,
-    };
-    
-    // Validate the mapped data
-    const result = createPricingTierSchema.safeParse(mappedBody);
-    if (!result.success) {
+    const { description, currency, merchantId, packages } = body;
+    if (!Array.isArray(packages) || packages.length === 0) {
       return NextResponse.json(
-        { error: 'Validation failed', details: result.error.issues },
+        { error: "At least one package is required." },
         { status: 400 }
       );
     }
 
-    const {
-      serviceType,
-      baseRate,
-      negotiatedRate,
-      rateUnit,
-      currency,
-      merchantId,
-    } = result.data;
-
-    // Check if pricing tier with same service type already exists
-    const existingTier = await prisma.pricingTier.findFirst({
-      where: { 
-        serviceType: {
-          equals: serviceType,
-          mode: 'insensitive',
-        },
-      },
-    });
-
-    if (existingTier) {
-      return NextResponse.json(
-        { error: 'A pricing tier with this service type already exists' },
-        { status: 400 }
-      );
-    }
-
-    // Create the pricing tier
-    const createData: any = {
-      serviceType,
-      baseRate,
-      negotiatedRate,
-      rateUnit,
-      currency,
-    };
-    if (merchantId) {
-      createData.merchantId = merchantId;
-    }
-    const pricingTier = await prisma.pricingTier.create({
-      data: createData,
-      include: {
-        Business: {
-          select: {
-            id: true,
-            name: true,
+    // Validate and create each package
+    const createdTiers = [];
+    const errors = [];
+    for (const pkg of packages) {
+      const mappedPkg = {
+        id:
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : Math.random().toString(36).slice(2),
+        serviceType: pkg.serviceType,
+        baseRate:
+          typeof pkg.baseRate === "string"
+            ? parseFloat(pkg.baseRate)
+            : pkg.baseRate,
+        negotiatedRate:
+          typeof pkg.negotiatedRate === "string"
+            ? parseFloat(pkg.negotiatedRate)
+            : pkg.negotiatedRate,
+        rateUnit: pkg.rateUnit || "per_kg",
+        currency: currency || "USD",
+        merchantId: merchantId || null,
+        updatedAt: new Date(),
+      };
+      const result = createPricingTierSchema.safeParse(mappedPkg);
+      if (!result.success) {
+        errors.push({
+          serviceType: pkg.serviceType,
+          error: result.error?.issues || [],
+        });
+        continue;
+      }
+      // Check for duplicates
+      const exists = await prisma.pricingTier.findFirst({
+        where: {
+          merchantId: mappedPkg.merchantId,
+          serviceType: {
+            equals: mappedPkg.serviceType,
+            mode: "insensitive",
           },
         },
-      },
-    });
+      });
+      if (exists) {
+        errors.push({
+          serviceType: pkg.serviceType,
+          error: "Tier already exists for this service type.",
+        });
+        continue;
+      }
+      // Create tier
+      const created = await prisma.pricingTier.create({
+        data: mappedPkg,
+      });
+      createdTiers.push({ id: created.id, serviceType: created.serviceType });
+    }
 
-    return NextResponse.json({
-      id: pricingTier.id,
-      name: pricingTier.serviceType,
-      description: `${pricingTier.rateUnit} pricing`,
-      baseRate: pricingTier.baseRate,
-      ratePerKg: pricingTier.negotiatedRate,
-      ratePerKm: pricingTier.baseRate * 0.5,
-      minimumCharge: pricingTier.baseRate,
-      isActive: true,
-      businessCount: 0,
-      createdAt: pricingTier.createdAt.toISOString(),
-      updatedAt: pricingTier.updatedAt.toISOString(),
-    }, { status: 201 });
+    if (createdTiers.length === 0) {
+      return NextResponse.json(
+        { error: "No tiers created.", details: errors },
+        { status: 400 }
+      );
+    }
 
-  } catch (error) {
-    console.error('Create pricing tier error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { success: true, created: createdTiers, errors },
+      { status: 201 }
+    );
+  } catch (error) {
+    console.error("Create pricing tier error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
       { status: 500 }
     );
   }

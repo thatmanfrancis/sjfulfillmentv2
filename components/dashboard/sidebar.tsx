@@ -91,7 +91,21 @@ export function Sidebar() {
   const { collapsed, setCollapsed } = useSidebar();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [unreadCount, setUnreadCount] = useState(0);
   const pathname = usePathname();
+
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
+
+  const fetchNotifications = async () => {
+    try {
+      const data = await get<{ unreadCount: number }>('/api/notifications?limit=0');
+      setUnreadCount(data.unreadCount || 0);
+    } catch (error) {
+      setUnreadCount(0);
+    }
+  };
 
   useEffect(() => {
     fetchUserProfile();
@@ -120,16 +134,31 @@ export function Sidebar() {
         collapsed ? 'w-16' : 'w-64'
       )}
     >
-      {/* Logo */}
-      <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
-        {!collapsed && (
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 gradient-gold rounded-lg flex items-center justify-center shadow-gold">
-              <span className="text-black font-bold text-sm">SJ</span>
-            </div>
-            <span className="font-bold text-xl text-sidebar-foreground">SJFulfillment</span>
-          </div>
-        )}
+      {/* Logo + Notification Bell */}
+      <div className="flex items-center justify-between p-4 border-b border-sidebar-border relative">
+        <div className="flex items-center space-x-2">
+          {!collapsed && (
+            <>
+              <div className="w-8 h-8 gradient-gold rounded-lg flex items-center justify-center shadow-gold">
+                <span className="text-black font-bold text-sm">SJ</span>
+              </div>
+              <span className="font-bold text-xl text-sidebar-foreground">SJFulfillment</span>
+            </>
+          )}
+        </div>
+        {/* Notification Bell Icon */}
+        <div className="relative mr-2">
+          <Button variant="ghost" size="icon" className="relative p-0 h-8 w-8" asChild>
+            <Link href="/merchant/notifications">
+              <Bell className="h-5 w-5 text-brand-gold" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full flex items-center justify-center text-xs bg-brand-gold text-black font-bold">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </Link>
+          </Button>
+        </div>
         <Button
           variant="ghost"
           size="sm"

@@ -7,12 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Select } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Upload, Download, FileText, AlertTriangle, CheckCircle, 
-  X, User, MapPin, Package, FileSpreadsheet, Loader2 
+import {
+  Upload, Download, FileText, AlertTriangle, CheckCircle,
+  X, User, MapPin, Package, FileSpreadsheet, Loader2
 } from 'lucide-react';
 import { post } from '@/lib/api';
 
@@ -47,70 +49,43 @@ interface ValidationResult {
 }
 
 export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: BulkOrderModalProps) {
-  const [activeTab, setActiveTab] = useState('manual');
-  const [file, setFile] = useState<File | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [parsedData, setParsedData] = useState<ValidationResult | null>(null);
-  const [validationErrors, setValidationErrors] = useState<string[]>([]);
-  
-  // Manual form state
-  const [manualForm, setManualForm] = useState({
-    customerName: '',
-    customerPhone: '',
-    customerAddress: '',
-    businessName: '',
-    amount: '',
-    cost: '',
-    items: [{ sku: '', quantity: 1 }]
-  });
-
-  const [businessCurrency, setBusinessCurrency] = useState<string>('');
-  // Fetch merchant currency when businessName changes
-  useEffect(() => {
-    const fetchCurrency = async () => {
-      if (!manualForm.businessName) {
-        setBusinessCurrency('');
-        return;
+  // Merchant search state
+  const [merchantSearch, setMerchantSearch] = useState('');
+  const [merchantDropdownOpen, setMerchantDropdownOpen] = useState(false);
+  // Restore missing validateOrders function
+  const validateOrders = async (orders: ParsedOrderData[]) => {
+    try {
+      setLoading(true);
+      const response = await post('/api/admin/orders/validate-bulk', { orders }) as any;
+      if (response.success) {
+        setParsedData(response.validation);
+        setValidationErrors([]);
+      } else {
+        setValidationErrors([response.error || 'Validation failed']);
+        setParsedData(null);
       }
-      try {
-        const res = await fetch(`/api/admin/businesses?search=${encodeURIComponent(manualForm.businessName)}`);
-        const data = await res.json();
-        const found = data.businesses?.find((b: any) => b.name.toLowerCase() === manualForm.businessName.toLowerCase());
-        setBusinessCurrency(found?.baseCurrency || '');
-      } catch {
-        setBusinessCurrency('');
-      }
-    };
-    fetchCurrency();
-  }, [manualForm.businessName]);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const uploadedFile = event.target.files?.[0];
-    if (uploadedFile && uploadedFile.type === 'text/csv') {
-      setFile(uploadedFile);
-      parseCSVFile(uploadedFile);
-    } else {
-      setValidationErrors(['Please select a valid CSV file.']);
+    } catch (error) {
+      setValidationErrors(['Failed to validate orders. Please try again.']);
+      setParsedData(null);
+    } finally {
+      setLoading(false);
     }
   };
-
+  // Restore missing state and handlers
+  const [activeTab, setActiveTab] = useState<string>('manual');
+  // Restore missing parseCSVFile and resetForm
   const parseCSVFile = async (file: File) => {
     setLoading(true);
     try {
       const text = await file.text();
       const result = Papa.parse(text, { header: true, skipEmptyLines: true });
       const rows = result.data as any[];
-      // Support optional 'amount' column
       const expectedHeaders = ['customername', 'customerphone', 'customeraddress', 'businessname', 'productsku', 'quantity'];
       const actualHeaders = Object.keys(rows[0] || {}).map(h => h.toLowerCase());
       const missingHeaders = expectedHeaders.filter(header => !actualHeaders.includes(header));
       if (missingHeaders.length > 0) {
         throw new Error(`Missing required columns: ${missingHeaders.join(', ')}`);
       }
-
       const parsedOrders: ParsedOrderData[] = [];
       const orderMap = new Map<string, ParsedOrderData>();
       for (const row of rows) {
@@ -120,7 +95,6 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
         const businessName = (row.businessName || row.businessname || '').trim();
         const sku = (row.productSku || row.productsku || '').trim();
         const quantity = parseInt(row.quantity) || 1;
-        // Support optional amount and cost columns
         const amount = row.amount !== undefined ? Number(row.amount) : (row.Amount !== undefined ? Number(row.Amount) : undefined);
         const cost = row.cost !== undefined ? Number(row.cost) : (row.Cost !== undefined ? Number(row.Cost) : undefined);
         if (!customerName || !customerPhone || !customerAddress || !businessName || !sku) {
@@ -145,94 +119,11 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
         }
       }
       await validateOrders(parsedOrders);
-      
     } catch (error) {
       setValidationErrors([error instanceof Error ? error.message : 'Failed to parse CSV file']);
       setParsedData(null);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const validateOrders = async (orders: ParsedOrderData[]) => {
-    try {
-      setLoading(true);
-      const response = await post('/api/admin/orders/validate-bulk', { orders }) as any;
-      
-      if (response.success) {
-        setParsedData(response.validation);
-        setValidationErrors([]);
-      } else {
-        setValidationErrors([response.error || 'Validation failed']);
-        setParsedData(null);
-      }
-    } catch (error) {
-      setValidationErrors(['Failed to validate orders. Please try again.']);
-      setParsedData(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleBulkUpload = async () => {
-    if (!parsedData || parsedData.valid.length === 0) {
-      setValidationErrors(['No valid orders to upload']);
-      return;
-    }
-
-    try {
-      setUploading(true);
-      const response = await post('/api/admin/orders/bulk-create', { 
-        orders: parsedData.valid 
-      }) as any;
-      
-      if (response.success) {
-        onOrdersCreated();
-        onClose();
-        resetForm();
-      } else {
-        setValidationErrors([response.error || 'Failed to create orders']);
-      }
-    } catch (error) {
-      setValidationErrors(['Failed to create orders. Please try again.']);
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleManualSubmit = async () => {
-    if (!manualForm.customerName || !manualForm.customerPhone || !manualForm.customerAddress || 
-        !manualForm.businessName || manualForm.items.some(item => !item.sku || item.quantity < 1)) {
-      setValidationErrors(['Please fill in all required fields']);
-      return;
-    }
-    // Optionally validate amount
-    if (manualForm.amount && isNaN(Number(manualForm.amount))) {
-      setValidationErrors(['Amount must be a valid number']);
-      return;
-    }
-
-    try {
-      setUploading(true);
-      const orderData = {
-        ...manualForm,
-        amount: manualForm.amount ? Number(manualForm.amount) : undefined,
-        items: manualForm.items.filter(item => item.sku && item.quantity > 0)
-      };
-
-      const response = await post('/api/admin/orders/create', orderData) as any;
-      
-      if (response.success) {
-        onOrdersCreated();
-        onClose();
-        resetForm();
-      } else {
-        setValidationErrors([response.error || 'Failed to create order']);
-      }
-    } catch (error) {
-      setValidationErrors(['Failed to create order. Please try again.']);
-    } finally {
-      setUploading(false);
     }
   };
 
@@ -247,43 +138,196 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
       businessName: '',
       amount: '',
       cost: '',
-      items: [{ sku: '', quantity: 1 }]
+      items: []
     });
+    setSelectedProducts([]);
+    setProductSearchInput('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
+  const [file, setFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [parsedData, setParsedData] = useState<ValidationResult | null>(null);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
-  const addManualItem = () => {
-    setManualForm(prev => ({
-      ...prev,
-      items: [...prev.items, { sku: '', quantity: 1 }]
-    }));
+  // --- State for Merchant/Product Select ---
+  const [merchants, setMerchants] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [selectedMerchant, setSelectedMerchant] = useState<any | null>(null);
+  const [selectedProducts, setSelectedProducts] = useState<any[]>([]);
+  const [manualForm, setManualForm] = useState({
+    customerName: '',
+    customerPhone: '',
+    customerAddress: '',
+    businessName: '',
+    amount: '',
+    cost: '',
+    items: [] as Array<{ sku: string; quantity: number }>
+  });
+  const [businessCurrency, setBusinessCurrency] = useState<string>('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [productSearchInput, setProductSearchInput] = useState('');
+  const handleProductSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setProductSearchInput(e.target.value);
+  };
+  const filteredProducts = products.filter(p => {
+    const search = productSearchInput.toLowerCase();
+    return p.name.toLowerCase().includes(search) || p.sku.toLowerCase().includes(search);
+  });
+
+  // Add/remove products from selectedProducts
+  const toggleProductSelection = (product: any) => {
+    setSelectedProducts(prev => {
+      const exists = prev.find(p => p.sku === product.sku);
+      if (exists) {
+        // Remove
+        const updated = prev.filter(p => p.sku !== product.sku);
+        setManualForm(form => ({
+          ...form,
+          items: form.items.filter(item => item.sku !== product.sku)
+        }));
+        return updated;
+      } else {
+        // Add only if not already present in manualForm.items
+        setManualForm(form => {
+          if (form.items.some(item => item.sku === product.sku)) {
+            return form;
+          }
+          return {
+            ...form,
+            items: [...form.items, { sku: product.sku, quantity: 1 }]
+          };
+        });
+        return [...prev, product];
+      }
+    });
   };
 
-  const removeManualItem = (index: number) => {
-    setManualForm(prev => ({
-      ...prev,
-      items: prev.items.filter((_, i) => i !== index)
-    }));
-  };
-
-  const updateManualItem = (index: number, field: 'sku' | 'quantity', value: string | number) => {
-    setManualForm(prev => ({
-      ...prev,
-      items: prev.items.map((item, i) => 
-        i === index ? { ...item, [field]: value } : item
+  // Update quantity for a selected product
+  const updateProductQuantity = (sku: string, quantity: number) => {
+    setManualForm(form => ({
+      ...form,
+      items: form.items.map(item =>
+        item.sku === sku ? { ...item, quantity } : item
       )
     }));
   };
 
+  // File upload handler
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const uploadedFile = event.target.files?.[0];
+    if (uploadedFile && uploadedFile.type === 'text/csv') {
+      setFile(uploadedFile);
+      parseCSVFile(uploadedFile);
+    } else {
+      setValidationErrors(['Please select a valid CSV file.']);
+    }
+  };
+
+  // Download template handler
   const downloadTemplate = () => {
-    // Download the dynamic template with real products from the server
     const link = document.createElement('a');
     link.href = '/api/admin/orders/template/dynamic';
     link.download = 'bulk-orders-template-with-real-products.csv';
     link.click();
   };
+
+  // Manual submit handler
+  const handleManualSubmit = async () => {
+    if (!manualForm.customerName || !manualForm.customerPhone || !manualForm.customerAddress ||
+      !manualForm.businessName || manualForm.items.some(item => !item.sku || item.quantity < 1)) {
+      setValidationErrors(['Please fill in all required fields']);
+      return;
+    }
+    if (manualForm.amount && isNaN(Number(manualForm.amount))) {
+      setValidationErrors(['Amount must be a valid number']);
+      return;
+    }
+    try {
+      setUploading(true);
+      // Ensure only unique products in items
+      const uniqueItems = manualForm.items.reduce((acc, item) => {
+        if (!acc.some(i => i.sku === item.sku)) {
+          acc.push(item);
+        }
+        return acc;
+      }, [] as Array<{ sku: string; quantity: number }>);
+      const orderData = {
+        ...manualForm,
+        amount: manualForm.amount ? Number(manualForm.amount) : undefined,
+        items: uniqueItems.filter(item => item.sku && item.quantity > 0)
+      };
+      const response = await post('/api/admin/orders/create', orderData) as any;
+      if (response.success) {
+        onOrdersCreated();
+        onClose();
+        resetForm();
+      } else {
+        setValidationErrors([response.error || 'Failed to create order']);
+      }
+    } catch (error) {
+      setValidationErrors(['Failed to create order. Please try again.']);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Bulk upload handler
+  const handleBulkUpload = async () => {
+    if (!parsedData || parsedData.valid.length === 0) {
+      setValidationErrors(['No valid orders to upload']);
+      return;
+    }
+    try {
+      setUploading(true);
+      const response = await post('/api/admin/orders/bulk-create', { orders: parsedData.valid }) as any;
+      if (response.success) {
+        onOrdersCreated();
+        onClose();
+        resetForm();
+      } else {
+        setValidationErrors([response.error || 'Failed to create orders']);
+      }
+    } catch (error) {
+      setValidationErrors(['Failed to create orders. Please try again.']);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+ 
+  useEffect(() => {
+    if (merchantSearch.length === 0) {
+      setMerchants([]);
+      return;
+    }
+    const timeout = setTimeout(() => {
+      fetch(`/api/admin/businesses?search=${encodeURIComponent(merchantSearch)}&limit=10`)
+        .then(res => res.json())
+        .then(data => setMerchants(data.businesses || []));
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [merchantSearch]);
+
+  // Fetch products for selected merchant
+  useEffect(() => {
+    if (!selectedMerchant) {
+      setProducts([]);
+      setBusinessCurrency('');
+      setManualForm(prev => ({ ...prev, businessName: '' }));
+      return;
+    }
+    setManualForm(prev => ({ ...prev, businessName: selectedMerchant.name }));
+    setBusinessCurrency(selectedMerchant.baseCurrency || '');
+    fetch(`/api/admin/products?merchantId=${selectedMerchant.id}`)
+      .then(res => res.json())
+      .then(data => setProducts(data.products || []));
+  }, [selectedMerchant]);
+
+  // --- Existing logic for CSV/manual ---
+  // ...existing code...
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -348,14 +392,45 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
                   />
                 </div>
                 <div>
-                  <Label htmlFor="businessName" className="text-gray-300">Business/Merchant *</Label>
-                  <Input
-                    id="businessName"
-                    value={manualForm.businessName}
-                    onChange={(e) => setManualForm(prev => ({ ...prev, businessName: e.target.value }))}
-                    className="bg-[#1a1a1a] border-gray-600 text-white focus:border-[#f8c017]"
-                    placeholder="Enter business name"
-                  />
+                    <Label htmlFor="businessName" className="text-gray-300">Business/Merchant *</Label>
+                    <div className="w-full relative">
+                      <Input
+                        id="merchantSearch"
+                        value={selectedMerchant ? selectedMerchant.name : merchantSearch}
+                        onChange={e => {
+                          setMerchantSearch(e.target.value);
+                          setSelectedMerchant(null);
+                          setBusinessCurrency('');
+                          setMerchantDropdownOpen(true);
+                        }}
+                        onFocus={() => setMerchantDropdownOpen(true)}
+                        className="bg-[#1a1a1a] border-gray-600 text-white focus:border-[#f8c017] w-full"
+                        placeholder="Search merchant by name"
+                        autoComplete="off"
+                      />
+                      {merchantDropdownOpen && merchants.length > 0 && !selectedMerchant && (
+                        <div className="absolute left-0 mt-1 w-full z-50 bg-[#232323] border border-gray-700 rounded shadow-lg max-h-60 overflow-y-auto">
+                          {merchants.map(m => (
+                            <div
+                              key={m.id}
+                              onMouseDown={() => {
+                                setSelectedMerchant(m);
+                                setMerchantSearch(m.name);
+                                setBusinessCurrency(m.baseCurrency || '');
+                                setMerchantDropdownOpen(false);
+                              }}
+                              className="flex justify-between items-center px-3 py-2 cursor-pointer hover:bg-[#333]"
+                            >
+                              <span className="truncate max-w-[200px]">{m.name}</span>
+                              <span className="ml-2 text-xs text-gray-400">{m.baseCurrency}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {selectedMerchant && businessCurrency && (
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold bg-[#232323] px-2 py-1 rounded text-xs whitespace-nowrap pointer-events-none">{businessCurrency}</span>
+                      )}
+                    </div>
                 </div>
                 <div>
                   <Label htmlFor="amount" className="text-gray-300">Amount ({businessCurrency || 'Currency'})</Label>
@@ -396,48 +471,71 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {manualForm.items.map((item, index) => (
-                  <div key={index} className="flex gap-3 items-end">
-                    <div className="flex-1">
-                      <Label className="text-gray-300">Product SKU *</Label>
-                      <Input
-                        value={item.sku}
-                        onChange={(e) => updateManualItem(index, 'sku', e.target.value)}
-                        className="bg-[#1a1a1a] border-gray-600 text-white focus:border-[#f8c017]"
-                        placeholder="Enter product SKU"
-                      />
+                <Label className="text-gray-300">Select Products *</Label>
+                <div className="w-full relative mb-2">
+                  <Input
+                    value={productSearchInput}
+                    onChange={handleProductSearch}
+                    className="bg-[#1a1a1a] border-gray-600 text-white focus:border-[#f8c017] w-full"
+                    placeholder="Search products by name or SKU"
+                    autoComplete="off"
+                  />
+                  {productSearchInput.length > 0 && filteredProducts.length > 0 && (
+                    <div className="absolute left-0 mt-1 w-full z-50 bg-[#232323] border border-gray-700 rounded shadow-lg max-h-60 overflow-y-auto">
+                      {filteredProducts.map(p => {
+                        const selected = selectedProducts.some(sp => sp.sku === p.sku);
+                        return (
+                          <div
+                            key={p.sku}
+                            onMouseDown={() => toggleProductSelection(p)}
+                            className={`flex justify-between items-center px-3 py-2 cursor-pointer hover:bg-[#333] ${selected ? 'bg-[#333]' : ''}`}
+                          >
+                            <span className="truncate max-w-[200px]">{p.name}</span>
+                            <span className="ml-2 text-xs text-gray-400">{p.sku}</span>
+                            <span className={`ml-2 text-xs ${selected ? 'text-green-400' : 'text-gray-400'}`}>{selected ? 'Selected' : 'Select'}</span>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <div className="w-24">
-                      <Label className="text-gray-300">Quantity *</Label>
-                      <Input
-                        type="number"
-                        min="1"
-                        value={item.quantity}
-                        onChange={(e) => updateManualItem(index, 'quantity', parseInt(e.target.value) || 1)}
-                        className="bg-[#1a1a1a] border-gray-600 text-white focus:border-[#f8c017]"
-                      />
-                    </div>
-                    {manualForm.items.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => removeManualItem(index)}
-                        className="border-red-500 text-red-400 hover:bg-red-500 hover:text-white"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
+                  )}
+                </div>
+                {selectedProducts.length === 0 && (
+                  <div className="text-gray-400 text-sm">No products selected. Search and select products above.</div>
+                )}
+                {selectedProducts.length > 0 && (
+                  <div className="space-y-2">
+                    {selectedProducts.map((p, idx) => {
+                      const item = manualForm.items.find(i => i.sku === p.sku);
+                      return (
+                        <div key={p.sku} className="flex gap-3 items-end">
+                          <div className="flex-1">
+                            <span className="font-semibold text-white">{p.name}</span>
+                            <span className="ml-2 text-xs text-gray-400">{p.sku}</span>
+                          </div>
+                          <div className="w-24">
+                            <Label className="text-gray-300">Quantity *</Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={item?.quantity || 1}
+                              onChange={e => updateProductQuantity(p.sku, parseInt(e.target.value) || 1)}
+                              className="bg-[#1a1a1a] border-gray-600 text-white focus:border-[#f8c017]"
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => toggleProductSelection(p)}
+                            className="border-red-500 text-red-400 hover:bg-red-500 hover:text-white"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      );
+                    })}
                   </div>
-                ))}
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={addManualItem}
-                  className="border-[#f8c017] text-[#f8c017] hover:bg-[#f8c017] hover:text-black"
-                >
-                  Add Item
-                </Button>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -454,12 +552,54 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="mb-4">
+                  <Label className="text-gray-300">Select Merchant *</Label>
+                  <div className="w-full relative">
+                    <Input
+                      id="bulkMerchantSearch"
+                      value={selectedMerchant ? selectedMerchant.name : merchantSearch}
+                      onChange={e => {
+                        setMerchantSearch(e.target.value);
+                        setSelectedMerchant(null);
+                        setBusinessCurrency('');
+                        setMerchantDropdownOpen(true);
+                      }}
+                      onFocus={() => setMerchantDropdownOpen(true)}
+                      className="bg-[#1a1a1a] border-gray-600 text-white focus:border-[#f8c017] w-full"
+                      placeholder="Search merchant by name"
+                      autoComplete="off"
+                    />
+                    {merchantDropdownOpen && merchants.length > 0 && !selectedMerchant && (
+                      <div className="absolute left-0 mt-1 w-full z-50 bg-[#232323] border border-gray-700 rounded shadow-lg max-h-60 overflow-y-auto">
+                        {merchants.map(m => (
+                          <div
+                            key={m.id}
+                            onMouseDown={() => {
+                              setSelectedMerchant(m);
+                              setMerchantSearch(m.name);
+                              setBusinessCurrency(m.baseCurrency || '');
+                              setMerchantDropdownOpen(false);
+                            }}
+                            className="flex justify-between items-center px-3 py-2 cursor-pointer hover:bg-[#333]"
+                          >
+                            <span className="truncate max-w-[200px]">{m.name}</span>
+                            <span className="ml-2 text-xs text-gray-400">{m.baseCurrency}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {selectedMerchant && businessCurrency && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold bg-[#232323] px-2 py-1 rounded text-xs whitespace-nowrap pointer-events-none">{businessCurrency}</span>
+                    )}
+                  </div>
+                </div>
                 <div className="flex items-center gap-4">
                   <Button
                     type="button"
                     variant="outline"
                     onClick={downloadTemplate}
                     className="border-[#f8c017] text-[#f8c017] hover:bg-[#f8c017] hover:text-black"
+                    disabled={!selectedMerchant}
                   >
                     <Download className="h-4 w-4 mr-2" />
                     Download Template
@@ -476,6 +616,7 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
                     accept=".csv"
                     onChange={handleFileUpload}
                     className="hidden"
+                    disabled={!selectedMerchant}
                   />
                   {file ? (
                     <div className="space-y-2">
@@ -501,6 +642,7 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
                         variant="outline"
                         onClick={() => fileInputRef.current?.click()}
                         className="border-[#f8c017] text-[#f8c017] hover:bg-[#f8c017] hover:text-black"
+                        disabled={!selectedMerchant}
                       >
                         Select File
                       </Button>
@@ -559,7 +701,7 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
                           <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{order.cost !== undefined ? order.cost : '-'}</td>
                           <td className="px-4 py-3">
                             <div className="mb-1 text-xs text-muted-foreground">
-                              <span className="font-semibold">{order.items.length}</span> product{order.items.length !== 1 ? 's' : ''} / 
+                              <span className="font-semibold">{order.items.length}</span> product{order.items.length !== 1 ? 's' : ''} /
                               <span className="font-semibold">{order.items.reduce((sum: number, item: any) => sum + item.quantity, 0)}</span> total
                             </div>
                             <ul className="space-y-1">

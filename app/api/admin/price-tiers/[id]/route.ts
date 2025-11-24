@@ -18,10 +18,10 @@ const updatePricingTierSchema = z.object({
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: any }
 ) {
   try {
-    const { id } = await params;
+    const id = params.id;
     const session = await getCurrentSession();
     if (!session?.userId) {
       return NextResponse.json(
@@ -134,10 +134,10 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: any }
 ) {
   try {
-    const { id } = await params;
+    const id = params.id;
     const session = await getCurrentSession();
     if (!session?.userId) {
       return NextResponse.json(

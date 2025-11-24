@@ -1,4 +1,3 @@
-
 'use client';
 import Papa from 'papaparse';
 
@@ -27,8 +26,11 @@ interface Order {
   orderDate: string;
   status: string;
   totalAmount: number;
+  amount?: number | any;
+  cost?: number | any;
   Business: {
     name: string;
+    baseCurrency?: string;
   };
   items: Array<{
     id: string;
@@ -324,11 +326,12 @@ export default function AdminOrdersPage() {
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-NG', {
+  const formatCurrency = (amount: number, currency?: string) => {
+    const curr = currency || 'NGN';
+    return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'NGN',
-      minimumFractionDigits: 0
+      currency: curr,
+      minimumFractionDigits: 2
     }).format(amount);
   };
 
@@ -709,6 +712,7 @@ export default function AdminOrdersPage() {
             const isCompleted = ["DELIVERED", "RETURNED", "CANCELED"].includes(order.status);
             const isAssigned = !!order.assignedLogistics;
             const checked = selectedOrderIds.includes(order.id);
+            const currency = order.Business?.baseCurrency || 'USD';
             return (
               <Card key={order.id} className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all flex flex-col justify-between h-full">
                 <CardContent className="p-6 flex flex-col h-full">
@@ -730,15 +734,15 @@ export default function AdminOrdersPage() {
                   <div className="flex-1 space-y-3">
                     {/* Order Header */}
                     <div className="flex items-center gap-3 flex-wrap">
-                      <h3 className="font-semibold text-white text-lg">
-                        {order.externalOrderId || `Order #${order.id.slice(0, 8)}`}
+                      <h3 className="font-semibold text-white text-lg truncate">
+                        {order.externalOrderId || `Order #${order.id}`}
                       </h3>
                       <Badge className={`${statusInfo.color} border flex items-center gap-1`}>
                         {statusInfo.icon}
                         {statusInfo.label}
                       </Badge>
                       <Badge variant="outline" className="text-[#f8c017] border-[#f8c017]/20 bg-[#f8c017]/5">
-                        {formatCurrency(order.totalAmount)}
+                        {formatCurrency(order.totalAmount, currency)}
                       </Badge>
                     </div>
                     <div className="grid gap-2">
@@ -765,6 +769,16 @@ export default function AdminOrdersPage() {
                         <Calendar className="h-4 w-4" />
                         <span className="text-sm">{formatDate(order.orderDate)}</span>
                       </div>
+                      {/* In grid view and row view order card, add price/cost display */}
+                      {(order.amount || order.cost) && (
+                        <div className="flex items-center gap-2 text-gray-400">
+                          <DollarSign className="h-4 w-4" />
+                          <span className="text-sm">
+                            {order.amount ? `Price: ${formatCurrency(order.amount, currency)}` : ''}
+                            {order.cost ? ` / Cost: ${formatCurrency(order.cost, currency)}` : ''}
+                          </span>
+                        </div>
+                      )}
                     </div>
                     <div className="text-sm text-gray-500">
                       <p>Address: {order.customerAddress}</p>
@@ -843,6 +857,7 @@ export default function AdminOrdersPage() {
             const isCompleted = ["DELIVERED", "RETURNED", "CANCELED"].includes(order.status);
             const isAssigned = !!order.assignedLogistics;
             const checked = selectedOrderIds.includes(order.id);
+            const currency = order.Business?.baseCurrency || 'NGN';
             return (
               <Card key={order.id} className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
                 <CardContent className="p-6">
@@ -866,14 +881,14 @@ export default function AdminOrdersPage() {
                       {/* Order Header */}
                       <div className="flex items-center gap-3 flex-wrap">
                         <h3 className="font-semibold text-white text-lg">
-                          {order.externalOrderId || `Order #${order.id.slice(0, 8)}`}
+                          {order.externalOrderId || `Order #${order.id}`}
                         </h3>
                         <Badge className={`${statusInfo.color} border flex items-center gap-1`}>
                           {statusInfo.icon}
                           {statusInfo.label}
                         </Badge>
                         <Badge variant="outline" className="text-[#f8c017] border-[#f8c017]/20 bg-[#f8c017]/5">
-                          {formatCurrency(order.totalAmount)}
+                          {formatCurrency(order.totalAmount, currency)}
                         </Badge>
                       </div>
                       <div className="grid gap-2 md:grid-cols-2">
@@ -900,6 +915,16 @@ export default function AdminOrdersPage() {
                           <Calendar className="h-4 w-4" />
                           <span className="text-sm">{formatDate(order.orderDate)}</span>
                         </div>
+                        {/* In grid view and row view order card, add price/cost display */}
+                        {(order.amount || order.cost) && (
+                          <div className="flex items-center gap-2 text-gray-400">
+                            <DollarSign className="h-4 w-4" />
+                            <span className="text-sm">
+                              {order.amount ? `Price: ${formatCurrency(order.amount, currency)}` : ''}
+                              {order.cost ? ` / Cost: ${formatCurrency(order.cost, currency)}` : ''}
+                            </span>
+                          </div>
+                        )}
                       </div>
                       <div className="text-sm text-gray-500">
                         <p>Address: {order.customerAddress}</p>
@@ -1134,6 +1159,16 @@ export default function AdminOrdersPage() {
                 <Calendar className="h-4 w-4" />
                 <span className="text-sm">{formatDate(selectedOrder.orderDate)}</span>
               </div>
+              {/* In order details modal, add price/cost display */}
+              {(selectedOrder.amount || selectedOrder.cost) && (
+                <div className="flex items-center gap-2 text-gray-400">
+                  <DollarSign className="h-4 w-4" />
+                  <span className="text-sm">
+                    {selectedOrder.amount ? `Price: ${formatCurrency(selectedOrder.amount, selectedOrder.Business?.baseCurrency || 'NGN')}` : ''}
+                    {selectedOrder.cost ? ` / Cost: ${formatCurrency(selectedOrder.cost, selectedOrder.Business?.baseCurrency || 'NGN')}` : ''}
+                  </span>
+                </div>
+              )}
             </div>
             <div className="mb-4">
               <div className="text-gray-400 text-xs mb-1">Customer Address:</div>
@@ -1158,7 +1193,7 @@ export default function AdminOrdersPage() {
               )}
             </div>
               <div className="flex items-center justify-between mt-6">
-                <span className="text-lg font-bold text-white">Total: {formatCurrency(selectedOrder.totalAmount)}</span>
+                <span className="text-lg font-bold text-white">Total: {formatCurrency(selectedOrder.totalAmount, selectedOrder.Business?.baseCurrency || 'NGN')}</span>
                 <div className="relative">
                   <Button
                     size="sm"

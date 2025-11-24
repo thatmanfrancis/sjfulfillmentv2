@@ -42,6 +42,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "All order fields are required" }, { status: 400 });
     }
 
+    // Deduplicate products in items (sum quantities for same SKU)
+    const dedupedItemsMap = new Map<string, { sku: string; quantity: number }>();
+    for (const item of orderData.items) {
+      const sku = item.sku.toLowerCase();
+      if (dedupedItemsMap.has(sku)) {
+        dedupedItemsMap.get(sku)!.quantity += item.quantity;
+      } else {
+        dedupedItemsMap.set(sku, { sku, quantity: item.quantity });
+      }
+    }
+    const dedupedItems = Array.from(dedupedItemsMap.values());
+
     // Create the order using a transaction
     const result = await prisma.$transaction(async (tx) => {
       // Find business
@@ -63,7 +75,7 @@ export async function POST(request: NextRequest) {
       const itemsToCreate = [];
       const stockUpdates = [];
 
-      for (const item of orderData.items) {
+      for (const item of dedupedItems) {
         const product = await tx.product.findFirst({
           where: { 
             sku: {
@@ -164,6 +176,33 @@ export async function POST(request: NextRequest) {
       return order;
     });
 
+    // Send notification to merchant users when order is created
+    const merchantUsers = await prisma.user.findMany({
+      where: {
+        businessId: result.merchantId,
+        role: { in: ["MERCHANT", "MERCHANT_STAFF"] }
+      }
+    });
+    await Promise.all(
+      merchantUsers.map(user =>
+        prisma.notification.create({
+          data: {
+            id: crypto.randomUUID(),
+            userId: user.id,
+            title: "Order Created",
+            message: `Order #${result.trackingNumber} has been created for your business and is now active.`,
+            type: "INFO",
+            audienceType: "MERCHANT",
+            isRead: false,
+            sendEmail: false,
+            createdById: session.userId,
+            linkUrl: `/merchant/orders/${result.id}`,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }
+        })
+      )
+    );
     return NextResponse.json({
       success: true,
       order: {

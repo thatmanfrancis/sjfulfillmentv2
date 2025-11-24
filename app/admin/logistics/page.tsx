@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import AddLogisticsModal from '@/components/admin/AddLogisticsModal';
 import LogisticsDetailsModal from '@/components/admin/LogisticsDetailsModal';
 import { Eye } from 'lucide-react';
+import EditLogisticsModal from '@/components/admin/EditLogisticsModal';
 
 interface LogisticsPerson {
   id: string;
@@ -22,6 +23,7 @@ export default function AdminLogisticsPage() {
   const [logistics, setLogistics] = useState<any[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<any | null>(null);
 
   const fetchLogistics = async () => {
@@ -40,6 +42,10 @@ export default function AdminLogisticsPage() {
   const handleView = (person: any) => {
     setSelectedPerson(person);
     setDetailsOpen(true);
+  };
+  const handleEdit = (person: any) => {
+    setSelectedPerson(person);
+    setEditOpen(true);
   };
 
   return (
@@ -61,7 +67,7 @@ export default function AdminLogisticsPage() {
           </div>
         ) : (
           logistics.map((person) => (
-            <Card key={person.id} className="bg-[#1a1a1a] border border-[#f8c017]/20 h-full flex flex-col">
+            <Card key={person.id} className="bg-[#1a1a1a] border border-[#f8c017]/20 h-full flex flex-col cursor-pointer" onClick={() => handleEdit(person)}>
               <CardContent className="p-4 flex flex-col gap-3 h-full">
                 <div className="font-semibold text-white text-lg mb-1">
                   {person.firstName} {person.lastName}
@@ -72,7 +78,7 @@ export default function AdminLogisticsPage() {
                   <div>Status: {person.status || (person.isActive ? 'Verified' : 'Pending')}</div>
                 </div>
                 <div className="flex justify-between items-center mt-auto">
-                  <Button size="icon" variant="outline" className="text-[#f8c017] border-[#f8c017]/20" title="View Details" onClick={() => handleView(person)}>
+                  <Button size="icon" variant="outline" className="text-[#f8c017] border-[#f8c017]/20" title="View Details" onClick={(e) => { e.stopPropagation(); handleView(person); }}>
                     <Eye className="w-5 h-5" />
                   </Button>
                 </div>
@@ -81,6 +87,12 @@ export default function AdminLogisticsPage() {
           ))
         )}
       </div>
+      <EditLogisticsModal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        person={selectedPerson}
+        onUpdated={fetchLogistics}
+      />
     </div>
   );
 }

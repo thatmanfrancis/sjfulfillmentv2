@@ -69,6 +69,7 @@ export async function GET(request: NextRequest) {
         isActive: business.isActive,
         onboardingStatus: business.onboardingStatus,
         createdAt: business.createdAt,
+        baseCurrency: business.baseCurrency,
         owner: business.User_Business_ownerIdToUser ? {
           name: `${business.User_Business_ownerIdToUser.firstName} ${business.User_Business_ownerIdToUser.lastName}`,
           email: business.User_Business_ownerIdToUser.email,

@@ -99,6 +99,7 @@ export async function GET(request: NextRequest) {
       items: order.OrderItem?.map((item: any) => ({
         id: item.id,
         quantity: item.quantity,
+        productId: item.Product?.id || item.productId,
         product: {
           name: item.Product?.name || '',
           sku: item.Product?.sku || '',

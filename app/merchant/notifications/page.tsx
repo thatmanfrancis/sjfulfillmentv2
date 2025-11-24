@@ -20,12 +20,15 @@ interface Notification {
   createdAt: string;
   sentAt?: string;
   channels: string[];
+  isRead?: boolean;
 }
 
 export default function MerchantNotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [markingAll, setMarkingAll] = useState(false);
 
   useEffect(() => {
     fetchNotifications();
@@ -39,11 +42,29 @@ export default function MerchantNotificationsPage() {
       params.append("limit", "40");
       const data = await get(`/api/merchant/notifications?${params}`) as any;
       setNotifications(data?.notifications || []);
+      setUnreadCount(data?.unreadCount ?? 0);
     } catch (error) {
       setNotifications([]);
+      setUnreadCount(0);
     } finally {
       setLoading(false);
     }
+  };
+
+  const markAsRead = async (id: string) => {
+    try {
+      await fetch(`/api/merchant/notifications?id=${id}`, { method: 'PATCH' });
+      fetchNotifications();
+    } catch {}
+  };
+
+  const markAllAsRead = async () => {
+    setMarkingAll(true);
+    try {
+      await fetch(`/api/merchant/notifications/mark-all-read`, { method: 'POST' });
+      fetchNotifications();
+    } catch {}
+    setMarkingAll(false);
   };
 
   const getTypeInfo = (type: string) => {
@@ -122,6 +143,24 @@ export default function MerchantNotificationsPage() {
           <h1 className="text-3xl font-bold text-white">Notifications</h1>
           <p className="text-gray-400 mt-1">All notifications for your merchant account</p>
         </div>
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <Bell className="h-7 w-7 text-[#f8c017]" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold rounded-full px-2 py-0.5">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </div>
+          <Button
+            variant="outline"
+            className="border-[#f8c017] text-[#f8c017] hover:bg-[#f8c017]/10"
+            disabled={markingAll || unreadCount === 0}
+            onClick={markAllAsRead}
+          >
+            Mark all as read
+          </Button>
+        </div>
       </div>
       <Card className="bg-[#1a1a1a] border border-[#f8c017]/20">
         <CardContent className="p-6">
@@ -144,7 +183,7 @@ export default function MerchantNotificationsPage() {
         {notifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((notification) => {
           const typeInfo = getTypeInfo(notification.type);
           return (
-            <Card key={notification.id} className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
+            <Card key={notification.id} className={`bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all ${notification.isRead ? '' : 'ring-2 ring-[#f8c017]'}`}>
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">
                   <div className="flex-1 space-y-3">
@@ -157,9 +196,17 @@ export default function MerchantNotificationsPage() {
                       </Badge>
                     </div>
                     <p className="text-gray-300 text-sm leading-relaxed">{notification.message}</p>
-                    {/* Removed created at, sent at, and channels display */}
                   </div>
-                  {/* Removed View and Menu icons */}
+                  {!notification.isRead && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-[#f8c017] border border-[#f8c017]"
+                      onClick={() => markAsRead(notification.id)}
+                    >
+                      Mark as read
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>

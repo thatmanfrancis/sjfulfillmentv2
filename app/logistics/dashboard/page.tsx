@@ -207,9 +207,25 @@ export default function LogisticsDashboardPage() {
                 <div><b>Order Date:</b> {new Date(selectedOrder.orderDate).toLocaleString()}</div>
                 <div><b>Items:</b>
                   <ul className="ml-4 list-disc">
-                    {selectedOrder.OrderItem?.map((item: any) => (
-                      <li key={item.id}>{item.Product?.name} x{item.quantity}</li>
-                    ))}
+                    {selectedOrder.OrderItem?.map((item: any) => {
+                      // Find warehouse picks for this product
+                      const picks = selectedOrder.OrderWarehousePick?.filter((pick: any) => pick.productId === item.productId) || [];
+                      return (
+                        <li key={item.id}>
+                          {item.Product?.name} x{item.quantity}
+                          {picks.length > 0 && (
+                            <ul className="ml-4 list-disc text-xs text-gray-400">
+                              {picks.map((pick: any) => (
+                                <li key={pick.id}>
+                                  {pick.quantity} from {pick.Warehouse?.name || pick.warehouseId}
+                                  {pick.Warehouse?.region ? ` (${pick.Warehouse.region})` : ''}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               </div>

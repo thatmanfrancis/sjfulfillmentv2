@@ -11,8 +11,8 @@ interface DashboardLayoutProps {
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
-  const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
-  const isMerchant = pathname.startsWith('/merchant');
+  const pathname = usePathname();
+  const isMerchant = pathname?.startsWith('/merchant');
   return (
     <SidebarProvider defaultOpen={true}>
       {isMerchant ? <MerchantSidebar /> : <AdminSidebar />}

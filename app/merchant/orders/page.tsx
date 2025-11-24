@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Download, Eye, Calendar, ShoppingCart, CheckCircle, Truck, Package, Clock, XCircle } from 'lucide-react';
+import { Download, Eye, Calendar, ShoppingCart, CheckCircle, Truck, Package, Clock, XCircle, DollarSign } from 'lucide-react';
 import ExportOrdersModal from '@/components/merchant/ExportOrdersModal';
 import OrderDetailsModal from '@/components/merchant/OrderDetailsModal';
 
@@ -25,6 +25,8 @@ interface Order {
     quantity: number;
     price: number;
   }[];
+  amount?: number;
+  cost?: number;
 }
 
 export default function MerchantOrdersPage() {
@@ -201,6 +203,14 @@ export default function MerchantOrdersPage() {
                         <div className="flex items-center gap-2 text-gray-400">
                           <Calendar className="h-4 w-4" />
                           <span className="text-sm">{new Date(order.orderDate).toLocaleDateString()}</span>
+                        </div>
+                        {/* In order card, add price/cost display */}
+                        <div className="flex items-center gap-2 text-gray-400">
+                          {/* <DollarSign className="h-4 w-4" /> */}
+                          <span className="text-sm">
+                            {order.amount ? `Price: ${order.amount}` : ''}
+                            {order.cost ? ` / Cost: ${order.cost}` : ''}
+                          </span>
                         </div>
                       </div>
                     </div>
