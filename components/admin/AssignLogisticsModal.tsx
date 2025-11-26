@@ -49,28 +49,40 @@ export default function AssignLogisticsModal({ open, onClose, orderId, onAssigne
             sku: item.product.sku,
             name: item.product.name,
             quantity: item.quantity,
-            productId: item.productId || item.product.id
+            productId: item.product.id || item.productId // Prefer product.id if available
           })));
 
-          // For each product, fetch stock allocations
+          // For each product, fetch stock allocations (skip if productId is missing)
           const allocs: any = {};
           for (const item of order.items) {
-            const resp = await fetch(`/api/stock-allocations?productId=${item.productId || item.product.id}`);
+            const pid = item.product.id || item.productId;
+            if (!pid || typeof pid !== 'string' || pid.length < 3) {
+              console.warn('AssignLogisticsModal: Missing or invalid productId for item', item);
+              continue;
+            }
+            console.log('AssignLogisticsModal: Fetching allocations for productId', pid);
+            const resp = await fetch(`/api/stock-allocations?productId=${pid}`);
             const allocData = await resp.json();
-            allocs[item.productId || item.product.id] = (allocData.allocations || []).map((a: any) => ({
+            console.log('AssignLogisticsModal: Allocation fetch result for', pid, allocData);
+            allocs[pid] = (allocData.allocations || []).map((a: any) => ({
               warehouseId: a.warehouseId,
               warehouseName: a.Warehouse?.name || '',
               availableStock: a.allocatedQuantity
             }));
+            if (!allocData.allocations || allocData.allocations.length === 0) {
+              console.warn('AssignLogisticsModal: No allocations found for productId', pid);
+            }
           }
           setAllocations(allocs);
           // Initialize picks
           const initialPicks: any = {};
           for (const item of order.items) {
-            initialPicks[item.productId || item.product.id] = allocs[item.productId || item.product.id].map((a: any) => ({
+            const pid = item.product.id || item.productId;
+            if (!pid || typeof pid !== 'string' || pid.length < 3) continue;
+            initialPicks[pid] = allocs[pid]?.map((a: any) => ({
               warehouseId: a.warehouseId,
               quantity: 0
-            }));
+            })) || [];
           }
           setPicks(initialPicks);
         });
@@ -84,7 +96,13 @@ export default function AssignLogisticsModal({ open, onClose, orderId, onAssigne
       const arr = updated[productId] || [];
       const idx = arr.findIndex((a: any) => a.warehouseId === warehouseId);
       if (idx !== -1) {
-        arr[idx].quantity = value;
+        // Calculate total picked for other warehouses
+        const totalOther = arr.reduce((sum: number, a: any, i: number) => i === idx ? sum : sum + (a.quantity || 0), 0);
+        // Get required quantity for this product
+        const required = (orderItems.find((itm: any) => itm.productId === productId)?.quantity) || 0;
+        // Restrict value so total picked does not exceed required
+        const maxAllowed = Math.min(value, required - totalOther, allocations[productId]?.[idx]?.availableStock || 0);
+        arr[idx].quantity = Math.max(0, maxAllowed);
       }
       updated[productId] = arr;
       return updated;
@@ -138,66 +156,75 @@ export default function AssignLogisticsModal({ open, onClose, orderId, onAssigne
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="bg-black border-2 border-[#f8c017] shadow-[0_0_16px_2px_#f8c01755] max-w-2xl">
+      <DialogContent className="bg-[#18181b] border-2 border-[#f8c017] max-w-2xl shadow-lg rounded-2xl">
         <DialogHeader>
-          <DialogTitle className="text-white">Assign Logistics Partner & Warehouses</DialogTitle>
+          <DialogTitle className="text-white text-xl font-bold">Assign Logistics & Warehouses</DialogTitle>
         </DialogHeader>
-        <div className="mb-4">
+        <div className="mb-6">
+          <label className="block text-gray-400 text-sm mb-1 font-semibold">Logistics Partner</label>
           <Select value={selected} onValueChange={setSelected}>
-            <SelectTrigger className="w-full bg-[#181818] border border-[#f8c017] text-white">
+            <SelectTrigger className="w-full bg-[#23232b] border border-gray-600 text-white rounded-md focus:border-[#f8c017] focus:ring-[#f8c017]">
               <SelectValue placeholder="Select logistics partner" />
             </SelectTrigger>
-            <SelectContent className="bg-[#181818] border border-[#f8c017] text-white">
+            <SelectContent className="bg-[#23232b] border border-gray-600 text-white rounded-md">
               {logistics.map((l) => (
                 <SelectItem key={l.id} value={l.id} className="text-white">
-                  {l.firstName} {l.lastName} ({l.email})
+                  {l.firstName} {l.lastName} <span className="text-xs text-gray-400">({l.email})</span>
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
-        <div className="mb-4">
-          <div className="text-white font-semibold mb-2">Select Warehouses & Quantities for Each Item</div>
+        <div className="mb-6">
+          <div className="text-gray-400 font-semibold mb-2">Warehouses & Quantities</div>
           {orderItems.map(item => (
-            <div key={item.productId} className="mb-4 p-3 bg-[#181818] rounded border border-[#f8c017]/30">
-              <div className="mb-2 text-[#f8c017] font-bold">{item.name} (SKU: {item.sku}) - Qty: {item.quantity}</div>
+            <div key={item.id} className="mb-4 p-4 bg-[#23232b] rounded-lg border border-gray-600">
+              <div className="mb-2 text-[#f8c017] font-bold">{item.name} <span className="text-xs text-gray-400">(SKU: {item.sku})</span> <span className="ml-2 text-xs text-gray-400">Qty: {item.quantity}</span></div>
               {(allocations[item.productId] || []).length === 0 ? (
                 <div className="text-red-400 text-sm">No stock allocations found for this product.</div>
               ) : (
                 <div className="space-y-2">
-                  {(allocations[item.productId] || []).map((alloc: any, idx: number) => (
-                    <div key={alloc.warehouseId} className="flex items-center gap-3">
-                      <span className="text-white text-sm w-40">{alloc.warehouseName}</span>
-                      <span className="text-gray-400 text-xs">Available: {alloc.availableStock}</span>
-                      <input
-                        type="number"
-                        min={0}
-                        max={alloc.availableStock}
-                        value={picks[item.productId]?.[idx]?.quantity || 0}
-                        onChange={e => handlePickChange(item.productId, alloc.warehouseId, Math.max(0, Math.min(alloc.availableStock, Number(e.target.value))))}
-                        className="w-20 px-2 py-1 rounded bg-[#23232b] border border-gray-600 text-white focus:border-[#f8c017] focus:ring-[#f8c017]"
-                      />
-                    </div>
-                  ))}
+                  {(allocations[item.productId] || []).map((alloc: any, idx: number) => {
+                    // Calculate total picked for other warehouses
+                    const totalOther = (picks[item.productId] || []).reduce((sum: number, p: any, i: number) => i === idx ? sum : sum + (p.quantity || 0), 0);
+                    // Get required quantity for this product
+                    const required = item.quantity;
+                    // Restrict max input for this warehouse
+                    const maxInput = Math.min(alloc.availableStock, required - totalOther);
+                    return (
+                      <div key={alloc.warehouseId} className="flex items-center gap-4">
+                        <span className="text-white text-sm w-44">{alloc.warehouseName}</span>
+                        <span className="text-gray-400 text-xs">Available: {alloc.availableStock}</span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={maxInput}
+                          value={picks[item.productId]?.[idx]?.quantity || 0}
+                          onChange={e => handlePickChange(item.productId, alloc.warehouseId, Math.max(0, Math.min(maxInput, Number(e.target.value))))}
+                          className="w-20 px-2 py-1 rounded bg-[#18181b] border border-gray-600 text-white focus:border-[#f8c017] focus:ring-[#f8c017]"
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               )}
               <div className="mt-2 text-xs text-gray-400">
-                Total picked: {(picks[item.productId] || []).reduce((sum: number, p: any) => sum + (p.quantity || 0), 0)} / {item.quantity}
+                Total picked: <span className="font-bold text-white">{(picks[item.productId] || []).reduce((sum: number, p: any) => sum + (p.quantity || 0), 0)}</span> / <span className="font-bold text-white">{item.quantity}</span>
               </div>
             </div>
           ))}
         </div>
-        {error && <div className="text-red-500 text-sm mb-2">{error}</div>}
-        <div className="mb-4">
-          <label className="block text-white font-semibold mb-1">Add Note (optional)</label>
+        {error && <div className="text-red-500 text-sm mb-4 font-semibold">{error}</div>}
+        <div className="mb-6">
+          <label className="block text-gray-400 text-sm mb-1 font-semibold">Note (optional)</label>
           <textarea
             value={note}
             onChange={e => setNote(e.target.value)}
-            className="w-full min-h-[60px] px-3 py-2 rounded bg-[#23232b] border border-gray-600 text-white focus:border-[#f8c017] focus:ring-[#f8c017]"
-            placeholder="Add any instructions or notes for logistics..."
+            className="w-full min-h-[60px] px-3 py-2 rounded-md bg-[#23232b] border border-gray-600 text-white focus:border-[#f8c017] focus:ring-[#f8c017]"
+            placeholder="Add instructions or notes for logistics..."
           />
         </div>
-        <Button onClick={handleAssign} disabled={loading || !selected || !validatePicks()} className="w-full bg-[#f8c017] text-black font-semibold hover:bg-[#e6b800]">
+        <Button onClick={handleAssign} disabled={loading || !selected || !validatePicks()} className="w-full bg-[#f8c017] text-black font-bold py-3 rounded-md hover:bg-[#e6b800] transition-all">
           {loading ? 'Assigning...' : 'Assign'}
         </Button>
       </DialogContent>

@@ -2,6 +2,7 @@
 import Papa from 'papaparse';
 
 import { useState, useEffect } from 'react';
+import { useUser } from '@/hooks/useUser';
 import AssignLogisticsModal from '@/components/admin/AssignLogisticsModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
@@ -28,6 +29,7 @@ interface Order {
   totalAmount: number;
   amount?: number | any;
   cost?: number | any;
+  note?: string | null;
   Business: {
     name: string;
     baseCurrency?: string;
@@ -60,6 +62,8 @@ interface OrderStats {
 }
 
 export default function AdminOrdersPage() {
+  const { user } = useUser();
+  const isAdmin = user?.role === 'ADMIN';
   // Edit/Cancel state
   // Bulk status update state
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
@@ -251,6 +255,7 @@ export default function AdminOrdersPage() {
       params.append('limit', '20');
       
       const data = await get(`/api/admin/orders?${params}`) as any;
+      console.log(`Fetched Orders Data:`, data?.orders);
       setOrders(data?.orders || []);
       setTotalPages(data?.pagination?.totalPages || 1);
     } catch (error) {
@@ -419,6 +424,7 @@ export default function AdminOrdersPage() {
           <p className="text-gray-400 mt-1">
             Monitor and manage all orders across the platform
           </p>
+  
         </div>
         <div className="flex items-center gap-3">
           <Button 
@@ -713,6 +719,7 @@ export default function AdminOrdersPage() {
             const isAssigned = !!order.assignedLogistics;
             const checked = selectedOrderIds.includes(order.id);
             const currency = order.Business?.baseCurrency || 'USD';
+            // Only show assign button for admin users
             return (
               <Card key={order.id} className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all flex flex-col justify-between h-full">
                 <CardContent className="p-6 flex flex-col h-full">
@@ -779,6 +786,13 @@ export default function AdminOrdersPage() {
                           </span>
                         </div>
                       )}
+                      {/* Notes truncated to 60 chars */}
+                      {order.note && (
+                        <div className="flex items-center gap-2 text-gray-400">
+                          <AlertCircle className="h-4 w-4" />
+                          <span className="text-sm" title={order.note}>{order.note.length > 60 ? order.note.slice(0, 60) + '...' : order.note}</span>
+                        </div>
+                      )}
                     </div>
                     <div className="text-sm text-gray-500">
                       <p>Address: {order.customerAddress}</p>
@@ -801,17 +815,19 @@ export default function AdminOrdersPage() {
                       <Eye className="h-4 w-4 mr-1" />
                       View
                     </Button>
-                    <Button
-                      size="sm"
-                      className="bg-[#f8c017] text-black hover:bg-[#f8c017]/90"
-                      onClick={() => {
-                        setAssignOrderId(order.id);
-                        setShowAssignModal(true);
-                      }}
-                      disabled={isCompleted || isAssigned}
-                    >
-                      Assign Logistics
-                    </Button>
+                    {isAdmin && (
+                      <Button
+                        size="sm"
+                        className="bg-[#f8c017] text-black hover:bg-[#f8c017]/90"
+                        onClick={() => {
+                          setAssignOrderId(order.id);
+                          setShowAssignModal(true);
+                        }}
+                        disabled={isCompleted || isAssigned}
+                      >
+                        Assign Logistics
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       className="bg-blue-700 text-white hover:bg-blue-800"
@@ -925,6 +941,13 @@ export default function AdminOrdersPage() {
                             </span>
                           </div>
                         )}
+                        {/* Notes truncated to 60 chars */}
+                        {order.note && (
+                          <div className="flex items-center gap-2 text-gray-400">
+                            <AlertCircle className="h-4 w-4" />
+                            <span className="text-sm" title={order.note}>{order.note.length > 60 ? order.note.slice(0, 60) + '...' : order.note}</span>
+                          </div>
+                        )}
                       </div>
                       <div className="text-sm text-gray-500">
                         <p>Address: {order.customerAddress}</p>
@@ -999,16 +1022,19 @@ export default function AdminOrdersPage() {
         </div>
       )}
       {/* Assign Logistics Modal */}
-      <AssignLogisticsModal
-        open={showAssignModal}
-        onClose={() => setShowAssignModal(false)}
-        orderId={assignOrderId}
-        onAssigned={() => {
-          setShowAssignModal(false);
-          setAssignOrderId(null);
-          fetchOrders();
-        }}
-      />
+      {/* Assign Logistics Modal - admin only, strict validation */}
+      {user?.role === 'ADMIN' && (
+        <AssignLogisticsModal
+          open={showAssignModal}
+          onClose={() => setShowAssignModal(false)}
+          orderId={assignOrderId}
+          onAssigned={() => {
+            setShowAssignModal(false);
+            setAssignOrderId(null);
+            fetchOrders();
+          }}
+        />
+      )}
 
       {/* Change Status Modal */}
       <Dialog open={showStatusModal} onOpenChange={() => setShowStatusModal(false)}>
@@ -1175,6 +1201,12 @@ export default function AdminOrdersPage() {
               <div className="text-white text-sm mb-2">{selectedOrder.customerAddress}</div>
               <div className="text-gray-400 text-xs mb-1">Phone:</div>
               <div className="text-white text-sm mb-2">{selectedOrder.customerPhone}</div>
+              {selectedOrder.note && (
+                <div className="mt-2">
+                  <div className="text-gray-400 text-xs mb-1">Order Notes:</div>
+                  <div className="text-white text-sm whitespace-pre-line">{selectedOrder.note}</div>
+                </div>
+              )}
             </div>
             <div className="mb-4">
               <div className="text-gray-400 text-xs mb-1">Ordered Items:</div>

@@ -109,7 +109,8 @@ export async function GET(request: NextRequest) {
             city: true,
             state: true,
             country: true,
-            contactPhone: true
+            contactPhone: true,
+            baseCurrency: true
           }
         },
         ProductImage: {
@@ -158,7 +159,8 @@ export async function GET(request: NextRequest) {
           city: product.Business?.city,
           state: product.Business?.state,
           country: product.Business?.country,
-          phone: product.Business?.contactPhone
+          phone: product.Business?.contactPhone,
+          baseCurrency: product.Business?.baseCurrency
         },
         inventory: {
           totalStock,
@@ -232,6 +234,7 @@ export async function POST(request: NextRequest) {
     for (const prod of products) {
       try {
         const validatedData = createProductSchema.parse(prod);
+        console.log('Product Creation - Received stockAllocations:', validatedData.stockAllocations);
         // Validate total allocated quantity
         if (validatedData.stockAllocations && validatedData.stockAllocations.length > 0) {
           const totalAllocated = validatedData.stockAllocations.reduce((sum, sa) => sum + Number(sa.allocatedQuantity), 0);
@@ -266,69 +269,104 @@ export async function POST(request: NextRequest) {
         const existingProduct = await prisma.product.findFirst({ where: { sku } });
         if (existingProduct) throw new Error(`SKU already exists: ${sku}`);
         // Verify business
-        const business = await prisma.business.findUnique({ where: { id: validatedData.businessId }, select: { id: true, name: true, isActive: true } });
+        const business = await prisma.business.findUnique({ where: { id: validatedData.businessId }, select: { id: true, name: true, isActive: true, baseCurrency: true } });
         if (!business) throw new Error("Business not found");
         if (!business.isActive) throw new Error("Cannot add products to inactive business");
-        // Create product
-        const newProduct = await prisma.product.create({
-          data: {
-            id: `prod_${Date.now()}_${Math.random().toString(36).substring(2)}`,
-            name: validatedData.name,
-            sku,
-            initialQuantity: validatedData.initialQuantity,
-            weightKg: validatedData.weightKg,
-            businessId: validatedData.businessId,
-            dimensions: validatedData.dimensions || {},
-            ...(validatedData.price !== undefined ? { price: validatedData.price } : {}),
-          },
-          include: {
-            Business: { select: { id: true, name: true, city: true, state: true, country: true, contactPhone: true } }
-          }
-        });
-        // Stock allocations
-        if (validatedData.stockAllocations && validatedData.stockAllocations.length > 0) {
-          const processedAllocations = [];
-          for (const allocation of validatedData.stockAllocations) {
-            let warehouseId = allocation.warehouseId;
-            // If warehouseId is not found, or warehouse is not active, fallback to Default
-            let warehouse = await prisma.warehouse.findUnique({ where: { id: warehouseId } });
-            if (!warehouse || warehouse.status !== 'ACTIVE') {
-              // Try to resolve by name
-              warehouse = await prisma.warehouse.findFirst({ where: { name: { equals: warehouseId, mode: 'insensitive' }, status: 'ACTIVE' } });
-              if (!warehouse) {
-                warehouse = await getOrCreateDefaultWarehouse();
-              }
-              warehouseId = warehouse.id;
-            }
-            processedAllocations.push({ ...allocation, warehouseId });
-          }
-          // Create stock allocations
-          const stockAllocations = processedAllocations.map(sa => ({
-            id: `stock_${Date.now()}_${Math.random().toString(36).substring(2)}`,
-            productId: newProduct.id,
-            warehouseId: sa.warehouseId,
-            allocatedQuantity: sa.allocatedQuantity,
-            safetyStock: sa.safetyStock,
-          }));
-          await prisma.stockAllocation.createMany({ data: stockAllocations });
-        }
-        // Audit log
-        await prisma.auditLog.create({
-          data: {
-            id: `audit_${Date.now()}_${Math.random().toString(36).substring(2)}`,
-            entityType: 'Product',
-            entityId: newProduct.id,
-            action: 'CREATED',
-            details: {
-              productName: newProduct.name,
-              sku: newProduct.sku,
-              businessId: newProduct.businessId,
-              businessName: business.name
+
+        // Transactional creation
+        const result = await prisma.$transaction(async (tx) => {
+          // Create product
+          const newProduct = await tx.product.create({
+            data: {
+              id: `prod_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+              name: validatedData.name,
+              sku,
+              initialQuantity: validatedData.initialQuantity,
+              weightKg: validatedData.weightKg,
+              businessId: validatedData.businessId,
+              dimensions: validatedData.dimensions || {},
+              ...(validatedData.price !== undefined ? { price: validatedData.price } : {}),
             },
-            changedById: session.userId
+            include: {
+              Business: { select: { id: true, name: true, city: true, state: true, country: true, contactPhone: true, baseCurrency: true } }
+            }
+          });
+          // Stock allocations
+          if (validatedData.stockAllocations && validatedData.stockAllocations.length > 0) {
+            const processedAllocations = [];
+            for (const allocation of validatedData.stockAllocations) {
+              let warehouseId = allocation.warehouseId;
+              // If warehouseId is not found, or warehouse is not active, fallback to Default
+              let warehouse = await tx.warehouse.findUnique({ where: { id: warehouseId } });
+              if (!warehouse || warehouse.status !== 'ACTIVE') {
+                warehouse = await tx.warehouse.findFirst({ where: { name: { equals: warehouseId, mode: 'insensitive' }, status: 'ACTIVE' } });
+                if (!warehouse) {
+                  warehouse = await getOrCreateDefaultWarehouse();
+                }
+                warehouseId = warehouse.id;
+              }
+              processedAllocations.push({ ...allocation, warehouseId });
+            }
+            // Create stock allocations
+            const stockAllocations = processedAllocations.map(sa => ({
+              id: `stock_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+              productId: newProduct.id,
+              warehouseId: sa.warehouseId,
+              allocatedQuantity: sa.allocatedQuantity,
+              safetyStock: sa.safetyStock,
+            }));
+            await tx.stockAllocation.createMany({ data: stockAllocations });
+          } else {
+            // If no stockAllocations provided, create allocations for all active warehouses
+            const activeWarehouses = await tx.warehouse.findMany({ where: { status: 'ACTIVE' } });
+            if (activeWarehouses.length > 0) {
+              // Distribute initialQuantity evenly (or all to first warehouse if only one)
+              const initialQuantity = validatedData.initialQuantity;
+              const perWarehouse = Math.floor(initialQuantity / activeWarehouses.length);
+              let remainder = initialQuantity % activeWarehouses.length;
+              const stockAllocations = activeWarehouses.map((warehouse, idx) => ({
+                id: `stock_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+                productId: newProduct.id,
+                warehouseId: warehouse.id,
+                allocatedQuantity: perWarehouse + (remainder > 0 ? 1 : 0),
+                safetyStock: 0,
+              }));
+              // Adjust remainder
+              remainder -= activeWarehouses.length;
+              await tx.stockAllocation.createMany({ data: stockAllocations });
+            } else {
+              // No active warehouses, fallback to default warehouse
+              const defaultWarehouse = await getOrCreateDefaultWarehouse();
+              await tx.stockAllocation.create({
+                data: {
+                  id: `stock_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+                  productId: newProduct.id,
+                  warehouseId: defaultWarehouse.id,
+                  allocatedQuantity: validatedData.initialQuantity,
+                  safetyStock: 0,
+                }
+              });
+            }
           }
+          // Audit log
+          await tx.auditLog.create({
+            data: {
+              id: `audit_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+              entityType: 'Product',
+              entityId: newProduct.id,
+              action: 'CREATED',
+              details: {
+                productName: newProduct.name,
+                sku: newProduct.sku,
+                businessId: newProduct.businessId,
+                businessName: business.name
+              },
+              changedById: session.userId
+            }
+          });
+          return { newProduct, business };
         });
-        results.push({ success: true, product: newProduct });
+        results.push({ success: true, product: { ...result.newProduct, baseCurrency: result.business.baseCurrency } });
       } catch (err: any) {
         results.push({ success: false, error: err.message });
       }

@@ -145,6 +145,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Calculate shipment cost (example: totalWeight * 1000, replace with your logic)
+    const orderItems = await prisma.orderItem.findMany({
+      where: { orderId: validatedData.orderId },
+      include: { Product: true },
+    });
+    const totalWeight = orderItems.reduce((sum, item) => sum + ((item.Product?.weightKg || 0) * item.quantity), 0);
+    // Example cost calculation, replace with your business logic
+    const shipmentCost = totalWeight * 1000;
+
     // Create shipment
     const shipment = await prisma.shipment.create({
       data: {
@@ -158,7 +167,7 @@ export async function POST(request: NextRequest) {
       include: {
         Order: {
           include: {
-            Business: { select: { id: true, name: true } },
+            Business: { select: { id: true, name: true, baseCurrency: true } },
             User: { select: { id: true, firstName: true, lastName: true } },
             OrderItem: {
               include: {
@@ -199,6 +208,8 @@ export async function POST(request: NextRequest) {
         totalWeight: shipment.Order?.OrderItem?.reduce((sum: number, item: any) => sum + ((item.Product?.weightKg || 0) * item.quantity), 0) || 0,
         daysInTransit: 0,
         canRetry: true,
+        baseCurrency: shipment.Order?.Business?.baseCurrency || "USD",
+        cost: shipment.Order?.totalAmount || 0,
       },
     }, { status: 201 });
   } catch (error) {

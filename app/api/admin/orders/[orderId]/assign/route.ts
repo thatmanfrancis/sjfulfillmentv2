@@ -98,10 +98,20 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ orderId: 
       where: { id: orderId },
       data: {
         assignedLogisticsId: logisticsId,
-        status: 'PICKED_UP',
+        status: 'ASSIGNED_TO_LOGISTICS',
         notes: typeof note === 'string' ? note.trim() : undefined,
       },
     });
+
+    // Generate tracking number (e.g., SJ_02_x5)
+    function generateTrackingNumber(orderId: string) {
+      // Example: SJ_<day>_<shortId>
+      const day = new Date().getDate().toString().padStart(2, '0');
+      const shortId = orderId.slice(-3);
+      return `SJ_${day}_${shortId}`;
+    }
+
+    const trackingNumber = generateTrackingNumber(orderId);
 
     // Create a shipment if it doesn't exist for this order
     const existingShipment = await prisma.shipment.findUnique({ where: { orderId } });
@@ -110,16 +120,32 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ orderId: 
         data: {
           id: (globalThis.crypto ?? require('crypto')).randomUUID(),
           Order: { connect: { id: orderId } },
+          trackingNumber,
           lastStatusUpdate: new Date(),
           notes: typeof note === 'string' ? note.trim() : undefined,
         },
       });
-    } else if (typeof note === 'string' && note.trim()) {
-      // If shipment exists, update its notes
+      // Also update order with tracking number
+      await prisma.order.update({
+        where: { id: orderId },
+        data: { trackingNumber }
+      });
+    } else {
+      // If shipment exists, update its notes and tracking number if missing
       await prisma.shipment.update({
         where: { orderId },
-        data: { notes: note.trim() }
+        data: {
+          notes: typeof note === 'string' ? note.trim() : undefined,
+          trackingNumber: existingShipment.trackingNumber || trackingNumber
+        }
       });
+      // Also update order with tracking number if missing
+      if (!updated.trackingNumber) {
+        await prisma.order.update({
+          where: { id: orderId },
+          data: { trackingNumber }
+        });
+      }
     }
 
     return Response.json({ success: true, order: updated });

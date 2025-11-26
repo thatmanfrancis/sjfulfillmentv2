@@ -138,7 +138,8 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
       businessName: '',
       amount: '',
       cost: '',
-      items: []
+      items: [],
+      note: ''
     });
     setSelectedProducts([]);
     setProductSearchInput('');
@@ -164,7 +165,8 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
     businessName: '',
     amount: '',
     cost: '',
-    items: [] as Array<{ sku: string; quantity: number }>
+    items: [] as Array<{ sku: string; quantity: number }>,
+    note: '',
   });
   const [businessCurrency, setBusinessCurrency] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -257,8 +259,20 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
       const orderData = {
         ...manualForm,
         amount: manualForm.amount ? Number(manualForm.amount) : undefined,
-        items: uniqueItems.filter(item => item.sku && item.quantity > 0)
+        cost: manualForm.cost ? Number(manualForm.cost) : undefined,
+        items: uniqueItems.filter(item => item.sku && item.quantity > 0),
+        note: manualForm.note || ''
       };
+              <div>
+                <Label htmlFor="note">Order Note</Label>
+                <Textarea
+                  id="note"
+                  placeholder="Add a note for this order (optional)"
+                  value={manualForm.note}
+                  onChange={e => setManualForm(f => ({ ...f, note: e.target.value }))}
+                />
+              </div>
+      console.log('Manual Order Upload - Frontend Sent:', orderData);
       const response = await post('/api/admin/orders/create', orderData) as any;
       if (response.success) {
         onOrdersCreated();
@@ -350,7 +364,50 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
           </TabsList>
 
           <TabsContent value="manual" className="space-y-4">
+            <div>
+              <Label htmlFor="businessName" className="text-gray-300">Business/Merchant *</Label>
+              <div className="w-full relative">
+                <Input
+                  id="merchantSearch"
+                  value={selectedMerchant ? selectedMerchant.name : merchantSearch}
+                  onChange={e => {
+                    setMerchantSearch(e.target.value);
+                    setSelectedMerchant(null);
+                    setBusinessCurrency('');
+                    setMerchantDropdownOpen(true);
+                  }}
+                  onFocus={() => setMerchantDropdownOpen(true)}
+                  className="bg-[#1a1a1a] border-gray-600 text-white focus:border-[#f8c017] w-full"
+                  placeholder="Search merchant by name"
+                  autoComplete="off"
+                />
+                {merchantDropdownOpen && merchants.length > 0 && !selectedMerchant && (
+                  <div className="absolute left-0 mt-1 w-full z-50 bg-[#232323] border border-gray-700 rounded shadow-lg max-h-60 overflow-y-auto">
+                    {merchants.map(m => (
+                      <div
+                        key={m.id}
+                        onMouseDown={() => {
+                          setSelectedMerchant(m);
+                          setMerchantSearch(m.name);
+                          setBusinessCurrency(m.baseCurrency || '');
+                          setMerchantDropdownOpen(false);
+                        }}
+                        className="flex justify-between items-center px-3 py-2 cursor-pointer hover:bg-[#333]"
+                      >
+                        <span className="truncate max-w-[200px]">{m.name}</span>
+                        <span className="ml-2 text-xs text-gray-400">{m.baseCurrency}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {selectedMerchant && businessCurrency && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold bg-[#232323] px-2 py-1 rounded text-xs whitespace-nowrap pointer-events-none">{businessCurrency}</span>
+                )}
+              </div>
+            </div>
             <Card className="bg-[#2a2a2a] border-gray-700">
+
+              
               <CardHeader>
                 <CardTitle className="text-white flex items-center gap-2">
                   <User className="h-5 w-5 text-[#f8c017]" />
@@ -392,6 +449,17 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
                   />
                 </div>
                 <div>
+                  <Label htmlFor="note" className="text-gray-300">Order Note</Label>
+                  <Textarea
+                    id="note"
+                    value={manualForm.note}
+                    onChange={(e) => setManualForm(prev => ({ ...prev, note: e.target.value }))}
+                    className="bg-[#1a1a1a] border-gray-600 text-white focus:border-[#f8c017]"
+                    placeholder="Add a note for this order (optional)"
+                    rows={2}
+                  />
+                </div>
+                {/* <div>
                     <Label htmlFor="businessName" className="text-gray-300">Business/Merchant *</Label>
                     <div className="w-full relative">
                       <Input
@@ -431,7 +499,7 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold bg-[#232323] px-2 py-1 rounded text-xs whitespace-nowrap pointer-events-none">{businessCurrency}</span>
                       )}
                     </div>
-                </div>
+                </div> */}
                 <div>
                   <Label htmlFor="amount" className="text-gray-300">Amount ({businessCurrency || 'Currency'})</Label>
                   <div className="flex items-center gap-2 mb-2">

@@ -335,7 +335,7 @@ export default function AddMerchantModal({ isOpen, onClose, onMerchantAdded }: A
                         <SelectItem 
                           key={country.cca2} 
                           value={country.name.common} 
-                          className="text-black hover:bg-gray-100 focus:bg-gray-100 focus:text-black data-[highlighted]:bg-gray-100 data-[highlighted]:text-black"
+                          className="text-black hover:bg-gray-100 focus:bg-gray-100 focus:text-black data-highlighted:bg-gray-100 data-highlighted:text-black"
                           style={{color: 'black', backgroundColor: 'white'}}
                         >
                           {country.name.common}

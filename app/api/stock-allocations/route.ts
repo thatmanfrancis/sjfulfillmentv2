@@ -5,8 +5,8 @@ import { verifyAuth } from "@/lib/auth";
 import { createAuditLog } from "@/lib/notifications";
 
 const createStockAllocationSchema = z.object({
-  productId: z.string().uuid(),
-  warehouseId: z.string().uuid(),
+  productId: z.string(),
+  warehouseId: z.string(),
   allocatedQuantity: z.number().int().min(0),
   safetyStock: z.number().int().min(0).optional().default(0),
 });
@@ -18,8 +18,8 @@ const updateStockAllocationSchema = z.object({
 
 const bulkUpdateSchema = z.object({
   allocations: z.array(z.object({
-    productId: z.string().uuid(),
-    warehouseId: z.string().uuid(),
+    productId: z.string(),
+    warehouseId: z.string(),
     allocatedQuantity: z.number().int().min(0),
     safetyStock: z.number().int().min(0).optional().default(0),
   })),
@@ -43,6 +43,9 @@ export async function GET(request: NextRequest) {
     const lowStock = searchParams.get("lowStock") === "true";
 
     let where: any = {};
+
+    // Logging incoming query params
+    console.log("[StockAllocations][GET] Query Params:", { warehouseId, productId, businessId, lowStock });
 
     // Filter by warehouse
     if (warehouseId) {
@@ -74,7 +77,8 @@ export async function GET(request: NextRequest) {
         }
       });
 
-      const warehouseIds = userRegions.map((ur) => ur.warehouseId);      where.warehouseId = {
+      const warehouseIds = userRegions.map((ur) => ur.warehouseId);
+      where.warehouseId = {
         in: warehouseIds,
       };
     }
@@ -105,6 +109,12 @@ export async function GET(request: NextRequest) {
         { Product: { name: "asc" } },
       ],
     });
+
+    // Log allocations found
+    console.log(`[StockAllocations][GET] Found ${allocations.length} allocations for productId:`, productId);
+    if (allocations.length === 0) {
+      console.warn(`[StockAllocations][GET] No allocations found for productId:`, productId);
+    }
 
     // Filter for low stock if requested
     let filteredAllocations = allocations;

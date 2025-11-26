@@ -55,18 +55,26 @@ export async function GET(request: NextRequest) {
           orderDate: true,
           status: true,
           totalAmount: true,
+          notes: true,
           Business: {
             select: {
               id: true,
-              name: true
+              name: true,
+              address: true,
+              city: true,
+              state: true,
+              country: true,
+              baseCurrency: true
             }
           },
           OrderItem: {
             select: {
               id: true,
               quantity: true,
+              productId: true,
               Product: {
                 select: {
+                  id: true,
                   name: true,
                   sku: true
                 }
@@ -94,18 +102,36 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Map OrderItem to items for frontend compatibility
-    const mappedOrders = orders.map((order: any) => ({
-      ...order,
-      items: order.OrderItem?.map((item: any) => ({
-        id: item.id,
-        quantity: item.quantity,
-        productId: item.Product?.id || item.productId,
-        product: {
-          name: item.Product?.name || '',
-          sku: item.Product?.sku || '',
-        },
-      })) || [],
-    }));
+    const mappedOrders = orders.map((order: any) => {
+      const mappedItems = order.OrderItem?.map((item: any) => {
+        // Always use Product.id if available, fallback to item.productId
+        const pid = item.Product?.id || item.productId;
+        return {
+          id: item.id,
+          quantity: item.quantity,
+          productId: pid,
+          product: {
+            id: pid,
+            name: item.Product?.name || '',
+            sku: item.Product?.sku || '',
+          },
+        };
+      }) || [];
+      return {
+        ...order,
+        business: order.Business ? {
+          id: order.Business.id,
+          name: order.Business.name,
+          address: order.Business.address,
+          city: order.Business.city,
+          state: order.Business.state,
+          country: order.Business.country,
+          baseCurrency: order.Business.baseCurrency
+        } : undefined,
+        note: order.notes || '',
+        items: mappedItems,
+      };
+    });
 
     return NextResponse.json({
       orders: mappedOrders,

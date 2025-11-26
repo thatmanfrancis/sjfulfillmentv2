@@ -144,6 +144,7 @@ export async function GET(request: NextRequest) {
             include: {
               Product: {
                 select: {
+                  id: true,
                   name: true,
                   weightKg: true,
                   sku: true

@@ -15,6 +15,9 @@ interface ManualOrderData {
   businessName: string;
   items: OrderItem[];
   manualTotalAmount?: number;
+  note?: string | null;
+  cost?: number;
+  notes?: string | null;
 }
 
 export async function POST(request: NextRequest) {
@@ -29,12 +32,21 @@ export async function POST(request: NextRequest) {
       where: { id: session.userId },
       select: { role: true }
     });
+    
 
     if (!user || user.role !== 'ADMIN') {
       return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     }
 
     const orderData: ManualOrderData = await request.json();
+        // If frontend sends 'cost', use it for totalAmount
+        if (typeof orderData.cost === 'number' && !isNaN(orderData.cost)) {
+          orderData.manualTotalAmount = orderData.cost;
+        }
+    // If frontend sends 'note', map to backend 'notes'
+    if (orderData.note && !orderData.notes) {
+      orderData.notes = orderData.note;
+    }
 
     // Validate required fields
     if (!orderData.customerName || !orderData.customerPhone || 
@@ -138,7 +150,7 @@ export async function POST(request: NextRequest) {
       }
 
       // If any price is missing and manualTotalAmount is provided, use it
-      if (missingPrice && typeof orderData.manualTotalAmount === 'number') {
+      if (typeof orderData.manualTotalAmount === 'number') {
         totalAmount = orderData.manualTotalAmount;
       }
 
@@ -155,6 +167,7 @@ export async function POST(request: NextRequest) {
           status: 'NEW',
           totalAmount: totalAmount,
           fulfillmentWarehouseId: stockUpdates[0]?.warehouseId || null,
+          notes: orderData.notes || null,
           OrderItem: {
             create: itemsToCreate.map(item => ({
               id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
