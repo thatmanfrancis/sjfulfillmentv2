@@ -72,9 +72,10 @@ function VerifyMfaForm() {
             redirectUrl = '/auth/login';
         }
         
-        console.log('🔄 MFA verified, redirecting to:', redirectUrl, 'for role:', userRole);
+        // console.log('🔄 MFA verified, redirecting to:', redirectUrl, 'for role:', userRole);
         // Force a full page navigation to trigger middleware
-        window.location.href = redirectUrl;
+        // window.location.href = redirectUrl;
+        router.refresh();
       } else {
         setError(result.error || 'Invalid verification code. Please try again.');
       }

@@ -111,7 +111,6 @@ export function StockTransferModal({ onTransferCreated }: StockTransferModalProp
 
     // Validation
     const newErrors: string[] = [];
-    
     if (!transferData.fromWarehouseId) newErrors.push('Source warehouse is required');
     if (!transferData.toWarehouseId) newErrors.push('Destination warehouse is required');
     if (!transferData.productId) newErrors.push('Product is required');
@@ -121,12 +120,10 @@ export function StockTransferModal({ onTransferCreated }: StockTransferModalProp
     if (transferData.fromWarehouseId === transferData.toWarehouseId) {
       newErrors.push('Source and destination warehouses must be different');
     }
-
     const selectedProduct = products.find(p => p.id === transferData.productId);
     if (selectedProduct && parseInt(transferData.quantity) > selectedProduct.availableStock) {
       newErrors.push(`Only ${selectedProduct.availableStock} units available for transfer`);
     }
-
     if (newErrors.length > 0) {
       setErrors(newErrors);
       setLoading(false);
@@ -141,10 +138,19 @@ export function StockTransferModal({ onTransferCreated }: StockTransferModalProp
         quantity: parseInt(transferData.quantity),
         notes: transferData.notes || `Admin transfer - ${transferData.reason || 'Administrative action'}`
       };
+      console.log('Transfer payload:', payload);
+      // Use fetch to get status code and error message
+      const res = await fetch('/api/inventory/transfers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const response = await res.json();
 
-      const response: any = await post('/api/inventory/transfers', payload);
+      // Artificial delay to guarantee spinner visibility
+      await new Promise(resolve => setTimeout(resolve, 500));
 
-      if (response.success) {
+      if (res.ok && response.success !== false) {
         setIsOpen(false);
         setTransferData({
           fromWarehouseId: '',
@@ -158,11 +164,10 @@ export function StockTransferModal({ onTransferCreated }: StockTransferModalProp
         });
         setProducts([]);
         onTransferCreated();
-        
         // Show success message based on transfer status
         console.log(response.message || 'Stock transfer completed successfully');
       } else {
-        setErrors([response.error || 'Transfer creation failed']);
+        setErrors([response.error || response.message || 'Transfer creation failed']);
       }
     } catch (error: any) {
       console.error('Stock transfer error:', error);
@@ -206,6 +211,12 @@ export function StockTransferModal({ onTransferCreated }: StockTransferModalProp
                 <li key={index}>• {error}</li>
               ))}
             </ul>
+            {loading && (
+              <div className="flex items-center mt-2">
+                <Loader2 className="w-4 h-4 mr-2 animate-spin text-yellow-400" />
+                <span className="text-yellow-300">Waiting for server response...</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -513,23 +524,24 @@ export function StockTransferModal({ onTransferCreated }: StockTransferModalProp
               variant="outline" 
               onClick={() => setIsOpen(false)}
               className="border-gray-600 text-gray-300 hover:bg-gray-800"
+              disabled={loading}
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={loading}
-              className="gradient-gold text-black shadow-gold font-semibold"
+              className={`gradient-gold text-black shadow-gold font-semibold ${loading ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Creating Transfer...
+                  Transferring...
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="w-4 h-4 mr-2" />
-                  Create Transfer
+                  Transfer Inventory
                 </>
               )}
             </Button>

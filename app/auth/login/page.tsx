@@ -103,6 +103,7 @@ function LoginForm() {
         <div className="flex justify-center mb-4">
           <div className="w-12 h-12 bg-[#f8c017] rounded-lg flex items-center justify-center">
             {/* Logo image will go here */}
+            <img src="/sjflogo.png" alt="Sjf" />
             <div className="w-8 h-8 bg-black/20 rounded"></div>
           </div>
         </div>

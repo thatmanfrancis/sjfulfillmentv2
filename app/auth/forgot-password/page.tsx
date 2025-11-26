@@ -99,7 +99,7 @@ export default function ForgotPasswordPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   disabled={isLoading}
-                  className="w-full"
+                  className="w-full border border-[#f08c17]"
                 />
               </div>
             )}
@@ -110,7 +110,7 @@ export default function ForgotPasswordPage() {
               <>
                 <Button
                   type="submit"
-                  className="w-full bg-black hover:bg-gray-800 text-white border-2 border-transparent hover:border-[#f8c017] transition-all duration-200"
+                  className="w-full bg-black hover:bg-gray-800  border-2 text-white hover:border-[#f8c017] transition-all duration-200"
                   disabled={isLoading || !email}
                 >
                   {isLoading ? (

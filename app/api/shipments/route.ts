@@ -173,7 +173,7 @@ export async function POST(request: NextRequest) {
     // Update order status to DISPATCHED
     await prisma.order.update({
       where: { id: validatedData.orderId },
-      data: { status: "DISPATCHED" },
+      data: { status: "DELIVERING" },
     });
 
     // Create audit log

@@ -31,6 +31,8 @@ export function useUser() {
       setLoading(true);
       setError(null);
       const response = await get<{success: boolean; user: UserProfile} | UserProfile>('/api/auth/me');
+
+     {console.log('This is users details response:', response)};
       
       // Handle both wrapped and unwrapped responses
       if ('user' in response && 'success' in response) {

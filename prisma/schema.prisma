@@ -127,22 +127,22 @@ model Notification {
 }
 
 model Order {
-  id                     String      @id
+  id                     String               @id
   merchantId             String
   externalOrderId        String?
-  trackingNumber         String      @unique
+  trackingNumber         String               @unique
   customerName           String
   customerAddress        String
   customerPhone          String
   orderDate              DateTime
-  status                 OrderStatus @default(NEW)
+  status                 OrderStatus          @default(NEW)
   totalAmount            Float
   fulfillmentWarehouseId String?
   assignedLogisticsId    String?
   notes                  String?
-  User                   User?       @relation(fields: [assignedLogisticsId], references: [id])
-  Warehouse              Warehouse?  @relation(fields: [fulfillmentWarehouseId], references: [id])
-  Business               Business    @relation(fields: [merchantId], references: [id])
+  User                   User?                @relation(fields: [assignedLogisticsId], references: [id])
+  Warehouse              Warehouse?           @relation(fields: [fulfillmentWarehouseId], references: [id])
+  Business               Business             @relation(fields: [merchantId], references: [id])
   OrderItem              OrderItem[]
   Shipment               Shipment?
   OrderWarehousePick     OrderWarehousePick[]
@@ -178,20 +178,21 @@ model PricingTier {
 }
 
 model Product {
-  id              String            @id
-  businessId      String
-  sku             String
-  name            String
-  weightKg        Float
-  dimensions      Json
-  imageUrl        String?
-  price           Float?            // Optional price field
-  OrderItem       OrderItem[]
-  Business        Business          @relation(fields: [businessId], references: [id])
-  ProductImage    ProductImage[]
-  StockAllocation StockAllocation[]
-  StockTransfer   StockTransfer[]
-  OrderWarehousePick     OrderWarehousePick[]
+  id                 String               @id
+  businessId         String
+  sku                String
+  name               String
+  initialQuantity    Int                  @default(0)
+  weightKg           Float
+  dimensions         Json
+  imageUrl           String?
+  price              Float? // Optional price field
+  OrderItem          OrderItem[]
+  Business           Business             @relation(fields: [businessId], references: [id])
+  ProductImage       ProductImage[]
+  StockAllocation    StockAllocation[]
+  StockTransfer      StockTransfer[]
+  OrderWarehousePick OrderWarehousePick[]
 
   @@unique([businessId, sku])
 }
@@ -377,18 +378,19 @@ model VerificationToken {
   @@index([token])
   @@index([userId])
 }
-model OrderWarehousePick {
-  id         String   @id @default(uuid())
-  orderId    String
-  productId  String
-  warehouseId String
-  quantity   Int
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
 
-  Order      Order    @relation(fields: [orderId], references: [id])
-  Product    Product  @relation(fields: [productId], references: [id])
-  Warehouse  Warehouse @relation(fields: [warehouseId], references: [id])
+model OrderWarehousePick {
+  id          String   @id @default(uuid())
+  orderId     String
+  productId   String
+  warehouseId String
+  quantity    Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  Order     Order     @relation(fields: [orderId], references: [id])
+  Product   Product   @relation(fields: [productId], references: [id])
+  Warehouse Warehouse @relation(fields: [warehouseId], references: [id])
 
   @@index([orderId])
   @@index([productId])
@@ -396,31 +398,31 @@ model OrderWarehousePick {
 }
 
 model Warehouse {
-  id                                                     String            @id
+  id                                                     String               @id
   name                                                   String
   region                                                 String
-  code                                                   String?           @unique
+  code                                                   String?              @unique
   address                                                String?
-  capacity                                               Int?              @default(0)
+  capacity                                               Int?                 @default(0)
   city                                                   String?
   contactEmail                                           String?
   contactPhone                                           String?
   country                                                String?
-  createdAt                                              DateTime          @default(now())
-  currentStock                                           Int?              @default(0)
+  createdAt                                              DateTime             @default(now())
+  currentStock                                           Int?                 @default(0)
   description                                            String?
   manager                                                String?
   state                                                  String?
-  status                                                 String?           @default("ACTIVE")
-  type                                                   String?           @default("STORAGE")
+  status                                                 String?              @default("ACTIVE")
+  type                                                   String?              @default("STORAGE")
   updatedAt                                              DateTime
   zipCode                                                String?
   LogisticsRegion                                        LogisticsRegion[]
   Order                                                  Order[]
   StockAllocation                                        StockAllocation[]
-  StockTransfer_StockTransfer_fromWarehouseIdToWarehouse StockTransfer[]   @relation("StockTransfer_fromWarehouseIdToWarehouse")
-  StockTransfer_StockTransfer_toWarehouseIdToWarehouse   StockTransfer[]   @relation("StockTransfer_toWarehouseIdToWarehouse")
-  OrderWarehousePick     OrderWarehousePick[]
+  StockTransfer_StockTransfer_fromWarehouseIdToWarehouse StockTransfer[]      @relation("StockTransfer_fromWarehouseIdToWarehouse")
+  StockTransfer_StockTransfer_toWarehouseIdToWarehouse   StockTransfer[]      @relation("StockTransfer_toWarehouseIdToWarehouse")
+  OrderWarehousePick                                     OrderWarehousePick[]
 }
 
 enum InvoiceStatus {
@@ -449,7 +451,8 @@ enum NotificationType {
 enum OrderStatus {
   NEW
   AWAITING_ALLOC
-  DISPATCHED
+  ASSIGNED_TO_LOGISTICS
+  GOING_TO_PICKUP
   PICKED_UP
   DELIVERING
   DELIVERED

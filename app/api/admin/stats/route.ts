@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
       // Pending orders
       prisma.order.count({
         where: {
-          status: { in: ['NEW', 'AWAITING_ALLOC', 'DISPATCHED'] }
+          status: { in: ['NEW', 'AWAITING_ALLOC', 'DELIVERING'] }
         }
       }),
 

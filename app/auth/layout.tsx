@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
+import Image from 'next/image';
 import '@/app/globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -25,9 +26,9 @@ export default function AuthLayout({
                   <div className="mb-8">
                     {/* Logo Placeholder */}
                     <div className="flex justify-center mb-6">
-                      <div className="w-16 h-16 bg-[#f8c017] rounded-lg flex items-center justify-center">
-                        {/* Logo image will go here */}
-                        <div className="w-10 h-10 bg-black/20 rounded"></div>
+                      <div className="flex items-center justify-center">
+                        <Image src="/sjflogo.png" alt="Sjf" width={200} height={200} />
+                        <div className=" rounded"></div>
                       </div>
                     </div>
                     <p className="text-gray-300 text-lg text-center">

@@ -24,7 +24,7 @@ const createMerchantSchema = z.object({
   email: z.string().email('Valid email is required'),
   
   // Business Settings
-  currency: z.enum(['USD', 'NGN']).default('USD'),
+  currency: z.enum(['USD', 'NGN', "CAD", "GBP", "EUR"]).default('USD'),
 });
 
 export async function POST(request: NextRequest) {

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import Image from 'next/image';
 import { 
   LayoutDashboard, 
   Package, 
@@ -159,14 +160,16 @@ export function AdminSidebar() {
       {/* Header */}
       <SidebarHeader className="border-b border-gray-800 p-6 group-data-[collapsible=icon]:p-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3 group-data-[collapsible=icon]:justify-center">
+          {/* <div className="flex items-center space-x-3 group-data-[collapsible=icon]:justify-center">
             <div className="w-10 h-10 bg-linear-to-r from-[#f8c017] to-[#ffd700] rounded-xl flex items-center justify-center shadow-lg">
               <span className="text-black font-bold text-lg">SJ</span>
             </div>
             <span className="font-bold text-xl text-white group-data-[collapsible=icon]:hidden">
               SJFulfillment
             </span>
-          </div>
+          </div> */}
+
+            <Image src="/sjflogo.png" alt="SJFulfillment Logo" width={100} height={100} />
           {/* Always show trigger, but style differently when collapsed */}
           <SidebarTrigger className="text-white hover:bg-gray-800 hover:text-[#f8c017] transition-colors duration-200 group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:top-2 group-data-[collapsible=icon]:right-2 group-data-[collapsible=icon]:z-10" />
         </div>

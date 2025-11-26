@@ -208,7 +208,14 @@ export default function ProductDetailPage() {
   const handleSave = async () => {
     try {
       setSaving(true);
-      
+      // Validate total allocated quantity
+      const totalAllocated = editForm.stockAllocations.reduce((sum, alloc) => sum + alloc.allocatedQuantity, 0);
+      const initialQuantity = Number(editForm.weightKg); // Replace with actual quantity field if present
+      if (totalAllocated > initialQuantity) {
+        toast.error('Total allocated quantity exceeds product initial quantity');
+        setSaving(false);
+        return;
+      }
       const updateData = {
         name: editForm.name,
         weightKg: editForm.weightKg,
@@ -216,7 +223,6 @@ export default function ProductDetailPage() {
         ...(editForm.imageUrl && { imageUrl: editForm.imageUrl }),
         stockAllocations: editForm.stockAllocations.filter(allocation => allocation.warehouseId)
       };
-
       const updatedProduct = await put(`/api/admin/products/${productId}`, updateData) as ProductDetails;
       setProduct(updatedProduct);
       setIsEditing(false);
@@ -712,6 +718,47 @@ export default function ProductDetailPage() {
                             />
                           </div>
                         </div>
+
+                        {/* Transfer Button */}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="border-blue-600 text-blue-400 hover:bg-blue-600/10 mt-7 mr-2"
+                          onClick={async () => {
+                            // Prompt for destination warehouse and quantity
+                            const toWarehouseId = prompt('Enter destination warehouse ID:');
+                            const transferQuantity = parseInt(prompt('Enter quantity to transfer:') || '0', 10);
+                            if (!toWarehouseId || !transferQuantity || transferQuantity <= 0) {
+                              toast.error('Invalid transfer details');
+                              return;
+                            }
+                            // Call backend transfer API
+                            try {
+                              const res = await fetch('/api/inventory/transfers', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  fromWarehouseId: allocation.warehouseId,
+                                  toWarehouseId,
+                                  productId,
+                                  quantity: transferQuantity
+                                })
+                              });
+                              const result = await res.json();
+                              if (res.ok && result.success !== false) {
+                                toast.success('Stock transferred successfully');
+                                fetchProduct();
+                              } else {
+                                toast.error(result.error || 'Transfer failed');
+                              }
+                            } catch (err) {
+                              toast.error('Transfer failed');
+                            }
+                          }}
+                        >
+                          Transfer
+                        </Button>
 
                         {/* Remove Button */}
                         <Button

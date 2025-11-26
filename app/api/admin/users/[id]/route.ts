@@ -108,7 +108,7 @@ export async function GET(
             activeOrders: await prisma.order.count({
               where: {
                 fulfillmentWarehouseId: { in: assignedWarehouses },
-                status: { in: ['DISPATCHED', 'PICKED_UP', 'DELIVERING'] },
+                status: { in: ['GOING_TO_PICKUP', 'PICKED_UP', 'DELIVERING'] },
               },
             }),
             completedDeliveries: await prisma.order.count({
@@ -373,7 +373,7 @@ export async function DELETE(
       const activeAssignments = await prisma.order.count({
         where: {
           assignedLogisticsId: userId,
-          status: { in: ['DISPATCHED', 'PICKED_UP', 'DELIVERING'] },
+          status: { in: ['GOING_TO_PICKUP', 'PICKED_UP', 'DELIVERING'] },
         },
       });
       

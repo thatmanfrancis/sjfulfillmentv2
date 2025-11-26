@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import Image from 'next/image';
 import { 
   LayoutDashboard, 
   Package, 
@@ -139,15 +140,16 @@ export function Sidebar() {
         <div className="flex items-center space-x-2">
           {!collapsed && (
             <>
-              <div className="w-8 h-8 gradient-gold rounded-lg flex items-center justify-center shadow-gold">
+              {/* <div className="w-8 h-8 gradient-gold rounded-lg flex items-center justify-center shadow-gold">
                 <span className="text-black font-bold text-sm">SJ</span>
               </div>
-              <span className="font-bold text-xl text-sidebar-foreground">SJFulfillment</span>
+              <span className="font-bold text-xl text-sidebar-foreground">SJFulfillment</span> */}
+              <Image src="/sjflogo.png" alt="SJFulfillment Logo" width={100} height={100} />
             </>
           )}
         </div>
         {/* Notification Bell Icon */}
-        <div className="relative mr-2">
+        {/* <div className="relative mr-2">
           <Button variant="ghost" size="icon" className="relative p-0 h-8 w-8" asChild>
             <Link href="/merchant/notifications">
               <Bell className="h-5 w-5 text-brand-gold" />
@@ -158,7 +160,7 @@ export function Sidebar() {
               )}
             </Link>
           </Button>
-        </div>
+        </div> */}
         <Button
           variant="ghost"
           size="sm"

@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
       where: { id: validatedData.orderId },
       data: {
         assignedLogisticsId: validatedData.logisticsUserId,
-        status: "DISPATCHED",
+        status: "ASSIGNED_TO_LOGISTICS",
       },
       include: {
         Business: { select: { id: true, name: true } },

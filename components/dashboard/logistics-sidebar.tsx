@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import Image from "next/image";
 import { 
   LayoutDashboard, 
   Truck, 
@@ -111,12 +112,10 @@ export function LogisticsSidebar() {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3 group-data-[collapsible=icon]:justify-center">
             <div className="w-10 h-10 bg-linear-to-r from-[#f8c017] to-[#ffd700] rounded-xl flex items-center justify-center shadow-lg">
-              <span className="text-black font-bold text-lg">SJ</span>
+              
             </div>
             <div className="group-data-[collapsible=icon]:hidden">
-              <span className="font-bold text-xl text-white block">
-                SJFulfillment
-              </span>
+                <Image src="/sjflogo.png" alt="SJFulfillment Logo" width={100} height={100} />
               <span className="text-sm text-gray-400">
                 Logistics Portal
               </span>

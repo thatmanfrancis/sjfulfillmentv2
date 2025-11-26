@@ -213,7 +213,7 @@ export default function AdminOrdersPage() {
       ] = await Promise.all([
         get('/api/admin/orders/count'),
         get('/api/admin/orders/count?status=NEW,AWAITING_ALLOC'),
-        get('/api/admin/orders/count?status=DISPATCHED'),
+        get('/api/admin/orders/count?status=DELIVERING'),
         get('/api/admin/orders/count?status=PICKED_UP,DELIVERING'),
         get('/api/admin/orders/count?status=DELIVERED'),
         get(`/api/admin/orders/revenue?date=${today}`)
@@ -275,11 +275,11 @@ export default function AdminOrdersPage() {
           icon: <AlertCircle className="h-3 w-3" />,
           label: 'Awaiting Allocation'
         };
-      case 'DISPATCHED':
+      case 'DELIVERING':
         return { 
           color: 'bg-purple-100 text-purple-700 border-purple-200', 
           icon: <Package className="h-3 w-3" />,
-          label: 'Dispatched'
+          label: 'Delivering'
         };
       case 'PICKED_UP':
         return { 
@@ -385,7 +385,7 @@ export default function AdminOrdersPage() {
               <option value="">Select Status...</option>
               <option value="NEW">New</option>
               <option value="AWAITING_ALLOC">Awaiting Allocation</option>
-              <option value="DISPATCHED">Dispatched</option>
+              <option value="DELIVERING">Delivering</option>
               <option value="PICKED_UP">Picked Up</option>
               <option value="DELIVERING">Delivering</option>
               <option value="DELIVERED">Delivered</option>
@@ -670,7 +670,7 @@ export default function AdminOrdersPage() {
                 <option value="all">All Status</option>
                 <option value="NEW">New</option>
                 <option value="AWAITING_ALLOC">Awaiting Allocation</option>
-                <option value="DISPATCHED">Dispatched</option>
+                <option value="DELIVERING">DELIVERING</option>
                 <option value="PICKED_UP">Picked Up</option>
                 <option value="DELIVERING">Delivering</option>
                 <option value="DELIVERED">Delivered</option>
@@ -1025,7 +1025,7 @@ export default function AdminOrdersPage() {
             >
               <option value="NEW">New</option>
               <option value="AWAITING_ALLOC">Awaiting Allocation</option>
-              <option value="DISPATCHED">Dispatched</option>
+              <option value="DELIVERING">DELIVERING</option>
               <option value="PICKED_UP">Picked Up</option>
               <option value="DELIVERING">Delivering</option>
               <option value="DELIVERED">Delivered</option>

@@ -256,14 +256,14 @@ export default function AdminMerchantsPage() {
 
   if (loading && !merchants.length) {
     return (
-      <div className="space-y-6 bg-[#1a1a1a] min-h-screen p-6">
+      <div className="space-y-6 bg-black min-h-screen p-6">
         <div>
           <h1 className="text-3xl font-bold text-white">Merchants Management</h1>
           <p className="text-gray-400 mt-1">Loading merchants data...</p>
         </div>
         <div className="grid gap-4">
           {[...Array(5)].map((_, i) => (
-            <Card key={i} className="bg-[#1a1a1a] border border-[#f8c017]/20">
+            <Card key={i} className="bg-black border border-[#f8c017]/20">
               <CardContent className="p-6">
                 <div className="space-y-3">
                   <div className="h-4 bg-gray-700 rounded w-1/4 animate-pulse"></div>

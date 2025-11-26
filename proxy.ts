@@ -10,7 +10,7 @@ const PROTECTED_ROUTES = {
 };
 
 // Public routes that don't require authentication
-const PUBLIC_ROUTES = ['/auth/login', '/auth/register', '/auth/set-password', '/unauthorized', '/', '/login'];
+const PUBLIC_ROUTES = ['/auth/login', '/auth/register', '/auth/set-password', '/unauthorized', '/', '/login', "/auth/forgot-pasword", "/auth/verify-mfa"];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

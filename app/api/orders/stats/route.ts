@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
       total: totalOrders,
       pending: stats.find(s => s.status === 'NEW')?._count.id || 0,
       processing: stats.find(s => s.status === 'AWAITING_ALLOC')?._count.id || 0,
-      shipped: stats.find(s => s.status === 'DISPATCHED')?._count.id || 0,
+      shipped: stats.find(s => s.status === 'DELIVERING')?._count.id || 0,
       delivered: stats.find(s => s.status === 'DELIVERED')?._count.id || 0,
       cancelled: stats.find(s => s.status === 'CANCELED')?._count.id || 0
     };

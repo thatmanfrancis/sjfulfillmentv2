@@ -11,6 +11,7 @@ const createProductSchema = z.object({
   weightKg: z.number().positive('Weight must be a positive number'),
   businessId: z.string().min(1, 'Business ID is required'), // Remove UUID validation for custom format
   price: z.number().positive('Price must be positive').optional(),
+  initialQuantity: z.number().min(0, 'Initial quantity must be non-negative'),
   dimensions: z.object({
     length: z.number().positive().optional(),
     width: z.number().positive().optional(),
@@ -231,6 +232,14 @@ export async function POST(request: NextRequest) {
     for (const prod of products) {
       try {
         const validatedData = createProductSchema.parse(prod);
+        // Validate total allocated quantity
+        if (validatedData.stockAllocations && validatedData.stockAllocations.length > 0) {
+          const totalAllocated = validatedData.stockAllocations.reduce((sum, sa) => sum + Number(sa.allocatedQuantity), 0);
+          const initialQuantity = Number(validatedData.initialQuantity);
+          if (totalAllocated > initialQuantity) {
+            throw new Error('Total allocated quantity exceeds product initial quantity');
+          }
+        }
         // Generate SKU if not provided
         let sku = validatedData.sku;
         if (!sku) {
@@ -266,6 +275,7 @@ export async function POST(request: NextRequest) {
             id: `prod_${Date.now()}_${Math.random().toString(36).substring(2)}`,
             name: validatedData.name,
             sku,
+            initialQuantity: validatedData.initialQuantity,
             weightKg: validatedData.weightKg,
             businessId: validatedData.businessId,
             dimensions: validatedData.dimensions || {},

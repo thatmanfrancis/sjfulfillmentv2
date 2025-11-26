@@ -5,9 +5,9 @@ import { z } from "zod";
 import { randomUUID } from "crypto";
 
 const transferSchema = z.object({
-  fromWarehouseId: z.string().uuid(),
-  toWarehouseId: z.string().uuid(),
-  productId: z.string().uuid(),
+  fromWarehouseId: z.string().min(1),
+  toWarehouseId: z.string().min(1),
+  productId: z.string().min(1),
   quantity: z.number().int().min(1),
   notes: z.string().optional(),
 });
@@ -20,7 +20,14 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const validatedData = transferSchema.parse(body);
+    console.log('Received transfer payload:', body);
+    let validatedData;
+    try {
+      validatedData = transferSchema.parse(body);
+    } catch (err) {
+      console.error('Transfer validation error:', err);
+      return NextResponse.json({ error: 'Validation error', details: err }, { status: 400 });
+    }
 
     const { fromWarehouseId, toWarehouseId, productId, quantity, notes } = validatedData;
 

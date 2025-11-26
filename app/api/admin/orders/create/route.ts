@@ -14,6 +14,7 @@ interface ManualOrderData {
   customerAddress: string;
   businessName: string;
   items: OrderItem[];
+  manualTotalAmount?: number;
 }
 
 export async function POST(request: NextRequest) {
@@ -74,6 +75,7 @@ export async function POST(request: NextRequest) {
       let totalAmount = 0;
       const itemsToCreate = [];
       const stockUpdates = [];
+      let missingPrice = false;
 
       for (const item of dedupedItems) {
         const product = await tx.product.findFirst({
@@ -110,7 +112,7 @@ export async function POST(request: NextRequest) {
           if (remainingQuantity <= 0) break;
 
           const quantityToTake = Math.min(remainingQuantity, allocation.allocatedQuantity);
-          
+
           stockUpdates.push({
             allocationId: allocation.id,
             currentQuantity: allocation.allocatedQuantity,
@@ -123,11 +125,21 @@ export async function POST(request: NextRequest) {
 
         itemsToCreate.push({
           productId: product.id,
-          quantity: item.quantity
+          quantity: item.quantity,
+          price: product.price // Use actual price
         });
 
-        // Mock price calculation - in real implementation, get actual product prices
-        totalAmount += item.quantity * 100; // Assuming ₦100 per item
+        // Use actual product price for calculation
+        if (typeof product.price === 'number') {
+          totalAmount += item.quantity * product.price;
+        } else {
+          missingPrice = true;
+        }
+      }
+
+      // If any price is missing and manualTotalAmount is provided, use it
+      if (missingPrice && typeof orderData.manualTotalAmount === 'number') {
+        totalAmount = orderData.manualTotalAmount;
       }
 
       // Create the order
@@ -155,12 +167,12 @@ export async function POST(request: NextRequest) {
           OrderItem: {
             include: {
               Product: {
-                select: { name: true, sku: true }
+                select: { name: true, sku: true, price: true }
               }
             }
           },
           Business: {
-            select: { name: true }
+            select: { name: true, baseCurrency: true, id: true }
           }
         }
       });
@@ -209,13 +221,16 @@ export async function POST(request: NextRequest) {
         id: result.id,
         customerName: result.customerName,
         businessName: result.Business.name,
+        baseCurrency: result.Business.baseCurrency,
         totalAmount: result.totalAmount,
         status: result.status,
         itemCount: result.OrderItem.length,
         items: result.OrderItem.map(item => ({
           sku: item.Product.sku,
           productName: item.Product.name,
-          quantity: item.quantity
+          quantity: item.quantity,
+          price: item.Product.price,
+          currency: result.Business.baseCurrency
         }))
       }
     });

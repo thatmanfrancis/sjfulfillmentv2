@@ -89,7 +89,7 @@ export async function GET(
         Order: {
           fulfillmentWarehouseId: allocation.warehouseId,
           status: {
-            in: ['DISPATCHED', 'PICKED_UP', 'DELIVERING', 'DELIVERED']
+            in: ['PICKED_UP', 'DELIVERING', 'DELIVERED']
           },
           orderDate: {
             gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
@@ -383,7 +383,7 @@ export async function DELETE(
         Order: {
           fulfillmentWarehouseId: existingAllocation.warehouseId,
           status: {
-            in: ['NEW', 'AWAITING_ALLOC', 'DISPATCHED']
+            in: ['NEW', 'AWAITING_ALLOC', 'DELIVERING']
           }
         },
       },
