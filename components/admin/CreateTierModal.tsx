@@ -3,55 +3,50 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import type { PricingTier } from "@/types";
 import { useState, useEffect } from "react";
+
+type TierPackage = {
+  serviceType: string;
+  baseRate: string;
+  negotiatedRate: string;
+  discountPercent?: string;
+  rateUnit: string;
+  minimumOrderQuantity?: string;
+  maximumOrderQuantity?: string;
+  features?: string;
+  applicableRegions?: string;
+  validFrom?: string;
+  validTo?: string;
+};
 
 export default function CreateTierModal({ open, onOpenChange, onCreated }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreated?: () => void;
+  onCreated?: (newTier?: PricingTier) => void;
 }) {
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({
-    description: "",
-    currency: "",
-    merchantId: "",
-    packages: [
-      {
-        serviceType: "",
-        baseRate: "",
-        negotiatedRate: "",
-        rateUnit: "per_kg",
-        minimumOrderQuantity: "",
-        maximumOrderQuantity: "",
-        features: "",
-        applicableRegions: "",
-        validFrom: "",
-        validTo: ""
-      }
-    ]
-  });
-  const [merchantSearch, setMerchantSearch] = useState("");
-  const [merchantResults, setMerchantResults] = useState<any[]>([]);
-  const [selectedMerchant, setSelectedMerchant] = useState<any>(null);
-
-  useEffect(() => {
-    if (merchantSearch.length < 2) {
-      setMerchantResults([]);
-      return;
+  const [form, setForm] = useState<{ description: string; currency: string; packages: TierPackage[] }>(
+    {
+      description: "",
+      currency: "",
+      packages: [
+        {
+          serviceType: "",
+          baseRate: "",
+          negotiatedRate: "",
+          discountPercent: "",
+          rateUnit: "per_kg",
+          minimumOrderQuantity: "",
+          maximumOrderQuantity: "",
+          features: "",
+          applicableRegions: "",
+          validFrom: "",
+          validTo: ""
+        }
+      ]
     }
-    const fetchMerchants = async () => {
-      const res = await fetch(`/api/admin/businesses?search=${encodeURIComponent(merchantSearch)}`);
-      const data = await res.json();
-      setMerchantResults(data.businesses || []);
-    };
-    fetchMerchants();
-  }, [merchantSearch]);
-
-  useEffect(() => {
-    if (selectedMerchant) {
-      setForm(f => ({ ...f, currency: selectedMerchant.baseCurrency, merchantId: selectedMerchant.id }));
-    }
-  }, [selectedMerchant]);
+  );
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-[#1a1a1a] border-gray-700 max-w-3xl w-full">
@@ -63,26 +58,45 @@ export default function CreateTierModal({ open, onOpenChange, onCreated }: {
             e.preventDefault();
             setCreating(true);
             try {
+              // Only send fields allowed by backend schema
+              const allowed = [
+                "serviceType",
+                "baseRate",
+                "negotiatedRate",
+                "rateUnit",
+                "currency",
+                "merchantId",
+                "discountPercent"
+              ];
+              const cleanPackage = (pkg: TierPackage) => {
+                const cleaned: any = {};
+                cleaned.serviceType = pkg.serviceType;
+                cleaned.baseRate = parseFloat(pkg.baseRate);
+                cleaned.negotiatedRate = parseFloat(pkg.negotiatedRate);
+                cleaned.rateUnit = pkg.rateUnit;
+                // Always include currency from form
+                cleaned.currency = form.currency;
+                if (pkg.discountPercent && pkg.discountPercent !== "") {
+                  cleaned.discountPercent = parseFloat(pkg.discountPercent);
+                }
+                // Only include allowed fields
+                Object.keys(cleaned).forEach(key => {
+                  if (!allowed.includes(key) || cleaned[key] === undefined || cleaned[key] === "") {
+                    delete cleaned[key];
+                  }
+                });
+                return cleaned;
+              };
+              const payload = {
+                description: form.description,
+                currency: form.currency,
+                packages: form.packages.map(cleanPackage)
+              };
+              console.log("[CreateTierModal] Submitting payload:", payload);
               const res = await fetch("/api/admin/price-tiers", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  description: form.description,
-                  currency: form.currency,
-                  merchantId: form.merchantId,
-                  packages: form.packages.map(pkg => ({
-                    serviceType: pkg.serviceType,
-                    baseRate: parseFloat(pkg.baseRate),
-                    negotiatedRate: parseFloat(pkg.negotiatedRate),
-                    rateUnit: pkg.rateUnit,
-                    minimumOrderQuantity: pkg.minimumOrderQuantity ? parseInt(pkg.minimumOrderQuantity) : undefined,
-                    maximumOrderQuantity: pkg.maximumOrderQuantity ? parseInt(pkg.maximumOrderQuantity) : undefined,
-                    features: pkg.features,
-                    applicableRegions: pkg.applicableRegions,
-                    validFrom: pkg.validFrom,
-                    validTo: pkg.validTo
-                  }))
-                })
+                body: JSON.stringify(payload)
               });
               if (!res.ok) throw new Error("Failed to create tier(s)");
               if (onCreated) onCreated();
@@ -90,12 +104,12 @@ export default function CreateTierModal({ open, onOpenChange, onCreated }: {
               setForm({
                 description: "",
                 currency: "",
-                merchantId: "",
                 packages: [
                   {
                     serviceType: "",
                     baseRate: "",
                     negotiatedRate: "",
+                    discountPercent: "",
                     rateUnit: "per_kg",
                     minimumOrderQuantity: "",
                     maximumOrderQuantity: "",
@@ -106,8 +120,6 @@ export default function CreateTierModal({ open, onOpenChange, onCreated }: {
                   }
                 ]
               });
-              setSelectedMerchant(null);
-              setMerchantSearch("");
             } catch (err) {
               // Optionally show error
             } finally {
@@ -116,36 +128,22 @@ export default function CreateTierModal({ open, onOpenChange, onCreated }: {
           }}
           className="space-y-6"
         >
-          {/* Merchant Search & Select */}
+          {/* ...existing code... */}
           <div className="mb-4">
-            <Label className="text-white mb-2 block">Merchant <span className="text-[#f8c017]">*</span></Label>
-            <Input
-              placeholder="Search merchant by name..."
-              value={selectedMerchant ? selectedMerchant.name : merchantSearch}
-              onChange={e => {
-                setMerchantSearch(e.target.value);
-                setSelectedMerchant(null);
-              }}
-              className="bg-[#232323] border-gray-700 text-white"
-              autoComplete="off"
-            />
-            {merchantSearch.length > 1 && !selectedMerchant && merchantResults.length > 0 && (
-              <div className="absolute z-10 bg-[#232323] border border-gray-700 rounded mt-1 w-full max-h-48 overflow-y-auto">
-                {merchantResults.map((merchant) => (
-                  <div
-                    key={merchant.id}
-                    className="px-3 py-2 cursor-pointer hover:bg-[#f8c017]/20 text-white"
-                    onClick={() => {
-                      setSelectedMerchant(merchant);
-                      setMerchantSearch("");
-                    }}
-                  >
-                    <div className="font-semibold">{merchant.name}</div>
-                    <div className="text-xs text-gray-400">{merchant.baseCurrency} • {merchant.city}, {merchant.country}</div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <Label className="text-white mb-2 block">Currency <span className="text-[#f8c017]">*</span></Label>
+            <select
+              required
+              value={form.currency}
+              onChange={e => setForm(f => ({ ...f, currency: e.target.value }))}
+              className="w-full p-2 rounded bg-[#232323] border border-gray-700 text-white"
+            >
+              <option value="">Select currency</option>
+              <option value="NGN">NGN</option>
+              <option value="USD">USD</option>
+              <option value="GBP">GBP</option>
+              <option value="CAD">CAD</option>
+              <option value="EUR">EUR</option>
+            </select>
           </div>
           <div className="mb-4">
             <Label className="text-white mb-2 block">Description</Label>
@@ -216,76 +214,86 @@ export default function CreateTierModal({ open, onOpenChange, onCreated }: {
                   />
                 </div>
                 <div className="flex-1 min-w-[120px]">
-                  <Label className="text-white mb-1 block">Min Qty</Label>
+                  <Label className="text-white mb-1 block">Discount (%)</Label>
                   <Input
                     type="number"
-                    min="1"
-                    value={pkg.minimumOrderQuantity}
+                    min={0}
+                    max={100}
+                    value={pkg.discountPercent ?? ""}
                     onChange={e => setForm(f => ({
                       ...f,
-                      packages: f.packages.map((p, i) => i === idx ? { ...p, minimumOrderQuantity: e.target.value } : p)
+                      packages: f.packages.map((p, i) => i === idx ? { ...p, discountPercent: e.target.value } : p)
                     }))}
                     className="bg-[#232323] border-gray-700 text-white"
                   />
                 </div>
+                {/* Collapsible advanced options */}
                 <div className="flex-1 min-w-[120px]">
-                  <Label className="text-white mb-1 block">Max Qty</Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={pkg.maximumOrderQuantity}
-                    onChange={e => setForm(f => ({
-                      ...f,
-                      packages: f.packages.map((p, i) => i === idx ? { ...p, maximumOrderQuantity: e.target.value } : p)
-                    }))}
-                    className="bg-[#232323] border-gray-700 text-white"
-                  />
-                </div>
-                <div className="flex-1 min-w-[180px]">
-                  <Label className="text-white mb-1 block">Features</Label>
-                  <Input
-                    value={pkg.features}
-                    onChange={e => setForm(f => ({
-                      ...f,
-                      packages: f.packages.map((p, i) => i === idx ? { ...p, features: e.target.value } : p)
-                    }))}
-                    className="bg-[#232323] border-gray-700 text-white"
-                  />
-                </div>
-                <div className="flex-1 min-w-[180px]">
-                  <Label className="text-white mb-1 block">Regions</Label>
-                  <Input
-                    value={pkg.applicableRegions}
-                    onChange={e => setForm(f => ({
-                      ...f,
-                      packages: f.packages.map((p, i) => i === idx ? { ...p, applicableRegions: e.target.value } : p)
-                    }))}
-                    className="bg-[#232323] border-gray-700 text-white"
-                  />
-                </div>
-                <div className="flex-1 min-w-[120px]">
-                  <Label className="text-white mb-1 block">Valid From</Label>
-                  <Input
-                    type="date"
-                    value={pkg.validFrom}
-                    onChange={e => setForm(f => ({
-                      ...f,
-                      packages: f.packages.map((p, i) => i === idx ? { ...p, validFrom: e.target.value } : p)
-                    }))}
-                    className="bg-[#232323] border-gray-700 text-white"
-                  />
-                </div>
-                <div className="flex-1 min-w-[120px]">
-                  <Label className="text-white mb-1 block">Valid To</Label>
-                  <Input
-                    type="date"
-                    value={pkg.validTo}
-                    onChange={e => setForm(f => ({
-                      ...f,
-                      packages: f.packages.map((p, i) => i === idx ? { ...p, validTo: e.target.value } : p)
-                    }))}
-                    className="bg-[#232323] border-gray-700 text-white"
-                  />
+                  <details>
+                    <summary className="cursor-pointer text-[#f8c017]">Show advanced options</summary>
+                    <div className="mt-2 space-y-2">
+                      <Label className="text-white mb-1 block">Min Qty</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={pkg.minimumOrderQuantity}
+                        onChange={e => setForm(f => ({
+                          ...f,
+                          packages: f.packages.map((p, i) => i === idx ? { ...p, minimumOrderQuantity: e.target.value } : p)
+                        }))}
+                        className="bg-[#232323] border-gray-700 text-white"
+                      />
+                      <Label className="text-white mb-1 block">Max Qty</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={pkg.maximumOrderQuantity}
+                        onChange={e => setForm(f => ({
+                          ...f,
+                          packages: f.packages.map((p, i) => i === idx ? { ...p, maximumOrderQuantity: e.target.value } : p)
+                        }))}
+                        className="bg-[#232323] border-gray-700 text-white"
+                      />
+                      <Label className="text-white mb-1 block">Features</Label>
+                      <Input
+                        value={pkg.features}
+                        onChange={e => setForm(f => ({
+                          ...f,
+                          packages: f.packages.map((p, i) => i === idx ? { ...p, features: e.target.value } : p)
+                        }))}
+                        className="bg-[#232323] border-gray-700 text-white"
+                      />
+                      <Label className="text-white mb-1 block">Regions</Label>
+                      <Input
+                        value={pkg.applicableRegions}
+                        onChange={e => setForm(f => ({
+                          ...f,
+                          packages: f.packages.map((p, i) => i === idx ? { ...p, applicableRegions: e.target.value } : p)
+                        }))}
+                        className="bg-[#232323] border-gray-700 text-white"
+                      />
+                      <Label className="text-white mb-1 block">Valid From</Label>
+                      <Input
+                        type="date"
+                        value={pkg.validFrom}
+                        onChange={e => setForm(f => ({
+                          ...f,
+                          packages: f.packages.map((p, i) => i === idx ? { ...p, validFrom: e.target.value } : p)
+                        }))}
+                        className="bg-[#232323] border-gray-700 text-white"
+                      />
+                      <Label className="text-white mb-1 block">Valid To</Label>
+                      <Input
+                        type="date"
+                        value={pkg.validTo}
+                        onChange={e => setForm(f => ({
+                          ...f,
+                          packages: f.packages.map((p, i) => i === idx ? { ...p, validTo: e.target.value } : p)
+                        }))}
+                        className="bg-[#232323] border-gray-700 text-white"
+                      />
+                    </div>
+                  </details>
                 </div>
                 <div className="flex items-center">
                   {form.packages.length > 1 && (
@@ -305,6 +313,7 @@ export default function CreateTierModal({ open, onOpenChange, onCreated }: {
                 serviceType: "",
                 baseRate: "",
                 negotiatedRate: "",
+                discountPercent: "",
                 rateUnit: "per_kg",
                 minimumOrderQuantity: "",
                 maximumOrderQuantity: "",

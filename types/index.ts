@@ -1,3 +1,17 @@
+// PricingTier type for shared use
+export interface PricingTier {
+  id: string;
+  merchantId?: string;
+  serviceType: string;
+  baseRate: number;
+  negotiatedRate: number;
+  discountPercent?: number;
+  rateUnit: string;
+  currency: string;
+  createdAt: string;
+  updatedAt: string;
+  Business?: any;
+}
 // User and Authentication Types
 export interface User {
   id: string;

@@ -60,6 +60,7 @@ export default function AdminShipmentsPage() {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [tab, setTab] = useState<'all'|'delivered'|'returned'|'inprocess'>('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -73,7 +74,7 @@ export default function AdminShipmentsPage() {
   useEffect(() => {
     fetchShipments();
     fetchStats();
-  }, [searchTerm, statusFilter, page]);
+  }, [searchTerm, statusFilter, tab, page]);
 
   // Close menu on outside click
   useEffect(() => {
@@ -115,7 +116,11 @@ export default function AdminShipmentsPage() {
       setLoading(true);
       const params = new URLSearchParams();
       if (searchTerm) params.append('search', searchTerm);
-      if (statusFilter !== 'all') params.append('status', statusFilter);
+      // Tab logic overrides statusFilter
+      if (tab === 'delivered') params.append('status', 'DELIVERED');
+      else if (tab === 'returned') params.append('status', 'RETURNED');
+      else if (tab === 'inprocess') params.append('status', 'PICKED_UP,DELIVERING,GOING_TO_PICKUP');
+      else if (statusFilter !== 'all') params.append('status', statusFilter);
       params.append('page', page.toString());
       params.append('limit', '20');
       const data = await get(`/api/admin/shipments?${params}`) as any;
@@ -354,6 +359,13 @@ export default function AdminShipmentsPage() {
                 <option value="CANCELED">Canceled</option>
               </select>
             </div>
+          </div>
+          {/* Tabs for shipment status below search/filter */}
+          <div className="flex gap-2 mt-6">
+            <Button variant={tab==='all'?'default':'outline'} onClick={()=>{setTab('all');setPage(1);}}>All</Button>
+            <Button variant={tab==='delivered'?'default':'outline'} onClick={()=>{setTab('delivered');setPage(1);}}>Delivered</Button>
+            <Button variant={tab==='returned'?'default':'outline'} onClick={()=>{setTab('returned');setPage(1);}}>Returned</Button>
+            <Button variant={tab==='inprocess'?'default':'outline'} onClick={()=>{setTab('inprocess');setPage(1);}}>In Process</Button>
           </div>
         </CardContent>
       </Card>

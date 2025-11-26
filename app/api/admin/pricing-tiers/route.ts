@@ -9,8 +9,15 @@ const pricingTierCreateSchema = z.object({
   serviceType: z.string().min(1), // e.g., "WAREHOUSING_MONTHLY", "FULFILLMENT_PER_ORDER"
   baseRate: z.number().min(0),
   negotiatedRate: z.number().min(0),
+  discountPercent: z.number().min(0).max(100).optional(), // Optional percentage discount
   rateUnit: z.string().min(1), // e.g., "PER_UNIT_MONTH", "PER_ORDER"
   currency: z.string().default("USD"),
+  minimumOrderQuantity: z.number().optional(),
+  maximumOrderQuantity: z.number().optional(),
+  features: z.string().optional(),
+  applicableRegions: z.string().optional(),
+  validFrom: z.string().optional(),
+  validTo: z.string().optional(),
 });
 
 const pricingTierUpdateSchema = z.object({
@@ -18,6 +25,7 @@ const pricingTierUpdateSchema = z.object({
   serviceType: z.string().min(1).optional(),
   baseRate: z.number().min(0).optional(),
   negotiatedRate: z.number().min(0).optional(),
+  discountPercent: z.number().min(0).max(100).optional(),
   rateUnit: z.string().min(1).optional(),
   currency: z.string().optional(),
 });
@@ -164,6 +172,9 @@ export async function POST(request: NextRequest) {
     if (typeof validatedData.merchantId !== 'string') {
       delete createData.merchantId;
     }
+    if (typeof validatedData.discountPercent !== 'number') {
+      delete createData.discountPercent;
+    }
     const newPricingTier = await prisma.pricingTier.create({
       data: createData,
       include: {
@@ -175,6 +186,9 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+
+
+    
 
     // Create audit log
     await prisma.auditLog.create({

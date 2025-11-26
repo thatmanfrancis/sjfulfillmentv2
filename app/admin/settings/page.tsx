@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { ApiKeyManager } from '@/components/admin/ApiKeyManager'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -285,7 +286,7 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="bg-[#1a1a1a] p-6 min-h-screen">
+      <div className="bg-black p-6 min-h-screen">
         <div className="max-w-6xl mx-auto space-y-6">
           <div className="animate-pulse">
             <div className="h-8 bg-gray-600 rounded w-48 mb-4"></div>
@@ -297,7 +298,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="bg-[#1a1a1a] p-6 min-h-screen">
+    <div className="bg-black p-6 min-h-screen">
       <div className="max-w-6xl mx-auto space-y-8">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -782,6 +783,11 @@ export default function SettingsPage() {
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
+                {/* API Key Management Section (Admin) */}
+                <div className="mt-8">
+                  {/* Pass admin's id as merchantId for admin API key management (component expects merchantId prop) */}
+                  <ApiKeyManager adminId={profile?.id} />
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

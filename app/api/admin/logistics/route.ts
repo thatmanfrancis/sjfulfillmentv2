@@ -1,5 +1,12 @@
 import { randomUUID } from 'crypto';
 import { sendEmail } from '@/lib/email';
+import { NextRequest, NextResponse } from "next/server";
+import { getCurrentSession } from "@/lib/session";
+import prisma from "@/lib/prisma";
+
+
+
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getCurrentSession();
@@ -53,10 +60,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
-import { OrderScalarFieldEnum } from './../../../generated/prisma/internal/prismaNamespaceBrowser';
-import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentSession } from '@/lib/session';
-import prisma from '@/lib/prisma';
+
 
 export async function GET(request: NextRequest) {
   try {
@@ -101,6 +105,8 @@ export async function GET(request: NextRequest) {
             firstName: true,
             lastName: true,
             email: true,
+            phone: true,
+            role: true
           },
         },
         Warehouse: {
@@ -163,6 +169,8 @@ export async function GET(request: NextRequest) {
       isActive: user.isVerified, // Use isVerified as proxy for active
       regionId: null, // Not applicable with current schema
       region: null,
+      phone: user.phone,
+      role: user.role,
       totalOrders: user.Order.length,
       completedOrders: user.Order.filter(o => o.status === 'DELIVERED').length,
       createdAt: user.createdAt.toISOString(),

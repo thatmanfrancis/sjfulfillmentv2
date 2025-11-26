@@ -1,3 +1,12 @@
+model PriceTierGroup {
+  id          String        @id @default(uuid())
+  name        String
+  description String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  pricingTiers PricingTier[]
+}
+
 generator client {
   provider = "prisma-client"
   output   = "../app/generated/prisma"
@@ -20,6 +29,19 @@ model AuditLog {
 
   @@index([changedById])
   @@index([entityId])
+}
+
+model AdminApiKey {
+  id        String   @id @default(uuid())
+  adminId   String
+  apiKey    String   @unique
+  name      String
+  isRevoked Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  Admin     User     @relation(fields: [adminId], references: [id])
+
+  @@index([adminId])
 }
 
 model Business {
@@ -163,18 +185,22 @@ model OrderItem {
 }
 
 model PricingTier {
-  id             String    @id
+  id             String    @id @default(uuid())
+  groupId        String?
   merchantId     String?
   serviceType    String
   baseRate       Float
   negotiatedRate Float
+  discountPercent Float?   // Optional percentage discount (e.g., 20 for 20%)
   rateUnit       String
   createdAt      DateTime  @default(now())
   currency       String    @default("USD")
-  updatedAt      DateTime
+  updatedAt      DateTime  @updatedAt
   Business       Business? @relation(fields: [merchantId], references: [id])
+  PriceTierGroup PriceTierGroup? @relation(fields: [groupId], references: [id])
 
   @@index([merchantId])
+  @@index([groupId])
 }
 
 model Product {
@@ -361,6 +387,7 @@ model User {
   StockTransfer_StockTransfer_requestedByToUser StockTransfer[]     @relation("StockTransfer_requestedByToUser")
   Business_User_businessIdToBusiness            Business?           @relation("User_businessIdToBusiness", fields: [businessId], references: [id])
   VerificationToken                             VerificationToken[]
+  adminApiKeys                                  AdminApiKey[]
 
   @@index([businessId])
 }

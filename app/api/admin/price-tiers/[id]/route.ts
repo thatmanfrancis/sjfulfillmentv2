@@ -18,10 +18,10 @@ const updatePricingTierSchema = z.object({
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: any }
+  { params }: { params: Promise<{id: string}>}
 ) {
   try {
-    const id = params.id;
+    const{ id} = await params;
     const session = await getCurrentSession();
     if (!session?.userId) {
       return NextResponse.json(

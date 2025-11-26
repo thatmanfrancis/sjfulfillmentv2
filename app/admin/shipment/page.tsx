@@ -20,19 +20,27 @@ export default function AdminShipmentPage() {
   const [shipments, setShipments] = useState([]);
   const [selected, setSelected]: any = useState(null);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('');
+  const [tab, setTab] = useState<'all'|'delivered'|'returned'|'inprocess'>('all');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
     fetchShipments();
     // eslint-disable-next-line
-  }, [statusFilter]);
+  }, [tab, page]);
 
   const fetchShipments = async () => {
     setLoading(true);
     const params = new URLSearchParams();
-    if (statusFilter) params.append('status', statusFilter);
+    params.append('page', page.toString());
+    params.append('limit', '20');
+    if (tab === 'delivered') params.append('status', 'DELIVERED');
+    else if (tab === 'returned') params.append('status', 'RETURNED');
+    else if (tab === 'inprocess') params.append('status', 'PICKED_UP,DELIVERING,DISPATCHED');
+    // 'all' tab: no status param
     const data: any = await get('/api/admin/shipments?' + params.toString());
     setShipments(data?.shipments || []);
+    setTotalPages(data?.pagination?.pages || 1);
     setLoading(false);
   };
 
@@ -42,21 +50,12 @@ export default function AdminShipmentPage() {
         <h1 className="text-3xl font-bold text-white">Shipments</h1>
       </div>
 
-      {/* Status Filter */}
-      <div className="flex gap-4">
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-2 bg-black border border-gray-700 rounded-lg text-white"
-        >
-          <option value="">All Statuses</option>
-          <option value="AWAITING_ALLOC">Pending</option>
-          <option value="PICKED_UP">Picked Up</option>
-          <option value="DELIVERING">In Transit</option>
-          <option value="DISPATCHED">Out for Delivery</option>
-          <option value="DELIVERED">Delivered</option>
-          <option value="RETURNED">Failed</option>
-        </select>
+      {/* Tabs */}
+      <div className="flex gap-2 mb-4">
+        <Button variant={tab==='all'?'default':'outline'} onClick={()=>{setTab('all');setPage(1);}}>All</Button>
+        <Button variant={tab==='delivered'?'default':'outline'} onClick={()=>{setTab('delivered');setPage(1);}}>Delivered</Button>
+        <Button variant={tab==='returned'?'default':'outline'} onClick={()=>{setTab('returned');setPage(1);}}>Returned</Button>
+        <Button variant={tab==='inprocess'?'default':'outline'} onClick={()=>{setTab('inprocess');setPage(1);}}>In Process</Button>
       </div>
 
       {/* Shipments Table */}
@@ -86,9 +85,9 @@ export default function AdminShipmentPage() {
                     <td className="px-6 py-4 text-white font-mono text-sm">
                       {shipment.trackingNumber || shipment.id.slice(0, 8)}
                     </td>
-                    <td className="px-6 py-4 text-gray-400">{shipment.Order?.id || '-'}</td>
-                    <td className="px-6 py-4 text-gray-400">{shipment.Order?.customerName || '-'}</td>
-                    <td className="px-6 py-4 text-gray-400">{shipment.Order?.customerAddress || '-'}</td>
+                    <td className="px-6 py-4 text-gray-400">{shipment.order?.id || '-'}</td>
+                    <td className="px-6 py-4 text-gray-400">{shipment.order?.customerName || '-'}</td>
+                    <td className="px-6 py-4 text-gray-400">{shipment.order?.customerAddress || '-'}</td>
                     <td className="px-6 py-4">
                       <span className={`px-2 py-1 rounded text-xs font-medium text-white ${getStatusColor(shipment.status || '')}`}>
                         {(shipment.status || '').replace('_', ' ')}
@@ -106,6 +105,12 @@ export default function AdminShipmentPage() {
             </table>
           </div>
         )}
+        {/* Pagination Controls */}
+        <div className="flex justify-center items-center gap-2 py-4">
+          <Button disabled={page<=1} onClick={()=>setPage(page-1)}>Previous</Button>
+          <span className="text-white">Page {page} of {totalPages}</span>
+          <Button disabled={page>=totalPages} onClick={()=>setPage(page+1)}>Next</Button>
+        </div>
       </div>
 
       <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>

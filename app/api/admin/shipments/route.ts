@@ -18,7 +18,11 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
     const where: any = {};
     if (status && status !== 'all') {
-      where.status = status;
+      if (status.includes(',')) {
+        where.Order = { status: { in: status.split(',') } };
+      } else {
+        where.Order = { status };
+      }
     }
     // Enhanced search: by customer name, tracking number, or orderId
     if (search) {
