@@ -1,20 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { z } from 'zod';
 import { getCurrentSession } from '@/lib/session';
 import prisma from '@/lib/prisma';
 import { createAuditLog } from '@/lib/notifications';
 
-const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1, 'Current password is required'),
-  newPassword: z.string().min(8, 'New password must be at least 8 characters')
-    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/, 
-           'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character'),
-  confirmPassword: z.string().min(1, 'Please confirm your new password'),
-}).refine((data) => data.newPassword === data.confirmPassword, {
-  message: "New password and confirmation don't match",
-  path: ["confirmPassword"],
-});
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,16 +17,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     
-    // Validate the request data
-    const result = changePasswordSchema.safeParse(body);
-    if (!result.success) {
-      return NextResponse.json(
-        { error: 'Validation failed', details: result.error.issues },
-        { status: 400 }
-      );
-    }
-
-    const { currentPassword, newPassword } = result.data;
+    const { currentPassword, newPassword } = body;
 
     // Get current user with password
     const user = await prisma.user.findUnique({
@@ -53,6 +33,13 @@ export async function POST(request: NextRequest) {
         }
       },
     });
+
+    // For debugging: return the current password hash
+    if (request.method === "POST" && body.debug === true) {
+      return NextResponse.json({
+        passwordHash: user?.passwordHash || null
+      });
+    }
 
     if (!user) {
       return NextResponse.json(

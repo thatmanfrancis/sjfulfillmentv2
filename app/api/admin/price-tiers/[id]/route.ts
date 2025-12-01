@@ -44,83 +44,67 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    
-    // Validate the request data
-    const result = updatePricingTierSchema.safeParse(body);
-    if (!result.success) {
-      return NextResponse.json(
-        { error: 'Validation failed', details: result.error.issues },
-        { status: 400 }
-      );
-    }
+    // Expect payload: { name, description, currency, packages: [...] }
+    const { name, description, currency, packages } = body;
 
-    const updateData = result.data;
-
-    // Map frontend fields to backend fields
-    const mappedData: any = {};
-    if (updateData.name) mappedData.serviceType = updateData.name;
-    if (updateData.serviceType) mappedData.serviceType = updateData.serviceType;
-    if (updateData.baseRate !== undefined) mappedData.baseRate = updateData.baseRate;
-    if (updateData.ratePerKg !== undefined) mappedData.negotiatedRate = updateData.ratePerKg;
-    if (updateData.negotiatedRate !== undefined) mappedData.negotiatedRate = updateData.negotiatedRate;
-    if (updateData.rateUnit) mappedData.rateUnit = updateData.rateUnit;
-    if (updateData.currency) mappedData.currency = updateData.currency;
-
-    // Check if pricing tier exists
-    const existingTier = await prisma.pricingTier.findUnique({
+    // Update parent group
+    const group = await prisma.priceTierGroup.update({
       where: { id },
-      include: {
-        Business: {
-          select: { id: true, name: true },
-        },
+      data: {
+        name,
+        description,
+        currency,
+        updatedAt: new Date(),
       },
     });
 
-    if (!existingTier) {
-      return NextResponse.json(
-        { error: 'Pricing tier not found' },
-        { status: 404 }
-      );
-    }
-
-    // If changing service type, check for duplicates
-    if (mappedData.serviceType && mappedData.serviceType !== existingTier.serviceType) {
-      const nameExists = await prisma.pricingTier.findFirst({
-        where: { 
-          serviceType: {
-            equals: mappedData.serviceType,
-            mode: 'insensitive',
-          },
-          id: { not: id },
-        },
-      });
-
-      if (nameExists) {
-        return NextResponse.json(
-          { error: 'A pricing tier with this service type already exists' },
-          { status: 400 }
-        );
+    // Update children (packages)
+    // For each package: if id exists, update; else, create
+    if (Array.isArray(packages)) {
+      for (const pkg of packages) {
+        if (pkg.id) {
+          await prisma.pricingTier.update({
+            where: { id: pkg.id },
+            data: {
+              serviceType: pkg.serviceType,
+              baseRate: pkg.baseRate,
+              negotiatedRate: pkg.negotiatedRate,
+              rateUnit: pkg.rateUnit,
+              currency: pkg.currency,
+              discountPercent: pkg.discountPercent,
+              updatedAt: new Date(),
+            },
+          });
+        } else {
+          await prisma.pricingTier.create({
+            data: {
+              serviceType: pkg.serviceType,
+              baseRate: pkg.baseRate,
+              negotiatedRate: pkg.negotiatedRate,
+              rateUnit: pkg.rateUnit,
+              currency: pkg.currency,
+              discountPercent: pkg.discountPercent,
+              updatedAt: new Date(),
+              groupId: id,
+            },
+          });
+        }
       }
     }
 
-    // Update the pricing tier
-    const updatedTier = await prisma.pricingTier.update({
+    // Optionally: delete children not present in packages
+    // (not implemented here, but can be added)
+
+    // Return updated group and children
+    const updatedGroup = await prisma.priceTierGroup.findUnique({
       where: { id },
-      data: mappedData,
+      include: {
+        pricingTiers: true,
+      },
     });
 
     return NextResponse.json({
-      id: updatedTier.id,
-      name: updatedTier.serviceType,
-      description: `${updatedTier.rateUnit} pricing`,
-      baseRate: updatedTier.baseRate,
-      ratePerKg: updatedTier.negotiatedRate,
-      ratePerKm: updatedTier.baseRate * 0.5,
-      minimumCharge: updatedTier.baseRate,
-      isActive: true,
-      businessCount: existingTier.Business ? 1 : 0,
-      createdAt: updatedTier.createdAt.toISOString(),
-      updatedAt: updatedTier.updatedAt.toISOString(),
+      group: updatedGroup,
     });
 
   } catch (error) {

@@ -339,8 +339,8 @@ export default function AddProductModal({ isOpen, onClose, onProductAdded }: Add
         const product: any = {};
         headers.forEach((header, index) => {
           if (values[index] !== undefined) {
-            if (header.toLowerCase() === 'price' && values[index] !== '') {
-              product.price = parseFloat(values[index]);
+            if (header.toLowerCase() === 'price') {
+              // Ignore price column
             } else {
               product[header] = values[index];
             }
@@ -369,7 +369,6 @@ export default function AddProductModal({ isOpen, onClose, onProductAdded }: Add
             businessId: selectedBusiness.id,
             ...(product.sku ? { sku: product.sku } : {}),
             ...(Object.keys(dimensions).length > 0 ? { dimensions } : {}),
-            ...(product.price !== undefined ? { price: product.price } : {}),
           };
           if (product.quantity && !isNaN(parseInt(product.quantity))) {
             productData.stockAllocations = [{
@@ -483,8 +482,8 @@ export default function AddProductModal({ isOpen, onClose, onProductAdded }: Add
           const product: any = {};
           headers.forEach((header, index) => {
             if (values[index] !== undefined) {
-              if (header.toLowerCase() === 'price' && values[index] !== '') {
-                product.price = parseFloat(values[index]);
+              if (header.toLowerCase() === 'price') {
+                // Ignore price column
               } else {
                 product[header] = values[index];
               }
@@ -502,8 +501,7 @@ export default function AddProductModal({ isOpen, onClose, onProductAdded }: Add
               height: product.height || '',
               quantity: product.quantity || '',
               warehouseCode: product.warehouseCode || '',
-              description: product.description || '',
-              ...(product.price !== undefined ? { price: product.price } : {})
+              description: product.description || ''
             });
           }
         }
@@ -641,18 +639,7 @@ export default function AddProductModal({ isOpen, onClose, onProductAdded }: Add
                         </div>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-gray-300">Price (optional)</Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            placeholder="0.00"
-                            value={singleProduct.price}
-                            onChange={e => setSingleProduct(prev => ({ ...prev, price: e.target.value }))}
-                            className="bg-[#2a2a2a] border-gray-600 text-white"
-                          />
-                        </div>
+                        {/* Price input removed as per new requirements */}
                         <div className="space-y-2">
                           <Label className="text-sm font-medium text-gray-300">Weight (kg) *</Label>
                           <Input

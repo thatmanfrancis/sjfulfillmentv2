@@ -1,10 +1,25 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Package, ShoppingCart, TrendingUp, AlertTriangle, DollarSign, Star, Users, Truck, ArrowUpRight } from 'lucide-react';
-import { get } from '@/lib/api';
+import { useEffect, useState } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Package,
+  ShoppingCart,
+  AlertTriangle,
+  DollarSign,
+  Star,
+  Users,
+  Truck,
+  ArrowUpRight,
+} from "lucide-react";
+import { get } from "@/lib/api";
 
 interface MerchantStats {
   totalProducts: number;
@@ -14,6 +29,7 @@ interface MerchantStats {
   lowStockItems: number;
   pendingShipments: number;
   activeCustomers: number;
+  currency: string;
   recentOrders: Array<{
     id: string;
     customerName: string;
@@ -47,6 +63,16 @@ interface MerchantStats {
 
 export function MerchantDashboard() {
   const [stats, setStats] = useState<MerchantStats | null>(null);
+  const currencySymbolMap: Record<string, string> = {
+    NGN: "₦",
+    USD: "$",
+    EUR: "€",
+    GBP: "£",
+    CAD: "C$",
+  };
+  const currencySymbol = stats?.currency
+    ? currencySymbolMap[stats.currency] || stats.currency
+    : "₦";
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,10 +84,10 @@ export function MerchantDashboard() {
     try {
       setLoading(true);
       setError(null);
-      const data: any = await get('/api/merchant/dashboard');
+      const data: any = await get("/api/merchant/dashboard");
       setStats(data);
     } catch (error) {
-      setError('Failed to load dashboard data');
+      setError("Failed to load dashboard data");
     } finally {
       setLoading(false);
     }
@@ -69,12 +95,16 @@ export function MerchantDashboard() {
 
   if (loading) {
     return (
-      <div className="bg-[#1a1a1a] p-6">
+      <div className="bg-black p-6">
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-white">Merchant Dashboard</h1>
-              <p className="text-gray-400 mt-1">Loading your business analytics...</p>
+              <h1 className="text-3xl font-bold text-white">
+                Merchant Dashboard
+              </h1>
+              <p className="text-gray-400 mt-1">
+                Loading your business analytics...
+              </p>
             </div>
           </div>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -102,8 +132,12 @@ export function MerchantDashboard() {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-white">Merchant Dashboard</h1>
-              <p className="text-gray-400 mt-1">Business overview and management</p>
+              <h1 className="text-3xl font-bold text-white">
+                Merchant Dashboard
+              </h1>
+              <p className="text-gray-400 mt-1">
+                Business overview and management
+              </p>
             </div>
           </div>
           <Card className="bg-red-900/20 border-red-500/30">
@@ -117,7 +151,7 @@ export function MerchantDashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <button 
+              <button
                 onClick={fetchStats}
                 className="px-4 py-2 bg-[#f8c017] text-black rounded-md hover:bg-[#f8c017]/90 transition-colors font-medium"
               >
@@ -137,7 +171,9 @@ export function MerchantDashboard() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-bold text-white mb-2">Merchant Dashboard</h1>
+            <h1 className="text-4xl font-bold text-white mb-2">
+              Merchant Dashboard
+            </h1>
             <p className="text-gray-300 text-lg">
               Your business overview and key metrics
             </p>
@@ -158,16 +194,23 @@ export function MerchantDashboard() {
           {/* Total Products */}
           <Card className="bg-linear-to-br from-[#2a2a2a] to-[#1f1f1f] border-gray-700 hover:border-[#f8c017]/50 transition-all duration-300 hover:shadow-lg hover:shadow-[#f8c017]/10">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-              <CardTitle className="text-sm font-medium text-gray-300">Total Products</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-300">
+                Total Products
+              </CardTitle>
               <div className="p-3 bg-[#f8c017]/20 rounded-xl">
                 <Package className="h-5 w-5 text-[#f8c017]" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-white mb-2">{stats?.totalProducts?.toLocaleString() || '0'}</div>
+              <div className="text-3xl font-bold text-white mb-2">
+                {stats?.totalProducts?.toLocaleString() || "0"}
+              </div>
               <p className="text-sm text-gray-400 flex items-center">
                 <ArrowUpRight className="h-4 w-4 text-emerald-400 mr-1" />
-                <span className="text-emerald-400 font-medium">+{stats?.growthRate || 0}%</span> this month
+                <span className="text-emerald-400 font-medium">
+                  +{stats?.growthRate || 0}%
+                </span>{" "}
+                this month
               </p>
             </CardContent>
           </Card>
@@ -175,16 +218,23 @@ export function MerchantDashboard() {
           {/* Total Orders */}
           <Card className="bg-linear-to-br from-[#2a2a2a] to-[#1f1f1f] border-gray-700 hover:border-[#f8c017]/50 transition-all duration-300 hover:shadow-lg hover:shadow-[#f8c017]/10">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-              <CardTitle className="text-sm font-medium text-gray-300">Total Orders</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-300">
+                Total Orders
+              </CardTitle>
               <div className="p-3 bg-gray-600/50 rounded-xl">
                 <ShoppingCart className="h-5 w-5 text-white" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-white mb-2">{stats?.totalOrders?.toLocaleString() || '0'}</div>
+              <div className="text-3xl font-bold text-white mb-2">
+                {stats?.totalOrders?.toLocaleString() || "0"}
+              </div>
               <p className="text-sm text-gray-400 flex items-center">
                 <ArrowUpRight className="h-4 w-4 text-emerald-400 mr-1" />
-                <span className="text-emerald-400 font-medium">+{stats?.growthRate || 0}%</span> from last month
+                <span className="text-emerald-400 font-medium">
+                  +{stats?.growthRate || 0}%
+                </span>{" "}
+                from last month
               </p>
             </CardContent>
           </Card>
@@ -192,18 +242,24 @@ export function MerchantDashboard() {
           {/* Monthly Revenue */}
           <Card className="bg-linear-to-br from-[#2a2a2a] to-[#1f1f1f] border-gray-700 hover:border-[#f8c017]/50 transition-all duration-300 hover:shadow-lg hover:shadow-[#f8c017]/10">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-              <CardTitle className="text-sm font-medium text-gray-300">Monthly Revenue</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-300">
+                Monthly Revenue
+              </CardTitle>
               <div className="p-3 bg-emerald-500/20 rounded-xl">
                 <DollarSign className="h-5 w-5 text-emerald-400" />
               </div>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-white mb-2">
-                ₦{stats?.monthlyRevenue?.toLocaleString() || '0'}
+                {currencySymbol}
+                {stats?.monthlyRevenue?.toLocaleString() || "0"}
               </div>
               <p className="text-sm text-gray-400 flex items-center">
                 <ArrowUpRight className="h-4 w-4 text-emerald-400 mr-1" />
-                <span className="text-emerald-400 font-medium">+{stats?.growthRate || 0}%</span> from last month
+                <span className="text-emerald-400 font-medium">
+                  +{stats?.growthRate || 0}%
+                </span>{" "}
+                from last month
               </p>
             </CardContent>
           </Card>
@@ -211,48 +267,54 @@ export function MerchantDashboard() {
           {/* Low Stock Items */}
           <Card className="bg-linear-to-br from-[#2a2a2a] to-[#1f1f1f] border-gray-700 hover:border-red-500/50 transition-all duration-300">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-              <CardTitle className="text-sm font-medium text-gray-300">Low Stock Items</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-300">
+                Low Stock Items
+              </CardTitle>
               <div className="p-3 bg-red-500/20 rounded-xl">
                 <AlertTriangle className="h-5 w-5 text-red-400" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-white mb-2">{stats?.lowStockItems || 0}</div>
-              <p className="text-sm text-red-300">
-                Needs restocking
-              </p>
+              <div className="text-3xl font-bold text-white mb-2">
+                {stats?.lowStockItems || 0}
+              </div>
+              <p className="text-sm text-red-300">Needs restocking</p>
             </CardContent>
           </Card>
 
           {/* Pending Shipments */}
           <Card className="bg-linear-to-br from-[#2a2a2a] to-[#1f1f1f] border-gray-700 hover:border-blue-500/50 transition-all duration-300">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-              <CardTitle className="text-sm font-medium text-gray-300">Pending Shipments</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-300">
+                Pending Shipments
+              </CardTitle>
               <div className="p-3 bg-blue-500/20 rounded-xl">
                 <Truck className="h-5 w-5 text-blue-400" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-white mb-2">{stats?.pendingShipments || 0}</div>
-              <p className="text-sm text-blue-300">
-                Awaiting fulfillment
-              </p>
+              <div className="text-3xl font-bold text-white mb-2">
+                {stats?.pendingShipments || 0}
+              </div>
+              <p className="text-sm text-blue-300">Awaiting fulfillment</p>
             </CardContent>
           </Card>
 
           {/* Active Customers */}
           <Card className="bg-linear-to-br from-[#2a2a2a] to-[#1f1f1f] border-gray-700 hover:border-emerald-500/50 transition-all duration-300">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-              <CardTitle className="text-sm font-medium text-gray-300">Active Customers</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-300">
+                Active Customers
+              </CardTitle>
               <div className="p-3 bg-emerald-500/20 rounded-xl">
                 <Users className="h-5 w-5 text-emerald-400" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-white mb-2">{stats?.activeCustomers || 0}</div>
-              <p className="text-sm text-emerald-300">
-                Engaged this month
-              </p>
+              <div className="text-3xl font-bold text-white mb-2">
+                {stats?.activeCustomers || 0}
+              </div>
+              <p className="text-sm text-emerald-300">Engaged this month</p>
             </CardContent>
           </Card>
         </div>
@@ -266,36 +328,55 @@ export function MerchantDashboard() {
                 <ShoppingCart className="h-5 w-5 text-[#f8c017]" />
                 Recent Orders
               </CardTitle>
-              <CardDescription className="text-gray-400">Latest orders placed for your products</CardDescription>
+              <CardDescription className="text-gray-400">
+                Latest orders placed for your products
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4 max-h-80 overflow-y-auto">
-                {stats?.recentOrders?.length ? stats.recentOrders.map((order) => (
-                  <div key={order.id} className="flex items-start gap-4 p-4 rounded-lg bg-[#1f1f1f] border border-gray-700 hover:border-[#f8c017]/30 transition-colors">
-                    <div className="p-2.5 rounded-full border border-blue-400 bg-blue-500/10">
-                      <ShoppingCart className="h-4 w-4 text-blue-400" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-white truncate">Order #{order.id}</p>
-                      <p className="text-xs text-gray-500 mt-1">{order.itemCount} items • ₦{order.totalAmount?.toLocaleString()}</p>
-                      <p className="text-xs text-gray-500 mt-1">{order.customerName} ({order.customerPhone})</p>
-                      <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800 mt-1">
-                        {order.status}
-                      </span>
-                      <div className="mt-2">
-                        {order.items?.map((item, idx) => (
-                          <span key={idx} className="inline-block text-xs text-gray-400 mr-2">
-                            {item.name} x{item.quantity}
-                          </span>
-                        ))}
+                {stats?.recentOrders?.length ? (
+                  stats.recentOrders.map((order) => (
+                    <div
+                      key={order.id}
+                      className="flex items-start gap-4 p-4 rounded-lg bg-[#1f1f1f] border border-gray-700 hover:border-[#f8c017]/30 transition-colors"
+                    >
+                      <div className="p-2.5 rounded-full border border-blue-400 bg-blue-500/10">
+                        <ShoppingCart className="h-4 w-4 text-blue-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-white truncate">
+                          Order #{order.id}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {order.itemCount} items • {currencySymbol}
+                          {order.totalAmount?.toLocaleString()}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {order.customerName} ({order.customerPhone})
+                        </p>
+                        <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800 mt-1">
+                          {order.status}
+                        </span>
+                        <div className="mt-2">
+                          {order.items?.map((item, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-block text-xs text-gray-400 mr-2"
+                            >
+                              {item.name} x{item.quantity}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )) : (
+                  ))
+                ) : (
                   <div className="text-center py-12 text-gray-500">
                     <ShoppingCart className="h-12 w-12 mx-auto mb-3 opacity-50" />
                     <p className="text-lg">No recent orders</p>
-                    <p className="text-sm">Orders will appear here as they happen</p>
+                    <p className="text-sm">
+                      Orders will appear here as they happen
+                    </p>
                   </div>
                 )}
               </div>
@@ -309,25 +390,57 @@ export function MerchantDashboard() {
                 <DollarSign className="h-5 w-5 text-emerald-400" />
                 Payments & Invoices
               </CardTitle>
-              <CardDescription className="text-gray-400">Recent and outstanding payments</CardDescription>
+              <CardDescription className="text-gray-400">
+                Recent and outstanding payments
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="mb-2 text-sm text-gray-300">
-                <span className="mr-2">Active: <span className="text-emerald-400 font-bold">{stats?.payments?.activePayments || 0}</span></span>
-                <span className="mr-2">Pending: <span className="text-yellow-400 font-bold">{stats?.payments?.pendingPayments || 0}</span></span>
-                <span>Overdue: <span className="text-red-400 font-bold">{stats?.payments?.overduePayments || 0}</span></span>
+                <span className="mr-2">
+                  Active:{" "}
+                  <span className="text-emerald-400 font-bold">
+                    {stats?.payments?.activePayments || 0}
+                  </span>
+                </span>
+                <span className="mr-2">
+                  Pending:{" "}
+                  <span className="text-yellow-400 font-bold">
+                    {stats?.payments?.pendingPayments || 0}
+                  </span>
+                </span>
+                <span>
+                  Overdue:{" "}
+                  <span className="text-red-400 font-bold">
+                    {stats?.payments?.overduePayments || 0}
+                  </span>
+                </span>
               </div>
               <div className="max-h-40 overflow-y-auto space-y-2">
-                {stats?.payments?.invoices?.length ? stats.payments.invoices.map((inv, idx) => (
-                  <div key={inv.id || idx} className="flex justify-between items-center p-2 rounded bg-[#232323] border border-gray-700 mb-1">
-                    <div>
-                      <div className="font-medium text-white text-xs">Invoice #{inv.id}</div>
-                      <div className="text-xs text-gray-400">{inv.status} • {new Date(inv.issueDate).toLocaleDateString()}</div>
+                {stats?.payments?.invoices?.length ? (
+                  stats.payments.invoices.map((inv, idx) => (
+                    <div
+                      key={inv.id || idx}
+                      className="flex justify-between items-center p-2 rounded bg-[#232323] border border-gray-700 mb-1"
+                    >
+                      <div>
+                        <div className="font-medium text-white text-xs">
+                          Invoice #{inv.id}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          {inv.status} •{" "}
+                          {new Date(inv.issueDate).toLocaleDateString()}
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-300">
+                        {currencySymbol}
+                        {inv.totalDue?.toLocaleString()}
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-300">₦{inv.totalDue?.toLocaleString()}</div>
+                  ))
+                ) : (
+                  <div className="text-center text-gray-500 text-xs">
+                    No invoices found
                   </div>
-                )) : (
-                  <div className="text-center text-gray-500 text-xs">No invoices found</div>
                 )}
               </div>
             </CardContent>
@@ -340,20 +453,39 @@ export function MerchantDashboard() {
                 <Package className="h-5 w-5 text-[#f8c017]" />
                 Products
               </CardTitle>
-              <CardDescription className="text-gray-400">Your top products</CardDescription>
+              <CardDescription className="text-gray-400">
+                Your top products
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="max-h-40 overflow-y-auto space-y-2">
-                {stats?.products?.length ? stats.products.map((prod) => (
-                  <div key={prod.id} className="flex items-center gap-3 p-2 rounded bg-[#232323] border border-gray-700 mb-1">
-                    {prod.imageUrl && <img src={prod.imageUrl} alt={prod.name} className="w-8 h-8 rounded object-cover" />}
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-white text-xs truncate">{prod.name}</div>
-                      <div className="text-xs text-gray-400">SKU: {prod.sku} • {prod.weightKg}kg</div>
+                {stats?.products?.length ? (
+                  stats.products.map((prod) => (
+                    <div
+                      key={prod.id}
+                      className="flex items-center gap-3 p-2 rounded bg-[#232323] border border-gray-700 mb-1"
+                    >
+                      {prod.imageUrl && (
+                        <img
+                          src={prod.imageUrl}
+                          alt={prod.name}
+                          className="w-8 h-8 rounded object-cover"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-white text-xs truncate">
+                          {prod.name}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          SKU: {prod.sku} • {prod.weightKg}kg
+                        </div>
+                      </div>
                     </div>
+                  ))
+                ) : (
+                  <div className="text-center text-gray-500 text-xs">
+                    No products found
                   </div>
-                )) : (
-                  <div className="text-center text-gray-500 text-xs">No products found</div>
                 )}
               </div>
             </CardContent>
@@ -362,22 +494,38 @@ export function MerchantDashboard() {
           {/* Quick Actions */}
           <Card className="bg-linear-to-br from-[#2a2a2a] to-[#1f1f1f] border-gray-700">
             <CardHeader>
-              <CardTitle className="text-lg font-semibold text-white">Quick Actions</CardTitle>
-              <CardDescription className="text-gray-400">Common merchant tasks</CardDescription>
+              <CardTitle className="text-lg font-semibold text-white">
+                Quick Actions
+              </CardTitle>
+              <CardDescription className="text-gray-400">
+                Common merchant tasks
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
                 <button className="w-full text-left p-4 rounded-lg bg-linear-to-r from-[#f8c017]/20 to-[#f8c017]/10 hover:from-[#f8c017]/30 hover:to-[#f8c017]/20 border border-[#f8c017]/30 transition-all duration-300 group">
-                  <div className="font-medium text-white group-hover:text-[#f8c017]">Add New Product</div>
-                  <div className="text-sm text-gray-400">Create a new product listing</div>
+                  <div className="font-medium text-white group-hover:text-[#f8c017]">
+                    Add New Product
+                  </div>
+                  <div className="text-sm text-gray-400">
+                    Create a new product listing
+                  </div>
                 </button>
                 <button className="w-full text-left p-4 rounded-lg bg-[#1f1f1f] hover:bg-[#2f2f2f] border border-gray-700 hover:border-gray-600 transition-all duration-300 group">
-                  <div className="font-medium text-white group-hover:text-[#f8c017]">Process Pending Shipments</div>
-                  <div className="text-sm text-gray-400">Review and fulfill shipments</div>
+                  <div className="font-medium text-white group-hover:text-[#f8c017]">
+                    Process Pending Shipments
+                  </div>
+                  <div className="text-sm text-gray-400">
+                    Review and fulfill shipments
+                  </div>
                 </button>
                 <button className="w-full text-left p-4 rounded-lg bg-[#1f1f1f] hover:bg-[#2f2f2f] border border-gray-700 hover:border-gray-600 transition-all duration-300 group">
-                  <div className="font-medium text-white group-hover:text-[#f8c017]">Update Inventory</div>
-                  <div className="text-sm text-gray-400">Manage stock levels</div>
+                  <div className="font-medium text-white group-hover:text-[#f8c017]">
+                    Update Inventory
+                  </div>
+                  <div className="text-sm text-gray-400">
+                    Manage stock levels
+                  </div>
                 </button>
               </div>
             </CardContent>

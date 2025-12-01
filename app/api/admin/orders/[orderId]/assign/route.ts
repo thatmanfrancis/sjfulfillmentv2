@@ -27,7 +27,8 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ orderId: 
     const order = await prisma.order.findUnique({
       where: { id: orderId },
       include: {
-        OrderItem: true
+        OrderItem: true,
+        Business: true
       }
     });
     if (!order) {
@@ -116,6 +117,38 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ orderId: 
     // Create a shipment if it doesn't exist for this order
     const existingShipment = await prisma.shipment.findUnique({ where: { orderId } });
     if (!existingShipment) {
+      // Calculate shipment price: sum of price tier breakdown + order totalAmount
+      let shipmentPrice = 0;
+      let currency = order.Business?.baseCurrency || 'NGN';
+      // Fetch full price tier breakdown with SKU and product name
+      let breakdown: Array<{ sku: string; productName: string; amount: number; quantity: number }> = [];
+      if (order.priceTierGroupId) {
+        const pricingTiers = await prisma.pricingTier.findMany({
+          where: { groupId: order.priceTierGroupId }
+        });
+        if (Array.isArray(pricingTiers)) {
+          breakdown = [];
+          for (const tier of pricingTiers) {
+            let productName = '';
+            let sku = '';
+            if (tier.productId) {
+              const product = await prisma.product.findUnique({ where: { id: tier.productId } });
+              productName = product?.name || '';
+              sku = product?.sku || '';
+            }
+            breakdown.push({
+              sku,
+              productName,
+              amount: tier.negotiatedRate ?? tier.baseRate,
+              quantity: tier.quantity ?? 1
+            });
+          }
+          shipmentPrice += breakdown.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
+        }
+      }
+      // Add order totalAmount
+      if (typeof order.totalAmount === 'number') shipmentPrice += order.totalAmount;
+
       await prisma.shipment.create({
         data: {
           id: (globalThis.crypto ?? require('crypto')).randomUUID(),
@@ -123,12 +156,33 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ orderId: 
           trackingNumber,
           lastStatusUpdate: new Date(),
           notes: typeof note === 'string' ? note.trim() : undefined,
+          price: shipmentPrice,
+          currency,
+          priceTierBreakdown: breakdown.length ? breakdown : undefined,
         },
       });
       // Also update order with tracking number
       await prisma.order.update({
         where: { id: orderId },
-        data: { trackingNumber }
+        data: { trackingNumber, priceTierBreakdown: breakdown.length ? breakdown : undefined }
+      });
+      // Create invoice for merchant
+      await prisma.invoice.create({
+        data: {
+          id: (globalThis.crypto ?? require('crypto')).randomUUID(),
+          merchantId: order.merchantId,
+          billingPeriod: `${new Date().getFullYear()}-${(new Date().getMonth()+1).toString().padStart(2,'0')}`,
+          totalDue: shipmentPrice,
+          fulfillmentFees: 0,
+          storageCharges: 0,
+          receivingFees: 0,
+          otherFees: 0,
+          dueDate: new Date(Date.now() + 7*24*60*60*1000),
+          status: "ISSUED",
+          orderId: orderId,
+          priceTierGroupId: order.priceTierGroupId ?? undefined,
+          priceTierBreakdown: order.priceTierBreakdown ?? undefined,
+        }
       });
     } else {
       // If shipment exists, update its notes and tracking number if missing

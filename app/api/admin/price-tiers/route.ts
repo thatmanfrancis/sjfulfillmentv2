@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/session";
 import prisma from "@/lib/prisma";
 import { z } from "zod";
-
+import crypto from "crypto";
 
 const createPricingTierSchema = z.object({
   serviceType: z.string().min(1, "Service type is required").max(100),
@@ -39,12 +39,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get all price tier groups and their children
+    // Get all price tier groups and their children, including Business relation for each pricingTier
     const groups = await prisma.priceTierGroup.findMany({
       include: {
         pricingTiers: {
           include: {
-            Business: { select: { id: true, name: true } },
+            Business: true, // include full Business relation,
           },
           orderBy: { createdAt: "desc" },
         },
@@ -53,8 +53,8 @@ export async function GET(request: NextRequest) {
     });
 
     // Format response: each group is a card, with its offerings/packages as an array
-    const priceTiers = groups.map(group => {
-      const offerings = group.pricingTiers.map(tier => ({
+    const priceTiers = groups.map((group) => {
+      const offerings = group.pricingTiers.map((tier) => ({
         id: tier.id,
         serviceType: tier.serviceType,
         baseRate: tier.baseRate,
@@ -66,13 +66,17 @@ export async function GET(request: NextRequest) {
         updatedAt: tier.updatedAt,
         Business: tier.Business,
       }));
+
       return {
         id: group.id,
         name: group.name,
         description: group.description,
         offerings,
         totalBaseRate: offerings.reduce((sum, o) => sum + (o.baseRate || 0), 0),
-        totalNegotiatedRate: offerings.reduce((sum, o) => sum + (o.negotiatedRate || 0), 0),
+        totalNegotiatedRate: offerings.reduce(
+          (sum, o) => sum + (o.negotiatedRate || 0),
+          0
+        ),
         createdAt: group.createdAt,
         updatedAt: group.updatedAt,
       };
@@ -117,16 +121,28 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { description, currency, merchantId, packages } = body;
+    const { name, description, currency, merchantId, packages } = body;
     if (!Array.isArray(packages) || packages.length === 0) {
-        console.log("[PriceTier] Invalid packages payload:", body);
+      console.log("[PriceTier] Invalid packages payload:", body);
       return NextResponse.json(
         { error: "At least one package is required." },
         { status: 400 }
       );
     }
 
-    // Validate and create each package
+    // Create the parent priceTierGroup first
+    const group = await prisma.priceTierGroup.create({
+      data: {
+        name: name || description || "Untitled Group",
+        description: description || "",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        // currency: currency || "USD",
+        currency: currency || "USD",
+      },
+    });
+
+    // Validate and create each package, linking to groupId
     const createdTiers = [];
     const errors = [];
     for (const pkg of packages) {
@@ -152,34 +168,40 @@ export async function POST(request: NextRequest) {
             ? Number(pkg.discountPercent)
             : undefined,
         updatedAt: new Date(),
+        groupId: group.id,
       };
       // Remove any extra fields not in schema
-        Object.keys(mappedPkg).forEach(key => {
-          const allowed = [
-            "id",
-            "serviceType",
-            "baseRate",
-            "negotiatedRate",
-            "rateUnit",
-            "currency",
-            "merchantId",
-            "discountPercent",
-            "updatedAt"
-          ];
-          if (!allowed.includes(key)) {
-            delete mappedPkg[key as keyof typeof mappedPkg];
-          }
-        });
+      Object.keys(mappedPkg).forEach((key) => {
+        const allowed = [
+          "id",
+          "serviceType",
+          "baseRate",
+          "negotiatedRate",
+          "rateUnit",
+          "currency",
+          "merchantId",
+          "discountPercent",
+          "updatedAt",
+          "groupId",
+        ];
+        if (!allowed.includes(key)) {
+          delete mappedPkg[key as keyof typeof mappedPkg];
+        }
+      });
       // Remove undefined fields
-        Object.keys(mappedPkg).forEach(key => {
-          const k = key as keyof typeof mappedPkg;
-          if (mappedPkg[k] === undefined) {
-            delete mappedPkg[k];
-          }
-        });
+      Object.keys(mappedPkg).forEach((key) => {
+        const k = key as keyof typeof mappedPkg;
+        if (mappedPkg[k] === undefined) {
+          delete mappedPkg[k];
+        }
+      });
       const result = createPricingTierSchema.safeParse(mappedPkg);
       if (!result.success) {
-          console.log("[PriceTier] Validation failed:", mappedPkg, result.error?.issues);
+        console.log(
+          "[PriceTier] Validation failed:",
+          mappedPkg,
+          result.error?.issues
+        );
         errors.push({
           serviceType: pkg.serviceType,
           error: result.error?.issues || [],
@@ -194,12 +216,13 @@ export async function POST(request: NextRequest) {
             equals: mappedPkg.serviceType,
             mode: "insensitive",
           },
+          groupId: group.id,
         },
       });
       if (exists) {
         errors.push({
           serviceType: pkg.serviceType,
-          error: "Tier already exists for this service type.",
+          error: "Tier already exists for this service type in this group.",
         });
         continue;
       }
@@ -211,7 +234,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (createdTiers.length === 0) {
-        console.log("[PriceTier] No tiers created. Errors:", errors, "Payload:", body);
+      console.log(
+        "[PriceTier] No tiers created. Errors:",
+        errors,
+        "Payload:",
+        body
+      );
       return NextResponse.json(
         { error: "No tiers created.", details: errors },
         { status: 400 }
@@ -219,7 +247,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { success: true, created: createdTiers, errors },
+      { success: true, created: createdTiers, groupId: group.id, errors },
       { status: 201 }
     );
   } catch (error) {

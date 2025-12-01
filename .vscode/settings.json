@@ -2,13 +2,32 @@
   "WillLuke.nextjs.hasPrompted": true,
   "editor.suggest.localityBonus": true, // Prioritize local/member suggestions
   "editor.suggest.matchOnWordStartOnly": false,
+   "typescript.tsdk": "node_modules/typescript/lib",
+   "javascript.validate.enable": false,
+  "typescript.validate.enable": false,
+  "typescript.reportStyleChecksAsWarnings": true,
+  "typescript.tsserver.log": "off",
+   
 
   // Reorder suggestion types
   "editor.suggest.statusBar.visible": true,
+  "eslint.rules.customizations": [
+    {
+      "rule": "@typescript-eslint/no-explicit-any",
+      "severity": "off"
+    }
+  ],
 
   // Specific to TypeScript
   "typescript.suggest.completeFunctionCalls": true,
   "typescript.suggest.paths": false, // Don't suggest file paths
   "typescript.suggest.autoImports": false, // KEY: Disable auto imports
-  "typescript.preferences.includePackageJsonAutoImports": "off"
+  "typescript.preferences.includePackageJsonAutoImports": "off",
+
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/dist/**": true
+  }
 }

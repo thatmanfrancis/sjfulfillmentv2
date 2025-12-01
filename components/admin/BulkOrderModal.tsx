@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select } from '@/components/ui/select';
+import { Select, SelectTrigger, SelectContent, SelectItem } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,7 +16,7 @@ import {
   Upload, Download, FileText, AlertTriangle, CheckCircle,
   X, User, MapPin, Package, FileSpreadsheet, Loader2
 } from 'lucide-react';
-import { post } from '@/lib/api';
+import { post, get } from '@/lib/api';
 
 interface BulkOrderModalProps {
   isOpen: boolean;
@@ -169,6 +169,7 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
     note: '',
   });
   const [businessCurrency, setBusinessCurrency] = useState<string>('');
+  const [priceTiers, setPriceTiers] = useState<any[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [productSearchInput, setProductSearchInput] = useState('');
   const handleProductSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -260,24 +261,18 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
         ...manualForm,
         amount: manualForm.amount ? Number(manualForm.amount) : undefined,
         cost: manualForm.cost ? Number(manualForm.cost) : undefined,
-        items: uniqueItems.filter(item => item.sku && item.quantity > 0),
+        priceTierGroupId: selectedPriceTierGroup || null,
         note: manualForm.note || ''
       };
-              <div>
-                <Label htmlFor="note">Order Note</Label>
-                <Textarea
-                  id="note"
-                  placeholder="Add a note for this order (optional)"
-                  value={manualForm.note}
-                  onChange={e => setManualForm(f => ({ ...f, note: e.target.value }))}
-                />
-              </div>
-      console.log('Manual Order Upload - Frontend Sent:', orderData);
       const response = await post('/api/admin/orders/create', orderData) as any;
       if (response.success) {
+        if (typeof window !== 'undefined') {
+          // @ts-ignore
+          import('sonner').then(({ toast }) => toast.success('Order created successfully!'));
+        }
         onOrdersCreated();
-        onClose();
         resetForm();
+        onClose();
       } else {
         setValidationErrors([response.error || 'Failed to create order']);
       }
@@ -298,9 +293,13 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
       setUploading(true);
       const response = await post('/api/admin/orders/bulk-create', { orders: parsedData.valid }) as any;
       if (response.success) {
+        if (typeof window !== 'undefined') {
+          // @ts-ignore
+          import('sonner').then(({ toast }) => toast.success('Bulk orders created successfully!'));
+        }
         onOrdersCreated();
-        onClose();
         resetForm();
+        onClose();
       } else {
         setValidationErrors([response.error || 'Failed to create orders']);
       }
@@ -311,7 +310,7 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
     }
   };
 
- 
+  // Search for merchants
   useEffect(() => {
     if (merchantSearch.length === 0) {
       setMerchants([]);
@@ -339,6 +338,26 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
       .then(res => res.json())
       .then(data => setProducts(data.products || []));
   }, [selectedMerchant]);
+
+  // State for selected price tier group
+  const [selectedPriceTierGroup, setSelectedPriceTierGroup] = useState<string>('');
+
+  useEffect(() => {
+    if (!selectedMerchant) {
+      setPriceTiers([]);
+      return;
+    }
+    get(`/api/admin/price-tiers?merchantId=${selectedMerchant.id}`).then((data: any) => {
+      const merchantCurrency = (selectedMerchant.baseCurrency || '').trim().toUpperCase();
+      // Only show groups where at least one child (offering) matches merchant currency
+      const groups = (data.priceTiers || []).filter((group: any) =>
+        Array.isArray(group.offerings) &&
+        group.offerings.some((tier: any) => (tier.currency || '').trim().toUpperCase() === merchantCurrency)
+      );
+      setPriceTiers(groups);
+    });
+  }, [selectedMerchant]);
+  console.log(`Price tiers:`, priceTiers);
 
   // --- Existing logic for CSV/manual ---
   // ...existing code...
@@ -407,7 +426,7 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
             </div>
             <Card className="bg-[#2a2a2a] border-gray-700">
 
-              
+
               <CardHeader>
                 <CardTitle className="text-white flex items-center gap-2">
                   <User className="h-5 w-5 text-[#f8c017]" />
@@ -459,47 +478,7 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
                     rows={2}
                   />
                 </div>
-                {/* <div>
-                    <Label htmlFor="businessName" className="text-gray-300">Business/Merchant *</Label>
-                    <div className="w-full relative">
-                      <Input
-                        id="merchantSearch"
-                        value={selectedMerchant ? selectedMerchant.name : merchantSearch}
-                        onChange={e => {
-                          setMerchantSearch(e.target.value);
-                          setSelectedMerchant(null);
-                          setBusinessCurrency('');
-                          setMerchantDropdownOpen(true);
-                        }}
-                        onFocus={() => setMerchantDropdownOpen(true)}
-                        className="bg-[#1a1a1a] border-gray-600 text-white focus:border-[#f8c017] w-full"
-                        placeholder="Search merchant by name"
-                        autoComplete="off"
-                      />
-                      {merchantDropdownOpen && merchants.length > 0 && !selectedMerchant && (
-                        <div className="absolute left-0 mt-1 w-full z-50 bg-[#232323] border border-gray-700 rounded shadow-lg max-h-60 overflow-y-auto">
-                          {merchants.map(m => (
-                            <div
-                              key={m.id}
-                              onMouseDown={() => {
-                                setSelectedMerchant(m);
-                                setMerchantSearch(m.name);
-                                setBusinessCurrency(m.baseCurrency || '');
-                                setMerchantDropdownOpen(false);
-                              }}
-                              className="flex justify-between items-center px-3 py-2 cursor-pointer hover:bg-[#333]"
-                            >
-                              <span className="truncate max-w-[200px]">{m.name}</span>
-                              <span className="ml-2 text-xs text-gray-400">{m.baseCurrency}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {selectedMerchant && businessCurrency && (
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold bg-[#232323] px-2 py-1 rounded text-xs whitespace-nowrap pointer-events-none">{businessCurrency}</span>
-                      )}
-                    </div>
-                </div> */}
+             
                 <div>
                   <Label htmlFor="amount" className="text-gray-300">Amount ({businessCurrency || 'Currency'})</Label>
                   <div className="flex items-center gap-2 mb-2">
@@ -566,6 +545,43 @@ export default function BulkOrderModal({ isOpen, onClose, onOrdersCreated }: Bul
                       })}
                     </div>
                   )}
+                </div>
+                {/* Price Tier Group dropdown for the whole order */}
+                <div className="w-64 mb-4">
+                  <Label className="text-gray-300">Price Tier Group</Label>
+                  <Select
+                    value={selectedPriceTierGroup}
+                    onValueChange={groupId => setSelectedPriceTierGroup(groupId)}
+                  >
+                    <SelectTrigger className="bg-[#1a1a1a] border-gray-600 text-white focus:border-[#f8c017]">
+                      {selectedPriceTierGroup
+                        ? (() => {
+                          const group = priceTiers.find(g => g.id === selectedPriceTierGroup);
+                          return group ? `${group.name} (${group.offerings[0]?.currency || ''}) - ${group.offerings.length} tiers` : 'Select price tier group';
+                        })()
+                        : 'Select price tier group'}
+                    </SelectTrigger>
+                    <SelectContent>
+                      {priceTiers.length === 0 ? (
+                        <SelectItem value="none" disabled>No price tier groups available for this currency</SelectItem>
+                      ) : (
+                        priceTiers.map(group => (
+                          <SelectItem key={group.id} value={group.id}>
+                            {group.name} ({group.offerings[0]?.currency || ''}) - {group.offerings.length} tiers
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {selectedPriceTierGroup && (() => {
+                    const group = priceTiers.find(g => g.id === selectedPriceTierGroup);
+                    return group ? (
+                      <div className="text-xs text-gray-400 mt-1">
+                        {group.description && <div>{group.description}</div>}
+                        Total Base Rate: {group.totalBaseRate} {group.currency}
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
                 {selectedProducts.length === 0 && (
                   <div className="text-gray-400 text-sm">No products selected. Search and select products above.</div>

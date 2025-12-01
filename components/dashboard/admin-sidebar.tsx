@@ -77,7 +77,7 @@ const getNavigationForRole = (role: string) => {
         { name: 'Warehouses', href: '/admin/warehouses', icon: Warehouse },
         { name: 'Price Tiers', href: '/admin/price-tiers', icon: CreditCard },
         { name: 'Notifications', href: '/admin/notifications', icon: Bell },
-        { name: 'Reports', href: '/admin/reports', icon: FileText },
+        // { name: 'Reports', href: '/admin/reports', icon: FileText },
         { name: 'Settings', href: '/admin/settings', icon: Settings },
       ];
     case 'MERCHANT':
@@ -88,7 +88,7 @@ const getNavigationForRole = (role: string) => {
         { name: 'Inventory', href: '/merchant/inventory', icon: Warehouse },
         { name: 'Analytics', href: '/merchant/analytics', icon: BarChart3 },
         { name: 'Invoices', href: '/merchant/invoices', icon: CreditCard },
-        { name: 'Reports', href: '/merchant/reports', icon: FileText },
+        // { name: 'Reports', href: '/merchant/reports', icon: FileText },
         { name: 'Staff', href: '/merchant/staff', icon: Users },
         { name: 'Settings', href: '/merchant/settings', icon: Settings },
       ];
@@ -99,7 +99,7 @@ const getNavigationForRole = (role: string) => {
         { name: 'Orders', href: '/logistics/orders', icon: ShoppingCart },
         { name: 'Analytics', href: '/logistics/analytics', icon: BarChart3 },
         { name: 'Warehouses', href: '/logistics/warehouses', icon: Warehouse },
-        { name: 'Reports', href: '/logistics/reports', icon: FileText },
+        // { name: 'Reports', href: '/logistics/reports', icon: FileText },
         { name: 'Settings', href: '/logistics/settings', icon: Settings },
       ];
     default:

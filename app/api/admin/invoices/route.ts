@@ -39,12 +39,28 @@ export async function GET(request: NextRequest) {
       merchantId: invoice.merchantId,
       merchantName: invoice.Business?.name || 'Unknown',
       billingPeriod: invoice.billingPeriod,
-      amount: 0, // Calculate based on your business logic
+      totalDue: invoice.totalDue,
       status: invoice.status || 'PENDING',
       issueDate: invoice.issueDate.toISOString(),
       dueDate: invoice.dueDate.toISOString(),
       paymentDate: invoice.paymentDate?.toISOString(),
-      createdAt: invoice.issueDate.toISOString()
+      createdAt: invoice.issueDate.toISOString(),
+      amountPaid: invoice.amountPaid,
+      fulfillmentFees: invoice.fulfillmentFees,
+      storageCharges: invoice.storageCharges,
+      receivingFees: invoice.receivingFees,
+      otherFees: invoice.otherFees,
+      Business: invoice.Business,
+      currency: invoice.currency || 'NGN',
+      orderId: invoice.orderId,
+      priceTierBreakdown: Array.isArray(invoice.priceTierBreakdown)
+        ? invoice.priceTierBreakdown.map((item: any) => ({
+            sku: item.sku || '',
+            productName: item.productName || '',
+            amount: item.amount,
+            quantity: item.quantity
+          }))
+        : invoice.priceTierBreakdown
     }));
 
     return NextResponse.json({
@@ -84,8 +100,8 @@ export async function POST(request: NextRequest) {
       where: { id: { in: orderIds }, merchantId },
       include: {
         OrderItem: { include: { Product: true } },
-        Shipment: true
-      }
+        Shipment: true,
+      },
     });
     // Fetch price tiers
     const priceTiers = await prisma.pricingTier.findMany({ where: { merchantId } });
@@ -95,6 +111,10 @@ export async function POST(request: NextRequest) {
     let storageCharges = 0;
     let receivingFees = 0;
     let otherFees = 0;
+    // Collect price tier group and breakdowns from orders
+    const orderIdsForInvoice = orders.map(order => order.id);
+    const priceTierGroupIds = orders.map(order => order.priceTierGroupId).filter(Boolean);
+    const priceTierBreakdowns = orders.map(order => order.priceTierBreakdown).filter(Boolean);
     orders.forEach(order => {
       totalDue += order.totalAmount;
       fulfillmentFees += 100; // Example
@@ -112,10 +132,13 @@ export async function POST(request: NextRequest) {
         receivingFees,
         otherFees,
         dueDate: new Date(),
-        status: "ISSUED"
-      }
+        status: "ISSUED",
+        orderId: orderIdsForInvoice[0] ?? undefined,
+        priceTierGroupId: priceTierGroupIds[0] ?? undefined,
+        priceTierBreakdown: priceTierBreakdowns[0] ?? undefined,
+      },
     });
-    return NextResponse.json({ success: true, invoice, orders, priceTiers });
+    return NextResponse.json({ success: true, invoice, orders, priceTiers, orderIds: orderIdsForInvoice, priceTierGroupIds, priceTierBreakdowns });
   } catch (error) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

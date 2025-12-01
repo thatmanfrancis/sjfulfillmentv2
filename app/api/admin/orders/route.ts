@@ -56,6 +56,8 @@ export async function GET(request: NextRequest) {
           status: true,
           totalAmount: true,
           notes: true,
+          priceTierGroupId: true,
+          priceTierBreakdown: true,
           Business: {
             select: {
               id: true,
@@ -64,8 +66,8 @@ export async function GET(request: NextRequest) {
               city: true,
               state: true,
               country: true,
-              baseCurrency: true
-            }
+              baseCurrency: true,
+            },
           },
           OrderItem: {
             select: {
@@ -76,29 +78,29 @@ export async function GET(request: NextRequest) {
                 select: {
                   id: true,
                   name: true,
-                  sku: true
-                }
-              }
-            }
+                  sku: true,
+                },
+              },
+            },
           },
           User: {
             select: {
               firstName: true,
-              lastName: true
-            }
+              lastName: true,
+            },
           },
           Warehouse: {
             select: {
               name: true,
-              region: true
-            }
-          }
+              region: true,
+            },
+          },
         },
         orderBy: { orderDate: 'desc' },
         skip,
-        take: limit
+        take: limit,
       }),
-      prisma.order.count({ where })
+      prisma.order.count({ where }),
     ]);
 
     // Map OrderItem to items for frontend compatibility
@@ -126,10 +128,12 @@ export async function GET(request: NextRequest) {
           city: order.Business.city,
           state: order.Business.state,
           country: order.Business.country,
-          baseCurrency: order.Business.baseCurrency
+          baseCurrency: order.Business.baseCurrency,
         } : undefined,
         note: order.notes || '',
         items: mappedItems,
+        priceTierGroupId: order.priceTierGroupId,
+        priceTierBreakdown: order.priceTierBreakdown,
       };
     });
 

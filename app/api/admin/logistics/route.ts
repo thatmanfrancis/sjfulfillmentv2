@@ -3,6 +3,7 @@ import { sendEmail } from '@/lib/email';
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/session";
 import prisma from "@/lib/prisma";
+import bcrypt from 'bcryptjs';
 
 
 
@@ -27,7 +28,10 @@ export async function POST(req: NextRequest) {
     if (existing) {
       return NextResponse.json({ error: 'User already exists' }, { status: 409 });
     }
-    // Create user with LOGISTICS role
+    // Generate password
+    const password = Math.random().toString(36).slice(-10) + "Aa1!";
+    const passwordHash = await bcrypt.hash(password, 12);
+    // Create user with LOGISTICS role (auto-verified)
     const user = await prisma.user.create({
       data: {
         id: randomUUID(),
@@ -36,21 +40,19 @@ export async function POST(req: NextRequest) {
         email,
         phone,
         role: 'LOGISTICS',
-        isVerified: false,
-        passwordHash: '',
+        isVerified: true,
+        passwordHash,
         updatedAt: new Date(),
       },
     });
-    // Generate secure verification token (like merchant flow)
-    const { generateVerificationToken } = await import('@/lib/auth');
-    const verificationToken = await generateVerificationToken(user.id);
-    const verifyUrl = `${process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://app.sjfulfillment.com'}/auth/verify-email?token=${verificationToken}&email=${encodeURIComponent(email)}`;
+    // Send welcome email with credentials
     await sendEmail({
       to: email,
-      subject: 'Welcome to SJFulfillment Logistics – Verify Your Email & Set Password',
+      subject: 'Welcome to SJFulfillment Logistics – Your Account Details',
       html: `<p>Hello ${firstName},</p>
-        <p>You have been invited as a logistics partner on SJFulfillment. Please verify your email and set your password by clicking the link below:</p>
-        <p><a href="${verifyUrl}">Verify Email & Set Password</a></p>
+        <p>Your logistics account has been created. You can now log in using the credentials below:</p>
+        <p><b>Email:</b> ${email}<br/><b>Password:</b> ${password}</p>
+        <p><a href="${process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://app.sjfulfillment.com'}/auth/login">Log in to SJFulfillment</a></p>
         <p>If you did not expect this invitation, you can ignore this email.</p>
         <p>Thank you,<br/>SJFulfillment Team</p>`
     });

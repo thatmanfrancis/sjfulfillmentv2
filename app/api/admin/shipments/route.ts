@@ -63,6 +63,8 @@ export async function GET(request: NextRequest) {
       labelUrl: shipment.labelUrl,
       deliveryAttempts: shipment.deliveryAttempts,
       lastStatusUpdate: shipment.lastStatusUpdate?.toISOString(),
+      price: shipment.price,
+      currency: shipment.currency,
       order: {
         id: shipment.Order?.id,
         business: shipment.Order?.Business?.name,

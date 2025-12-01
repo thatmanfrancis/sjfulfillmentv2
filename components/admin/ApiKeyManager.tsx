@@ -6,29 +6,38 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Copy, Loader2, RefreshCw, Trash2, Key } from "lucide-react";
 
+type ApiKeyManagerMode = "admin" | "merchant";
 interface ApiKeyManagerProps {
+  mode?: ApiKeyManagerMode;
   adminId?: string;
 }
 
-export function ApiKeyManager({ adminId }: ApiKeyManagerProps) {
+export function ApiKeyManager({
+  mode = "merchant",
+  adminId,
+}: ApiKeyManagerProps) {
   const [apiKey, setApiKey] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (adminId) {
-      fetchMerchantApiKey();
+    if (mode === "admin") {
+      if (adminId) {
+        fetchAdminApiKey(adminId);
+      } else {
+        fetchAdminApiKey();
+      }
     } else {
-      fetchAdminApiKey();
+      fetchMerchantApiKey();
     }
-  }, [adminId]);
+  }, [mode, adminId]);
 
   const fetchMerchantApiKey = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/admin-api-key?adminId=${adminId}`);
+      const res = await fetch(`/api/merchant/api-key`);
       const data = await res.json();
       if (data.apiKey) {
         setApiKey(data.apiKey);
@@ -42,11 +51,13 @@ export function ApiKeyManager({ adminId }: ApiKeyManagerProps) {
     }
   };
 
-  const fetchAdminApiKey = async () => {
+  const fetchAdminApiKey = async (adminId?: string) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/admin-api-key`);
+      let url = `/api/admin/admin-api-key`;
+      if (adminId) url += `?adminId=${adminId}`;
+      const res = await fetch(url);
       const data = await res.json();
       if (data.apiKey) {
         setApiKey(data.apiKey);
@@ -65,19 +76,24 @@ export function ApiKeyManager({ adminId }: ApiKeyManagerProps) {
     setError(null);
     try {
       let res, data;
-      if (adminId) {
-        res = await fetch(`/api/admin/admin-api-key`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ adminId })
-        });
-        data = await res.json();
+      if (mode === "admin") {
+        if (adminId) {
+          res = await fetch(`/api/admin/admin-api-key`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ adminId }),
+          });
+        } else {
+          res = await fetch(`/api/admin/admin-api-key`, {
+            method: "POST",
+          });
+        }
       } else {
-        res = await fetch(`/api/admin/admin-api-key`, {
-          method: "POST"
+        res = await fetch(`/api/merchant/api-key`, {
+          method: "POST",
         });
-        data = await res.json();
       }
+      data = await res.json();
       if (data.apiKey) {
         setApiKey(data.apiKey);
       } else {
@@ -94,12 +110,19 @@ export function ApiKeyManager({ adminId }: ApiKeyManagerProps) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/admin-api-key`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ adminId })
-      });
-      const data = await res.json();
+      let res, data;
+      if (mode === "admin") {
+        res = await fetch(`/api/admin/admin-api-key`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ adminId }),
+        });
+      } else {
+        res = await fetch(`/api/merchant/api-key`, {
+          method: "PUT",
+        });
+      }
+      data = await res.json();
       if ((data.apiKey && !data.error) || (data.success && data.apiKey)) {
         setApiKey(data.apiKey);
         setError(null);
@@ -117,10 +140,19 @@ export function ApiKeyManager({ adminId }: ApiKeyManagerProps) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/admin-api-key?adminId=${adminId}`, {
-        method: "DELETE"
-      });
-      const data = await res.json();
+      let res, data;
+      if (mode === "admin") {
+        let url = `/api/admin/admin-api-key`;
+        if (adminId) url += `?adminId=${adminId}`;
+        res = await fetch(url, {
+          method: "DELETE",
+        });
+      } else {
+        res = await fetch(`/api/merchant/api-key`, {
+          method: "DELETE",
+        });
+      }
+      data = await res.json();
       if (data.success) {
         setApiKey("");
       } else {
@@ -148,12 +180,17 @@ export function ApiKeyManager({ adminId }: ApiKeyManagerProps) {
       <CardContent className="py-6">
         <div className="flex items-center gap-3 mb-4">
           <Key className="h-5 w-5 text-[#f8c017]" />
-          <h3 className="font-medium text-white">Merchant API Key</h3>
-          <Badge variant="outline" className="border-[#f8c017]/30 text-[#f8c017] ml-2">Always Visible</Badge>
+          <h3 className="font-medium text-white">
+            {mode === "admin" ? "Admin API Key" : "Merchant API Key"}
+          </h3>
+          <Badge
+            variant="outline"
+            className="border-[#f8c017]/30 text-[#f8c017] ml-2"
+          >
+            Always Visible
+          </Badge>
         </div>
-        {error && (
-          <div className="text-red-400 mb-2 text-sm">{error}</div>
-        )}
+        {error && <div className="text-red-400 mb-2 text-sm">{error}</div>}
         <div className="flex items-center gap-2 mb-2">
           <Label className="text-gray-300">API Key:</Label>
           <Input
@@ -162,24 +199,60 @@ export function ApiKeyManager({ adminId }: ApiKeyManagerProps) {
             className="bg-[#232323] border-gray-700 text-white font-mono"
             style={{ width: "350px" }}
           />
-          <Button size="sm" variant="outline" onClick={handleCopy} disabled={!apiKey} className="border-gray-600">
-            {copied ? <Copy className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4 text-gray-400" />}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleCopy}
+            disabled={!apiKey}
+            className="border-gray-600"
+          >
+            {copied ? (
+              <Copy className="h-4 w-4 text-emerald-400" />
+            ) : (
+              <Copy className="h-4 w-4 text-gray-400" />
+            )}
           </Button>
         </div>
         <div className="flex gap-2 mt-2">
           {!apiKey && (
-            <Button onClick={handleCreate} disabled={loading} className="bg-[#f8c017] text-black">
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create API Key"}
+            <Button
+              onClick={handleCreate}
+              disabled={loading}
+              className="bg-[#f8c017] text-black"
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Create API Key"
+              )}
             </Button>
           )}
           {apiKey && (
-            <Button onClick={handleRegenerate} disabled={loading} className="bg-[#f8c017] text-black">
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />} Regenerate
+            <Button
+              onClick={handleRegenerate}
+              disabled={loading}
+              className="bg-[#f8c017] text-black"
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-1" />
+              )}{" "}
+              Regenerate
             </Button>
           )}
           {apiKey && (
-            <Button onClick={handleDelete} disabled={loading} className="bg-red-600 text-white">
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />} Delete
+            <Button
+              onClick={handleDelete}
+              disabled={loading}
+              className="bg-red-600 text-white"
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4 mr-1" />
+              )}{" "}
+              Delete
             </Button>
           )}
         </div>

@@ -3,7 +3,8 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { getCurrentSession } from '@/lib/session';
 import prisma from '@/lib/prisma';
-import { createNotification, createAuditLog } from '@/lib/notifications';
+import { createAuditLog } from '@/lib/notifications';
+import { sendEmail } from '@/lib/email';
 import { generateRandomPassword } from '@/lib/auth';
 
 const createMerchantSchema = z.object({
@@ -145,48 +146,38 @@ export async function POST(request: NextRequest) {
       });
 
       console.log('Creating user...');
-      // Create admin user for the business (unverified - they need to verify their email)
-      const user = await prisma.user.create({
-        data: {
-          id: `usr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          firstName,
-          lastName,
-          email,
-          passwordHash: hashedPassword,
-          role: 'MERCHANT',
-          isVerified: false, // Merchants need to verify their email
-          businessId: business.id,
-          updatedAt: new Date(),
-        },
-      });
+        // Create admin user for the business (auto-verified)
+        const user = await prisma.user.create({
+          data: {
+            id: `usr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            firstName,
+            lastName,
+            email,
+            passwordHash: hashedPassword,
+            role: 'MERCHANT',
+            isVerified: true, // Merchants are verified on creation
+            businessId: business.id,
+            
+            updatedAt: new Date(),
+          },
+        });
 
       return { business, user };
     });
 
     console.log('Transaction completed successfully');
 
-    // Generate email verification token
-    console.log('🎯 About to generate verification token for user:', result_transaction.user.id);
-    const { generateVerificationToken } = await import('@/lib/auth');
-    const verificationToken = await generateVerificationToken(result_transaction.user.id);
-    console.log('🎯 Verification token generated successfully:', verificationToken.substring(0, 16) + '...');
-
-    console.log('Creating notification...');
-    // Send email verification email instead of welcome email
-    await createNotification(
-      result_transaction.user.id,
-      `Your ${businessName} merchant account has been created. Please verify your email address to complete the setup.`,
-      null,
-      'EMAIL_VERIFICATION',
-      {
-        firstName,
-        businessName,
-        verificationUrl: `${process.env.NEXT_PUBLIC_APP_URL}/auth/verify-email?token=${verificationToken}&email=${encodeURIComponent(email)}`,
-        supportEmail: process.env.SUPPORT_EMAIL || 'support@sjfulfillment.com',
-        temporaryPassword,
-        email
-      }
-    );
+    // Send welcome email with credentials using sendEmail
+    await sendEmail({
+      to: email,
+      subject: `Action Required: Your ${businessName} merchant account has been created. You can now log in using the credentials below.`,
+      html: `<p>Your ${businessName} merchant account has been created.</p>
+        <p><b>Login Credentials:</b><br>
+        Email: <b>${email}</b><br>
+        Password: <b>${temporaryPassword}</b></p>
+        <p>You can log in at <a href='${process.env.NEXT_PUBLIC_APP_URL}/auth/login'>/auth/login</a>.</p>
+        <p>If you have any issues, contact support at <a href='mailto:${process.env.SUPPORT_EMAIL || 'support@sjfulfillment.com'}'>${process.env.SUPPORT_EMAIL || 'support@sjfulfillment.com'}</a>.</p>`
+    });
 
     console.log('Creating audit log...');
     await createAuditLog(
@@ -212,7 +203,7 @@ export async function POST(request: NextRequest) {
         email,
         temporaryPassword, // Include in response for admin reference
       },
-      note: 'Email verification has been sent to the merchant. They must verify their email before accessing their account.',
+      note: 'Welcome email with credentials has been sent to the merchant. They can log in immediately.',
     }, { status: 201 });
 
   } catch (error) {

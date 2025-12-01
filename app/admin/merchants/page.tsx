@@ -5,8 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { 
-  Search, Filter, Download, Eye, Building, Users, Package, 
+import {
+  Search, Filter, Download, Eye, Building, Users, Package,
   Calendar, Mail, MoreHorizontal, CheckCircle, XCircle, Edit, Plus,
   Grid3x3, List, Phone, MapPin
 } from 'lucide-react';
@@ -73,7 +73,7 @@ export default function AdminMerchantsPage() {
       if (statusFilter !== 'all') params.append('status', statusFilter);
       params.append('page', page.toString());
       params.append('limit', '20');
-      
+
       const data = await get(`/api/admin/merchants?${params}`) as any;
       setMerchants(data?.merchants || []);
       setTotalPages(data?.pagination?.totalPages || 1);
@@ -308,7 +308,7 @@ export default function AdminMerchantsPage() {
               <Grid3x3 className="h-4 w-4" />
             </Button>
           </div>
-          <Button 
+          <Button
             onClick={() => setShowAddMerchant(true)}
             className="bg-[#f8c017] text-black hover:bg-[#f8c017]/90"
           >
@@ -444,11 +444,10 @@ export default function AdminMerchantsPage() {
                       <h3 className="font-semibold text-white text-lg">
                         {merchant.name}
                       </h3>
-                      <Badge className={`flex items-center gap-1 ${
-                        merchant.isActive 
-                          ? 'bg-emerald-100 text-emerald-700 border-emerald-200' 
+                      <Badge className={`flex items-center gap-1 ${merchant.isActive
+                          ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
                           : 'bg-red-100 text-red-700 border-red-200'
-                      }`}>
+                        }`}>
                         {merchant.isActive ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
                         {merchant.isActive ? 'Active' : 'Inactive'}
                       </Badge>
@@ -486,9 +485,9 @@ export default function AdminMerchantsPage() {
 
                   {/* Actions */}
                   <div className="flex items-center gap-2">
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
+                    <Button
+                      size="sm"
+                      variant="outline"
                       onClick={() => handleViewMerchant(merchant)}
                       className="border-gray-600 text-gray-300 hover:border-[#f8c017] hover:text-[#f8c017]"
                     >
@@ -496,8 +495,8 @@ export default function AdminMerchantsPage() {
                       View
                     </Button>
                     <div className="relative group">
-                      <Button 
-                        size="sm" 
+                      <Button
+                        size="sm"
                         variant="outline"
                         className="border-gray-600 text-gray-300 hover:border-gray-500"
                       >
@@ -544,18 +543,17 @@ export default function AdminMerchantsPage() {
                       <h3 className="font-semibold text-white text-lg truncate">
                         {merchant.name}
                       </h3>
-                      <Badge className={`flex items-center gap-1 w-fit ${
-                        merchant.isActive 
-                          ? 'bg-emerald-100 text-emerald-700 border-emerald-200' 
+                      <Badge className={`flex items-center gap-1 w-fit ${merchant.isActive
+                          ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
                           : 'bg-red-100 text-red-700 border-red-200'
-                      }`}>
+                        }`}>
                         {merchant.isActive ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
                         {merchant.isActive ? 'Active' : 'Inactive'}
                       </Badge>
                     </div>
                     <div className="relative group">
-                      <Button 
-                        size="sm" 
+                      <Button
+                        size="sm"
                         variant="outline"
                         className="border-gray-600 text-gray-300 hover:border-gray-500 p-2"
                       >
@@ -611,8 +609,8 @@ export default function AdminMerchantsPage() {
                   </div>
 
                   {/* Actions */}
-                  <Button 
-                    size="sm" 
+                  <Button
+                    size="sm"
                     onClick={() => handleViewMerchant(merchant)}
                     className="w-full bg-[#f8c017] text-black hover:bg-[#f8c017]/90"
                   >
@@ -663,7 +661,7 @@ export default function AdminMerchantsPage() {
       )}
 
       {/* Add Merchant Modal */}
-      <AddMerchantModal 
+      <AddMerchantModal
         isOpen={showAddMerchant}
         onClose={() => setShowAddMerchant(false)}
         onMerchantAdded={() => {
@@ -737,11 +735,10 @@ export default function AdminMerchantsPage() {
                       <div>
                         <label className="text-sm font-medium text-gray-300">Status</label>
                         <div className="mt-1">
-                          <Badge className={`flex items-center gap-1 w-fit ${
-                            selectedMerchant.isActive 
-                              ? 'bg-emerald-100 text-emerald-700 border-emerald-200' 
+                          <Badge className={`flex items-center gap-1 w-fit ${selectedMerchant.isActive
+                              ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
                               : 'bg-red-100 text-red-700 border-red-200'
-                          }`}>
+                            }`}>
                             {selectedMerchant.isActive ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
                             {selectedMerchant.isActive ? 'Active' : 'Inactive'}
                           </Badge>
@@ -761,14 +758,14 @@ export default function AdminMerchantsPage() {
                       </div>
                     </div>
                   </div>
-                  
+
                   {selectedMerchant.address && (
                     <div>
                       <label className="text-sm font-medium text-gray-300">Business Address</label>
                       <p className="text-white mt-1">{selectedMerchant.address}</p>
                     </div>
                   )}
-                  
+
                   {selectedMerchant.description && (
                     <div>
                       <label className="text-sm font-medium text-gray-300">Description</label>

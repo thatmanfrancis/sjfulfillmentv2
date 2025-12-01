@@ -2,16 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import prisma from "@/lib/prisma";
 import { getCurrentSession } from "@/lib/session";
+import bcrypt from "bcryptjs";
 
 // Validation schemas
-const userUpdateSchema = z.object({
-  firstName: z.string().min(1).max(100).optional(),
-  lastName: z.string().min(1).max(100).optional(),
-  email: z.string().email().optional(),
-  role: z.enum(['ADMIN', 'MERCHANT', 'MERCHANT_STAFF', 'LOGISTICS']).optional(),
-  businessId: z.string().uuid().optional().nullable(),
-  isActive: z.boolean().optional(),
-});
+// Removed unused userUpdateSchema
 
 const userCreateSchema = z.object({
   firstName: z.string().min(1).max(100),
@@ -54,7 +48,7 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit;
 
     // Build filters
-    let whereClause: any = {};
+    const whereClause: any = {};
 
     if (role) {
       whereClause.role = role;
@@ -188,12 +182,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
+
     // Generate password if not provided
-    const bcrypt = require('bcryptjs');
     const password = validatedData.password || Math.random().toString(36).slice(-10) + "Aa1!";
     const passwordHash = await bcrypt.hash(password, 12);
 
-    // Create the user
+    // Create the user (auto-verified)
     const newUser = await prisma.user.create({
       data: {
         firstName: validatedData.firstName,
@@ -202,7 +196,7 @@ export async function POST(request: NextRequest) {
         role: validatedData.role,
         businessId: validatedData.businessId || null,
         passwordHash,
-        isVerified: false,
+        isVerified: true,
         id: `user_${Date.now()}_${Math.random().toString(36).substring(2)}`,
         updatedAt: new Date()
       },
@@ -238,38 +232,30 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // Send email verification for logistics users
-    if (validatedData.role === 'LOGISTICS') {
-      try {
-        const { generateVerificationToken } = await import('@/lib/auth');
-        const { createNotification } = await import('@/lib/notifications');
-        
-        const verificationToken = await generateVerificationToken(newUser.id);
-        
-        await createNotification(
-          newUser.id,
-          `Your logistics account has been created. Please verify your email address to complete the setup.`,
-          null,
-          'EMAIL_VERIFICATION',
-          {
-            firstName: newUser.firstName,
-            verificationUrl: `${process.env.NEXT_PUBLIC_APP_URL}/auth/verify-email?token=${verificationToken}&email=${encodeURIComponent(newUser.email)}`,
-            supportEmail: process.env.SUPPORT_EMAIL || 'support@sjfulfillment.com',
-            temporaryPassword: !validatedData.password ? password : undefined,
-            email: newUser.email
-          }
-        );
-        
-        console.log('Email verification sent to logistics user:', newUser.email);
-      } catch (emailError) {
-        console.error('Failed to send verification email to logistics user:', emailError);
-        // Don't fail the user creation if email fails
-      }
+
+    // Send welcome email with credentials
+    try {
+      const { createNotification } = await import('@/lib/notifications');
+      await createNotification(
+        newUser.id,
+        `Your account has been created. You can now log in using the credentials below.`,
+        null,
+        'MERCHANT_WELCOME',
+        {
+          firstName: newUser.firstName,
+          email: newUser.email,
+          password,
+          loginUrl: `${process.env.NEXT_PUBLIC_APP_URL}/auth/login`,
+          supportEmail: process.env.SUPPORT_EMAIL || 'support@sjfulfillment.com'
+        }
+      );
+      console.log('Welcome email sent to user:', newUser.email);
+    } catch (emailError) {
+      console.error('Failed to send welcome email:', emailError);
     }
 
-    // TODO: Send welcome email with temporary password
-    // For now, return the password in response (should be removed in production)
-    const response = {
+    // Return user info only (no password in response)
+    return NextResponse.json({
       user: {
         id: newUser.id,
         firstName: newUser.firstName,
@@ -279,12 +265,8 @@ export async function POST(request: NextRequest) {
         isVerified: newUser.isVerified,
         businessId: newUser.businessId,
         createdAt: newUser.createdAt,
-      },
-      // SECURITY NOTE: In production, password should be sent via secure email
-      temporaryPassword: !validatedData.password ? password : undefined,
-    };
-
-    return NextResponse.json(response, { status: 201 });
+      }
+    }, { status: 201 });
 
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -386,7 +368,6 @@ export async function PATCH(request: NextRequest) {
 
       case 'resetPassword':
         // Generate a temporary password
-        const bcrypt = require('bcryptjs');
         const tempPassword = Math.random().toString(36).slice(-10) + "Aa1!";
         const passwordHash = await bcrypt.hash(tempPassword, 12);
         
@@ -421,7 +402,10 @@ export async function PATCH(request: NextRequest) {
     });
 
     // Remove sensitive data
-    const { passwordHash, ...safeUser } = updatedUser;
+
+    // Remove sensitive fields from user object
+    const userObj = updatedUser || existingUser;
+    const { passwordHash, ...safeUser } = userObj;
 
     return NextResponse.json({ 
       success: true, 

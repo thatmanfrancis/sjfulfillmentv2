@@ -17,7 +17,10 @@ interface ManualOrderData {
   manualTotalAmount?: number;
   note?: string | null;
   cost?: number;
+  amount?: number;
   notes?: string | null;
+  priceTierGroupId?: string;
+  priceTierBreakdown?: any;
 }
 
 export async function POST(request: NextRequest) {
@@ -85,6 +88,7 @@ export async function POST(request: NextRequest) {
 
       // Validate products and stock
       let totalAmount = 0;
+      let priceTierSum = 0;
       const itemsToCreate = [];
       const stockUpdates = [];
       let missingPrice = false;
@@ -137,24 +141,33 @@ export async function POST(request: NextRequest) {
 
         itemsToCreate.push({
           productId: product.id,
-          quantity: item.quantity,
-          price: product.price // Use actual price
+          quantity: item.quantity
         });
-
-        // Use actual product price for calculation
-        if (typeof product.price === 'number') {
-          totalAmount += item.quantity * product.price;
-        } else {
-          missingPrice = true;
-        }
       }
 
-      // If any price is missing and manualTotalAmount is provided, use it
+      // Calculate totalAmount as sum of priceTierSum, amount, and cost
+      totalAmount = 0;
+      if (typeof orderData.amount === 'number' && !isNaN(orderData.amount)) {
+        totalAmount += orderData.amount;
+      }
+      if (typeof orderData.cost === 'number' && !isNaN(orderData.cost)) {
+        totalAmount += orderData.cost;
+      }
       if (typeof orderData.manualTotalAmount === 'number') {
         totalAmount = orderData.manualTotalAmount;
       }
 
       // Create the order
+      // Build priceTierBreakdown and priceTierGroupId
+      let priceTierBreakdown: any = null;
+      let priceTierGroupId: string | null = null;
+      if (orderData.priceTierGroupId) {
+        priceTierGroupId = orderData.priceTierGroupId;
+      }
+      // If priceTierGroupId is provided, build breakdown from items
+      if (priceTierGroupId && itemsToCreate.length > 0) {
+        priceTierBreakdown = itemsToCreate.map(item => ({ sku: item.productId, quantity: item.quantity }));
+      }
       const order = await tx.order.create({
         data: {
           id: `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -168,6 +181,8 @@ export async function POST(request: NextRequest) {
           totalAmount: totalAmount,
           fulfillmentWarehouseId: stockUpdates[0]?.warehouseId || null,
           notes: orderData.notes || null,
+          priceTierGroupId,
+          priceTierBreakdown,
           OrderItem: {
             create: itemsToCreate.map(item => ({
               id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -238,6 +253,8 @@ export async function POST(request: NextRequest) {
         totalAmount: result.totalAmount,
         status: result.status,
         itemCount: result.OrderItem.length,
+        priceTierGroupId: result.priceTierGroupId,
+        priceTierBreakdown: result.priceTierBreakdown,
         items: result.OrderItem.map(item => ({
           sku: item.Product.sku,
           productName: item.Product.name,

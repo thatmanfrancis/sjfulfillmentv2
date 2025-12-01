@@ -46,7 +46,12 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{id
     if (params && typeof params === 'object' && typeof (params as any).then === 'function') {
       resolvedParams = await (params as any);
     }
-    await prisma.user.delete({ where: { id: resolvedParams.id } });
+    // Permanently delete user and cascade related records if needed
+    await prisma.$transaction([
+      prisma.logisticsRegion.deleteMany({ where: { userId: resolvedParams.id } }),
+      prisma.order.updateMany({ where: { assignedLogisticsId: resolvedParams.id }, data: { assignedLogisticsId: null } }),
+      prisma.user.delete({ where: { id: resolvedParams.id } })
+    ]);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Delete logistics error:', error);

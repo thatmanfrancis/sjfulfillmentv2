@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { 
   Search, Filter, Download, Eye, Package, ShoppingCart, 
   Truck, CheckCircle, XCircle, Clock, User, Building,
-  Calendar, DollarSign, MoreHorizontal, AlertCircle, Plus
+  Calendar, DollarSign, MoreHorizontal, AlertCircle, Plus, RefreshCw, Edit
 } from 'lucide-react';
 import { get } from '@/lib/api';
 import BulkOrderModal from '@/components/admin/BulkOrderModal';
@@ -50,6 +50,8 @@ interface Order {
     name: string;
     region: string;
   } | null;
+  priceTierBreakdown?: Record<string, number> | Array<{ amount: number }> | null;
+  priceTierGroupId?: string | null;
 }
 
 interface OrderStats {
@@ -62,6 +64,29 @@ interface OrderStats {
 }
 
 export default function AdminOrdersPage() {
+    // Store fetched price tier groups by ID
+    const [priceTierGroups, setPriceTierGroups] = useState<Record<string, any>>({});
+
+    // Fetch price tier group for an order
+    const fetchPriceTierGroup = async (groupId: string) => {
+      if (!groupId || priceTierGroups[groupId]) return;
+      try {
+        const data: any = await get(`/api/admin/price-tiers/group/${groupId}`);
+        let group: any = null;
+        if (data && typeof data === 'object') {
+          if ('group' in data && typeof data.group === 'object' && data.group !== null && 'id' in data.group) {
+            group = data.group;
+          } else if ('id' in data) {
+            group = data;
+          }
+        }
+        if (group && group.id) {
+          setPriceTierGroups(prev => ({ ...prev, [groupId]: group }));
+        }
+      } catch (err) {
+        // Optionally handle error
+      }
+    };
   const { user } = useUser();
   const isAdmin = user?.role === 'ADMIN';
   // Edit/Cancel state
@@ -201,6 +226,15 @@ export default function AdminOrdersPage() {
     fetchOrders();
     fetchStats();
   }, [searchTerm, statusFilter, page]);
+
+  // Fetch price tier groups for all orders after orders are loaded
+  useEffect(() => {
+    orders.forEach(order => {
+      if (order.priceTierGroupId) {
+        fetchPriceTierGroup(order.priceTierGroupId);
+      }
+    });
+  }, [orders]);
 
   const fetchStats = async () => {
     try {
@@ -348,6 +382,18 @@ export default function AdminOrdersPage() {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  // Helper to sum price tier breakdown
+  const getPriceTierSum = (breakdown: any) => {
+    if (!breakdown) return 0;
+    if (Array.isArray(breakdown)) {
+      return breakdown.reduce((sum: number, tier: any) => sum + (tier.amount || 0), 0);
+    }
+    if (typeof breakdown === 'object') {
+      return Object.values(breakdown).reduce((sum: number, val: any) => sum + (typeof val === 'number' ? val : 0), 0);
+    }
+    return 0;
   };
 
   if (loading && !orders.length) {
@@ -691,7 +737,7 @@ export default function AdminOrdersPage() {
 
 
       {/* View Mode Toggle */}
-      <div className="flex justify-end mb-4">
+      {/* <div className="flex justify-end mb-4">
         <div className="inline-flex rounded-md shadow-sm" role="group">
           <button
             type="button"
@@ -708,163 +754,142 @@ export default function AdminOrdersPage() {
             Row View
           </button>
         </div>
-      </div>
+      </div> */}
 
       {/* Orders List */}
       {viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {orders.map((order) => {
-            const statusInfo = getStatusInfo(order.status);
-            const isCompleted = ["DELIVERED", "RETURNED", "CANCELED"].includes(order.status);
-            const isAssigned = !!order.assignedLogistics;
-            const checked = selectedOrderIds.includes(order.id);
-            const currency = order.Business?.baseCurrency || 'USD';
-            // Only show assign button for admin users
-            return (
-              <Card key={order.id} className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all flex flex-col justify-between h-full">
-                <CardContent className="p-6 flex flex-col h-full">
-                  <div className="flex items-center gap-2 mb-2">
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={e => {
-                        if (e.target.checked) {
-                          setSelectedOrderIds(ids => [...ids, order.id]);
-                        } else {
-                          setSelectedOrderIds(ids => ids.filter(id => id !== order.id));
-                        }
-                      }}
-                      className="accent-[#f8c017] h-4 w-4"
-                      aria-label="Select order for bulk update"
-                    />
-                  </div>
-                  <div className="flex-1 space-y-3">
-                    {/* Order Header */}
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <h3 className="font-semibold text-white text-lg truncate">
-                        {order.externalOrderId || `Order #${order.id}`}
-                      </h3>
+        <div className="overflow-x-auto">
+          <table className="min-w-full bg-[#1a1a1a] border border-[#f8c017]/20 rounded-lg">
+            <thead>
+              <tr className="text-left text-gray-400 text-sm">
+                <th className="p-3">Select</th>
+                <th className="p-3">Order ID</th>
+                <th className="p-3">Customer</th>
+                <th className="p-3">Products</th>
+                <th className="p-3">Date</th>
+                <th className="p-3">Status</th>
+                <th className="p-3">Total</th>
+                <th className="p-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orders.map((order) => {
+                const statusInfo = getStatusInfo(order.status);
+                const isCompleted = ["DELIVERED", "RETURNED", "CANCELED"].includes(order.status);
+                const isAssigned = !!order.assignedLogistics || order.status === 'ASSIGNED_TO_LOGISTICS';
+                const checked = selectedOrderIds.includes(order.id);
+                const currency = order.Business?.baseCurrency || 'USD';
+                const groupDetails = order.priceTierGroupId ? priceTierGroups[order.priceTierGroupId] : null;
+                let tierSum = 0;
+                if (groupDetails && Array.isArray(groupDetails.pricingTiers)) {
+                  tierSum = groupDetails.pricingTiers.reduce((sum: number, tier: any) => {
+                    return sum + (typeof tier.negotiatedRate === 'number' ? tier.negotiatedRate : (typeof tier.rate === 'number' ? tier.rate : 0));
+                  }, 0);
+                }
+                const orderBase = typeof order.totalAmount === 'number' && !isNaN(order.totalAmount)
+                  ? order.totalAmount
+                  : (order.amount || 0) + (order.cost || 0);
+                const finalTotal = orderBase + tierSum;
+                return (
+                  <tr key={order.id} className={`border-b border-[#f8c017]/10 hover:bg-[#23232b] ${isAssigned ? 'bg-[#f8c017]/30' : ''}`}>
+                    <td className="p-3">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={e => {
+                          if (e.target.checked) {
+                            setSelectedOrderIds(ids => [...ids, order.id]);
+                          } else {
+                            setSelectedOrderIds(ids => ids.filter(id => id !== order.id));
+                          }
+                        }}
+                        className="accent-[#f8c017] h-4 w-4"
+                        aria-label="Select order for bulk update"
+                      />
+                    </td>
+                    <td className="p-3 font-mono text-yellow-400 flex items-center gap-2">
+                      <span>{(order.externalOrderId || order.id).toString().slice(0, 10)}</span>
+                      <button
+                        className="text-gray-400 hover:text-[#f8c017]"
+                        title="Copy Order ID"
+                        onClick={() => {
+                          navigator.clipboard.writeText(order.externalOrderId || order.id);
+                        }}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16h8a2 2 0 002-2V8a2 2 0 00-2-2H8a2 2 0 00-2 2v6a2 2 0 002 2z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2" /></svg>
+                      </button>
+                    </td>
+                    <td className="p-3">{order.customerName}</td>
+                    <td className="p-3">
+                      {order.items?.length || 0} product(s)
+                      {order.items && order.items.length > 0 && (
+                        <span className="ml-2 text-xs text-[#f8c017]">/
+                          {order.items.reduce((sum, item) => sum + (item.quantity || 0), 0)} item(s)
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-3">{formatDate(order.orderDate)}</td>
+                    <td className="p-3">
                       <Badge className={`${statusInfo.color} border flex items-center gap-1`}>
                         {statusInfo.icon}
                         {statusInfo.label}
                       </Badge>
-                      <Badge variant="outline" className="text-[#f8c017] border-[#f8c017]/20 bg-[#f8c017]/5">
-                        {formatCurrency(order.totalAmount, currency)}
-                      </Badge>
-                    </div>
-                    <div className="grid gap-2">
-                      <div className="flex items-center gap-2 text-gray-400">
-                        <User className="h-4 w-4" />
-                        <span className="text-sm">Customer: {order.customerName}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-400">
-                        <Building className="h-4 w-4" />
-                        <span className="text-sm">Merchant: {order.Business.name}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-400">
-                        <Package className="h-4 w-4" />
-                        <span className="text-sm">
-                          {order.items?.length || 0} product(s)
-                          {order.items && order.items.length > 0 && (
-                            <span className="ml-2 text-xs text-[#f8c017]">/
-                              {order.items.reduce((sum, item) => sum + (item.quantity || 0), 0)} item(s)
-                            </span>
-                          )}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-400">
-                        <Calendar className="h-4 w-4" />
-                        <span className="text-sm">{formatDate(order.orderDate)}</span>
-                      </div>
-                      {/* In grid view and row view order card, add price/cost display */}
-                      {(order.amount || order.cost) && (
-                        <div className="flex items-center gap-2 text-gray-400">
-                          <DollarSign className="h-4 w-4" />
-                          <span className="text-sm">
-                            {order.amount ? `Price: ${formatCurrency(order.amount, currency)}` : ''}
-                            {order.cost ? ` / Cost: ${formatCurrency(order.cost, currency)}` : ''}
-                          </span>
-                        </div>
-                      )}
-                      {/* Notes truncated to 60 chars */}
-                      {order.note && (
-                        <div className="flex items-center gap-2 text-gray-400">
-                          <AlertCircle className="h-4 w-4" />
-                          <span className="text-sm" title={order.note}>{order.note.length > 60 ? order.note.slice(0, 60) + '...' : order.note}</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      <p>Address: {order.customerAddress}</p>
-                      {order.assignedLogistics && (
-                        <p>Assigned to: {order.assignedLogistics.firstName} {order.assignedLogistics.lastName}</p>
-                      )}
-                      {order.fulfillmentWarehouse && (
-                        <p>Warehouse: {order.fulfillmentWarehouse.name} ({order.fulfillmentWarehouse.region})</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-2 mt-6">
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      className="border-gray-600 text-gray-300 hover:border-[#f8c017] hover:text-[#f8c017]"
-                      onClick={() => { setSelectedOrder(order); setShowOrderModal(true); }}
-                      aria-label="View order details"
-                    >
-                      <Eye className="h-4 w-4 mr-1" />
-                      View
-                    </Button>
-                    {isAdmin && (
-                      <Button
-                        size="sm"
-                        className="bg-[#f8c017] text-black hover:bg-[#f8c017]/90"
-                        onClick={() => {
-                          setAssignOrderId(order.id);
-                          setShowAssignModal(true);
-                        }}
-                        disabled={isCompleted || isAssigned}
+                    </td>
+                    <td className="p-3 font-bold text-white">
+                      {formatCurrency(finalTotal, currency)}
+                    </td>
+                    <td className="p-3 flex gap-2">
+                      <button
+                        className="text-gray-400 hover:text-[#f8c017]"
+                        title="View Details"
+                        onClick={() => { setSelectedOrder(order); setShowOrderModal(true); }}
                       >
-                        Assign Logistics
-                      </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      className="bg-blue-700 text-white hover:bg-blue-800"
-                      onClick={() => {
-                        setStatusOrderId(order.id);
-                        setNewStatus(order.status);
-                        setShowStatusModal(true);
-                      }}
-                    >
-                      Change Status
-                    </Button>
-                    <div className="relative">
-                      <Button 
-                        size="sm" 
-                        variant="outline"
-                        className="border-gray-600 text-gray-300 hover:border-gray-500"
-                        onClick={() => {
-                          if (typeof window !== 'undefined') {
-                            setShowOrderActionsMenuId(order.id);
-                          }
-                        }}
-                        aria-label="Order actions"
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                      {showOrderActionsMenuId === order.id && (
-                        <div className="absolute right-0 mt-2 w-40 bg-[#23232b] border border-[#f8c017]/30 rounded-lg shadow-lg z-10">
-                          <button className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-[#f8c017]/10" onClick={() => handleEditOrder(order)}>Edit Order</button>
-                          <button className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-[#f8c017]/10" onClick={() => handleCancelOrder(order)}>Cancel Order</button>
-                        </div>
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      {isAdmin && (
+                        <button
+                          className="text-gray-400 hover:text-[#f8c017]"
+                          title="Assign Logistics"
+                          onClick={() => {
+                            setAssignOrderId(order.id);
+                            setShowAssignModal(true);
+                          }}
+                          disabled={isCompleted || isAssigned}
+                        >
+                          <Truck className="h-4 w-4" />
+                        </button>
                       )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                      <button
+                        className="text-gray-400 hover:text-[#f8c017]"
+                        title="Change Status"
+                        onClick={() => {
+                          setStatusOrderId(order.id);
+                          setNewStatus(order.status);
+                          setShowStatusModal(true);
+                        }}
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </button>
+                      <button
+                        className="text-gray-400 hover:text-[#f8c017]"
+                        title="Edit Order"
+                        onClick={() => handleEditOrder(order)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button
+                        className="text-gray-400 hover:text-red-500"
+                        title="Cancel Order"
+                        onClick={() => handleCancelOrder(order)}
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       ) : (
         <div className="space-y-4">
@@ -874,6 +899,13 @@ export default function AdminOrdersPage() {
             const isAssigned = !!order.assignedLogistics;
             const checked = selectedOrderIds.includes(order.id);
             const currency = order.Business?.baseCurrency || 'NGN';
+            // Debug log for total calculation
+            console.log('Order raw:', order);
+            const priceTierSum = getPriceTierSum(order.priceTierBreakdown);
+            console.log(`Order ${order.id} priceTierBreakdown:`, order.priceTierBreakdown);
+            console.log(`Order ${order.id} cost:`, order.cost);
+            const total = priceTierSum + (order.cost || 0);
+            console.log(`Order ${order.id} total:`, { priceTierSum, cost: order.cost, currency, total });
             return (
               <Card key={order.id} className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
                 <CardContent className="p-6">
@@ -904,7 +936,10 @@ export default function AdminOrdersPage() {
                           {statusInfo.label}
                         </Badge>
                         <Badge variant="outline" className="text-[#f8c017] border-[#f8c017]/20 bg-[#f8c017]/5">
-                          {formatCurrency(order.totalAmount, currency)}
+                          {formatCurrency(
+                            (getPriceTierSum(order.priceTierBreakdown) + (order.amount || 0) + (order.cost || 0)),
+                            currency
+                          )}
                         </Badge>
                       </div>
                       <div className="grid gap-2 md:grid-cols-2">
@@ -932,14 +967,21 @@ export default function AdminOrdersPage() {
                           <span className="text-sm">{formatDate(order.orderDate)}</span>
                         </div>
                         {/* In grid view and row view order card, add price/cost display */}
-                        {(order.amount || order.cost) && (
-                          <div className="flex items-center gap-2 text-gray-400">
-                            <DollarSign className="h-4 w-4" />
-                            <span className="text-sm">
-                              {order.amount ? `Price: ${formatCurrency(order.amount, currency)}` : ''}
-                              {order.cost ? ` / Cost: ${formatCurrency(order.cost, currency)}` : ''}
+                        {(order.priceTierBreakdown || order.amount || order.cost) && (
+                          <div className="flex flex-col gap-1 text-gray-400">
+                            {order.priceTierBreakdown && (
+                              <span className="text-xs text-[#f8c017]">Price Tier Breakdown: {JSON.stringify(order.priceTierBreakdown)}</span>
+                            )}
+                            <span className="flex items-center gap-2">
+                              <DollarSign className="h-4 w-4" />
+                              <span className="text-sm font-bold text-white">
+                                Total: {formatCurrency(total, currency)}
+                              </span>
                             </span>
                           </div>
+                        )}
+                        {order.priceTierGroupId && (
+                          <p>Price Tier Group: {order.priceTierGroupId}</p>
                         )}
                         {/* Notes truncated to 60 chars */}
                         {order.note && (
@@ -1185,7 +1227,6 @@ export default function AdminOrdersPage() {
                 <Calendar className="h-4 w-4" />
                 <span className="text-sm">{formatDate(selectedOrder.orderDate)}</span>
               </div>
-              {/* In order details modal, add price/cost display */}
               {(selectedOrder.amount || selectedOrder.cost) && (
                 <div className="flex items-center gap-2 text-gray-400">
                   <DollarSign className="h-4 w-4" />
@@ -1224,25 +1265,50 @@ export default function AdminOrdersPage() {
                 <div className="text-gray-500 text-sm italic py-2">No products in this order.</div>
               )}
             </div>
-              <div className="flex items-center justify-between mt-6">
-                <span className="text-lg font-bold text-white">Total: {formatCurrency(selectedOrder.totalAmount, selectedOrder.Business?.baseCurrency || 'NGN')}</span>
-                <div className="relative">
-                  <Button
-                    size="sm"
-                    className="bg-[#f8c017] text-black font-bold hover:bg-[#f8c017]/80"
-                    onClick={() => setShowOrderActionsMenu((v: any) => !v)}
-                    aria-label="Order actions"
-                  >
-                    More
-                  </Button>
-                  {showOrderActionsMenu && (
-                    <div className="absolute right-0 mt-2 w-40 bg-[#23232b] border border-[#f8c017]/30 rounded-lg shadow-lg z-10">
-                      <button className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-[#f8c017]/10" onClick={() => handleEditOrder(selectedOrder!)}>Edit Order</button>
-                      <button className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-[#f8c017]/10" onClick={() => handleCancelOrder(selectedOrder!)}>Cancel Order</button>
-                    </div>
-                  )}
-                </div>
-              </div>
+            
+            {/* Modal actions for order management */}
+            <div className="flex flex-col gap-2 mt-6">
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  className="bg-[#f8c017] text-black hover:bg-[#f8c017]/90"
+                  onClick={() => {
+                    setAssignOrderId(selectedOrder.id);
+                    setShowAssignModal(true);
+                  }}
+                  disabled={["DELIVERED", "RETURNED", "CANCELED"].includes(selectedOrder.status) || !!selectedOrder.assignedLogistics}
+                >
+                  Assign Logistics
+                </Button>
+              )}
+              <Button
+                size="sm"
+                className="bg-blue-700 text-white hover:bg-blue-800"
+                onClick={() => {
+                  setStatusOrderId(selectedOrder.id);
+                  setNewStatus(selectedOrder.status);
+                  setShowStatusModal(true);
+                }}
+              >
+                Change Status
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-gray-600 text-gray-300 hover:border-[#f8c017] hover:text-[#f8c017]"
+                onClick={() => handleEditOrder(selectedOrder)}
+              >
+                Edit Order
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-gray-600 text-red-400 hover:border-red-500 hover:text-red-500"
+                onClick={() => handleCancelOrder(selectedOrder)}
+              >
+                Cancel Order
+              </Button>
+            </div>
           </div>
         </div>
       )}

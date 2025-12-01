@@ -1,5 +1,5 @@
-
 import { useState, useEffect } from 'react';
+import './AssignLogisticsModal.css';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -181,7 +181,18 @@ export default function AssignLogisticsModal({ open, onClose, orderId, onAssigne
             <div key={item.id} className="mb-4 p-4 bg-[#23232b] rounded-lg border border-gray-600">
               <div className="mb-2 text-[#f8c017] font-bold">{item.name} <span className="text-xs text-gray-400">(SKU: {item.sku})</span> <span className="ml-2 text-xs text-gray-400">Qty: {item.quantity}</span></div>
               {(allocations[item.productId] || []).length === 0 ? (
-                <div className="text-red-400 text-sm">No stock allocations found for this product.</div>
+                <div className="flex flex-col items-center justify-center py-4">
+                  {/* Waveform animation */}
+                  <div className="flex gap-1 h-6 mb-2">
+                    {[1,2,3,4,5,6,7].map(i => (
+                      <div key={i} className={`bg-[#f8c017] animate-waveform`} style={{width:'6px',height:`${8+Math.random()*16}px`,borderRadius:'3px'}} />
+                    ))}
+                  </div>
+                  <span className="text-yellow-400 text-sm font-semibold">Searching for stock allocations...</span>
+                  {/* Dynamo sound effect */}
+                 
+                </div>
+              /* Add waveform animation keyframes */
               ) : (
                 <div className="space-y-2">
                   {(allocations[item.productId] || []).map((alloc: any, idx: number) => {
