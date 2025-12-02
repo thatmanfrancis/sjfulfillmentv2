@@ -34,7 +34,7 @@ export default function EditTierModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-[#1a1a1a] border-gray-700 max-w-3xl w-full">
+      <DialogContent className="bg-[#1a1a1a] border-gray-700 max-w-3xl w-full overflow-y-auto max-h-screen">
         <DialogHeader>
           <DialogTitle className="text-white">Edit Price Tier</DialogTitle>
         </DialogHeader>

@@ -1,23 +1,23 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { 
-  LayoutDashboard, 
-  Package, 
-  ShoppingCart, 
-  Warehouse, 
-  BarChart3, 
-  FileText, 
-  Settings, 
-  Users, 
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  LayoutDashboard,
+  Package,
+  ShoppingCart,
+  Warehouse,
+  BarChart3,
+  FileText,
+  Settings,
+  Users,
   CreditCard,
   User,
   Bell,
-  LogOut
-} from 'lucide-react';
-import { get } from '@/lib/api';
+  LogOut,
+} from "lucide-react";
+import { get } from "@/lib/api";
 import {
   Sidebar,
   SidebarContent,
@@ -30,8 +30,8 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
-} from '@/components/ui/sidebar';
-import { Button } from '@/components/ui/button';
+} from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -40,7 +40,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 
 interface UserProfile {
   id: string;
@@ -57,16 +57,16 @@ interface UserProfile {
 }
 
 const merchantNavigation = [
-  { name: 'Dashboard', href: '/merchant/dashboard', icon: LayoutDashboard },
-  { name: 'Products', href: '/merchant/products', icon: Package },
-  { name: 'Orders', href: '/merchant/orders', icon: ShoppingCart },
-  { name: 'Notifications', href: '/merchant/notifications', icon: Bell },
-  { name: 'Inventory', href: '/merchant/inventory', icon: Warehouse },
-  { name: 'Analytics', href: '/merchant/analytics', icon: BarChart3 },
-  { name: 'Invoices', href: '/merchant/invoices', icon: CreditCard },
-  { name: 'Reports', href: '/merchant/reports', icon: FileText },
-  { name: 'Staff', href: '/merchant/staff', icon: Users },
-  { name: 'Settings', href: '/merchant/settings', icon: Settings },
+  { name: "Dashboard", href: "/merchant/dashboard", icon: LayoutDashboard },
+  { name: "Products", href: "/merchant/products", icon: Package },
+  { name: "Orders", href: "/merchant/orders", icon: ShoppingCart },
+  { name: "Notifications", href: "/merchant/notifications", icon: Bell },
+  { name: "Inventory", href: "/merchant/inventory", icon: Warehouse },
+  { name: "Analytics", href: "/merchant/analytics", icon: BarChart3 },
+  { name: "Invoices", href: "/merchant/invoices", icon: CreditCard },
+  { name: "Reports", href: "/merchant/reports", icon: FileText },
+  { name: "Staff", href: "/merchant/staff", icon: Users },
+  { name: "Settings", href: "/merchant/settings", icon: Settings },
 ];
 
 export function MerchantSidebar() {
@@ -82,7 +82,7 @@ export function MerchantSidebar() {
 
   const fetchNotifications = async () => {
     try {
-      const data = await get('/api/notifications?limit=0');
+      const data = await get("/api/notifications?limit=0");
       const count = (data as { unreadCount?: number })?.unreadCount ?? 0;
       setUnreadCount(count);
     } catch (error) {
@@ -97,10 +97,10 @@ export function MerchantSidebar() {
     try {
       setLoading(true);
       // Fetch the actual logged-in merchant profile from the backend
-      const data = await get('/api/user/profile');
+      const data = await get("/api/user/profile");
       // The API may return { user: ... } or just the user object directly
-      if (data && typeof data === 'object') {
-        if ('user' in data) {
+      if (data && typeof data === "object") {
+        if ("user" in data) {
           setUser((data as any).user || null);
         } else {
           setUser(data as UserProfile);
@@ -109,7 +109,7 @@ export function MerchantSidebar() {
         setUser(null);
       }
     } catch (error) {
-      console.error('Failed to fetch user profile:', error);
+      console.error("Failed to fetch user profile:", error);
       setUser(null);
     } finally {
       setLoading(false);
@@ -118,52 +118,50 @@ export function MerchantSidebar() {
 
   const handleLogout = async () => {
     setIsLogoutDialogOpen(false);
-    
+
     try {
       // Call logout API to clear session
-      await fetch('/api/auth/logout', {
-        method: 'POST',
+      await fetch("/api/auth/logout", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
       });
     } catch (error) {
-      console.error('Logout API call failed:', error);
+      console.error("Logout API call failed:", error);
     }
-    
+
     // Clear any stored tokens/session data
-    localStorage.removeItem('authToken');
+    localStorage.removeItem("authToken");
     sessionStorage.clear();
     // Redirect to login
-    window.location.href = '/auth/login';
+    window.location.href = "/auth/login";
   };
 
   return (
-    <Sidebar collapsible="icon" className="bg-[#1a1a1a] border-r border-gray-800">
+    <Sidebar
+      collapsible="icon"
+      className="bg-[#1a1a1a] border-r border-gray-800"
+    >
       {/* Header */}
       <SidebarHeader className="border-b border-gray-800 p-6 group-data-[collapsible=icon]:p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3 group-data-[collapsible=icon]:justify-center">
-            <div className="w-10 h-10 bg-linear-to-r from-[#f8c017] to-[#ffd700] rounded-xl flex items-center justify-center shadow-lg">
-              <span className="text-black font-bold text-lg">SJ</span>
-            </div>
-            <div className="group-data-[collapsible=icon]:hidden">
-              <span className="font-bold text-xl text-white block">
-                SJFulfillment
-              </span>
-              <span className="text-sm text-gray-400">
-                Merchant Portal
-              </span>
-            </div>
+            <img src="/sjflogo.png" loading="lazy" alt="SJFulfillment Logo" />
           </div>
           {/* Notification Bell Icon */}
           <div className="relative mr-2">
-            <Button variant="ghost" size="icon" className="relative p-0 h-8 w-8" asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative p-0 h-8 w-8"
+              asChild
+            >
               <Link href="/merchant/notifications">
                 <Bell className="h-5 w-5 text-[#f8c017]" />
                 {unreadCount > 0 && (
                   <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full flex items-center justify-center text-xs bg-[#f8c017] text-black font-bold">
-                    {unreadCount > 9 ? '9+' : unreadCount}
+                    {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}
               </Link>
@@ -196,15 +194,21 @@ export function MerchantSidebar() {
                       tooltip={item.name}
                       className={`
                         h-12 text-base font-medium rounded-lg transition-all duration-200
-                        ${isActive 
-                          ? 'bg-[#f8c017]/10 text-[#f8c017] border border-[#f8c017]/20 shadow-sm' 
-                          : 'text-gray-300 hover:text-white hover:bg-gray-800/50 hover:border-gray-700'
+                        ${
+                          isActive
+                            ? "bg-[#f8c017]/10 text-[#f8c017] border border-[#f8c017]/20 shadow-sm"
+                            : "text-gray-300 hover:text-white hover:bg-gray-800/50 hover:border-gray-700"
                         }
                       `}
                     >
-                      <Link href={item.href} className="flex items-center gap-4 px-4">
+                      <Link
+                        href={item.href}
+                        className="flex items-center gap-4 px-4"
+                      >
                         <item.icon className="h-5 w-5 shrink-0" />
-                        <span className="group-data-[collapsible=icon]:sr-only">{item.name}</span>
+                        <span className="group-data-[collapsible=icon]:sr-only">
+                          {item.name}
+                        </span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -219,7 +223,10 @@ export function MerchantSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <Dialog open={isLogoutDialogOpen} onOpenChange={setIsLogoutDialogOpen}>
+                <Dialog
+                  open={isLogoutDialogOpen}
+                  onOpenChange={setIsLogoutDialogOpen}
+                >
                   <DialogTrigger asChild>
                     <SidebarMenuButton
                       tooltip="Logout"
@@ -227,15 +234,20 @@ export function MerchantSidebar() {
                     >
                       <div className="flex items-center gap-4 px-4">
                         <LogOut className="h-5 w-5 shrink-0" />
-                        <span className="group-data-[collapsible=icon]:sr-only">Logout</span>
+                        <span className="group-data-[collapsible=icon]:sr-only">
+                          Logout
+                        </span>
                       </div>
                     </SidebarMenuButton>
                   </DialogTrigger>
                   <DialogContent className="bg-[#1a1a1a] border-gray-700">
                     <DialogHeader>
-                      <DialogTitle className="text-white">Confirm Logout</DialogTitle>
+                      <DialogTitle className="text-white">
+                        Confirm Logout
+                      </DialogTitle>
                       <DialogDescription className="text-gray-400">
-                        Are you sure you want to logout? You will need to sign in again to access your merchant account.
+                        Are you sure you want to logout? You will need to sign
+                        in again to access your merchant account.
                       </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
@@ -265,8 +277,8 @@ export function MerchantSidebar() {
       <SidebarFooter className="border-t border-gray-800 p-6">
         <div className="flex items-center space-x-3 group-data-[collapsible=icon]:justify-center">
           {user?.profileImage ? (
-            <img 
-              src={user.profileImage} 
+            <img
+              src={user.profileImage}
               alt={`${user.firstName} ${user.lastName}`}
               className="w-10 h-10 rounded-full object-cover shrink-0"
             />
@@ -277,10 +289,15 @@ export function MerchantSidebar() {
           )}
           <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
             <p className="text-base font-medium text-white truncate">
-              {loading ? 'Loading...' : user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User' : 'Guest'}
+              {loading
+                ? "Loading..."
+                : user
+                ? `${user.firstName || ""} ${user.lastName || ""}`.trim() ||
+                  "User"
+                : "Guest"}
             </p>
             <p className="text-xs text-gray-400 truncate">
-              {loading ? '...' : user?.email || 'user@example.com'}
+              {loading ? "..." : user?.email || "user@example.com"}
             </p>
             {user?.business && !loading && (
               <p className="text-xs text-gray-500 truncate">

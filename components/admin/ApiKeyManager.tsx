@@ -5,51 +5,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Copy, Loader2, RefreshCw, Trash2, Key } from "lucide-react";
+import { get, post, put, del } from "@/lib/api";
 
-type ApiKeyManagerMode = "admin" | "merchant";
 interface ApiKeyManagerProps {
-  mode?: ApiKeyManagerMode;
   adminId?: string;
 }
 
-export function ApiKeyManager({
-  mode = "merchant",
-  adminId,
-}: ApiKeyManagerProps) {
+export function ApiKeyManager({ adminId }: ApiKeyManagerProps) {
   const [apiKey, setApiKey] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (mode === "admin") {
-      if (adminId) {
-        fetchAdminApiKey(adminId);
-      } else {
-        fetchAdminApiKey();
-      }
+    if (adminId) {
+      fetchAdminApiKey(adminId);
     } else {
-      fetchMerchantApiKey();
+      fetchAdminApiKey();
     }
-  }, [mode, adminId]);
-
-  const fetchMerchantApiKey = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/merchant/api-key`);
-      const data = await res.json();
-      if (data.apiKey) {
-        setApiKey(data.apiKey);
-      } else {
-        setApiKey("");
-      }
-    } catch (err) {
-      setError("Failed to fetch API key");
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [adminId]);
 
   const fetchAdminApiKey = async (adminId?: string) => {
     setLoading(true);
@@ -57,8 +31,7 @@ export function ApiKeyManager({
     try {
       let url = `/api/admin/admin-api-key`;
       if (adminId) url += `?adminId=${adminId}`;
-      const res = await fetch(url);
-      const data = await res.json();
+      const data = await get<{ apiKey?: string }>(url);
       if (data.apiKey) {
         setApiKey(data.apiKey);
       } else {
@@ -75,25 +48,10 @@ export function ApiKeyManager({
     setLoading(true);
     setError(null);
     try {
-      let res, data;
-      if (mode === "admin") {
-        if (adminId) {
-          res = await fetch(`/api/admin/admin-api-key`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ adminId }),
-          });
-        } else {
-          res = await fetch(`/api/admin/admin-api-key`, {
-            method: "POST",
-          });
-        }
-      } else {
-        res = await fetch(`/api/merchant/api-key`, {
-          method: "POST",
-        });
-      }
-      data = await res.json();
+      const data = await post<{ apiKey?: string; message?: string }>(
+        `/api/admin/admin-api-key`,
+        adminId ? { adminId } : undefined
+      );
       if (data.apiKey) {
         setApiKey(data.apiKey);
       } else {
@@ -110,19 +68,12 @@ export function ApiKeyManager({
     setLoading(true);
     setError(null);
     try {
-      let res, data;
-      if (mode === "admin") {
-        res = await fetch(`/api/admin/admin-api-key`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ adminId }),
-        });
-      } else {
-        res = await fetch(`/api/merchant/api-key`, {
-          method: "PUT",
-        });
-      }
-      data = await res.json();
+      const data = await put<{
+        apiKey?: string;
+        error?: string;
+        success?: boolean;
+        message?: string;
+      }>(`/api/admin/api-key`, adminId ? { adminId } : undefined);
       if ((data.apiKey && !data.error) || (data.success && data.apiKey)) {
         setApiKey(data.apiKey);
         setError(null);
@@ -140,19 +91,9 @@ export function ApiKeyManager({
     setLoading(true);
     setError(null);
     try {
-      let res, data;
-      if (mode === "admin") {
-        let url = `/api/admin/admin-api-key`;
-        if (adminId) url += `?adminId=${adminId}`;
-        res = await fetch(url, {
-          method: "DELETE",
-        });
-      } else {
-        res = await fetch(`/api/merchant/api-key`, {
-          method: "DELETE",
-        });
-      }
-      data = await res.json();
+      let url = `/api/admin/admin-api-key`;
+      if (adminId) url += `?adminId=${adminId}`;
+      const data = await del<{ success?: boolean; message?: string }>(url);
       if (data.success) {
         setApiKey("");
       } else {
@@ -180,9 +121,7 @@ export function ApiKeyManager({
       <CardContent className="py-6">
         <div className="flex items-center gap-3 mb-4">
           <Key className="h-5 w-5 text-[#f8c017]" />
-          <h3 className="font-medium text-white">
-            {mode === "admin" ? "Admin API Key" : "Merchant API Key"}
-          </h3>
+          <h3 className="font-medium text-white">Admin API Key</h3>
           <Badge
             variant="outline"
             className="border-[#f8c017]/30 text-[#f8c017] ml-2"

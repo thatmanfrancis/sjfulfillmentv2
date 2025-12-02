@@ -6,7 +6,17 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Search, Bell, CheckCircle, XCircle, Clock, AlertCircle, Calendar, Users, MessageSquare, Eye, MoreHorizontal
+  Search,
+  Bell,
+  CheckCircle,
+  XCircle,
+  Clock,
+  AlertCircle,
+  Calendar,
+  Users,
+  MessageSquare,
+  Eye,
+  MoreHorizontal,
 } from "lucide-react";
 import { get } from "@/lib/api";
 
@@ -40,7 +50,7 @@ export default function MerchantNotificationsPage() {
       const params = new URLSearchParams();
       if (searchTerm) params.append("search", searchTerm);
       params.append("limit", "40");
-      const data = await get(`/api/merchant/notifications?${params}`) as any;
+      const data = (await get(`/api/merchant/notifications?${params}`)) as any;
       setNotifications(data?.notifications || []);
       setUnreadCount(data?.unreadCount ?? 0);
     } catch (error) {
@@ -53,7 +63,7 @@ export default function MerchantNotificationsPage() {
 
   const markAsRead = async (id: string) => {
     try {
-      await fetch(`/api/merchant/notifications?id=${id}`, { method: 'PATCH' });
+      await fetch(`/api/merchant/notifications?id=${id}`, { method: "PATCH" });
       fetchNotifications();
     } catch {}
   };
@@ -61,7 +71,9 @@ export default function MerchantNotificationsPage() {
   const markAllAsRead = async () => {
     setMarkingAll(true);
     try {
-      await fetch(`/api/merchant/notifications/mark-all-read`, { method: 'POST' });
+      await fetch(`/api/merchant/notifications/mark-all-read`, {
+        method: "POST",
+      });
       fetchNotifications();
     } catch {}
     setMarkingAll(false);
@@ -114,14 +126,14 @@ export default function MerchantNotificationsPage() {
 
   if (loading && !notifications.length) {
     return (
-      <div className="space-y-6 bg-[#1a1a1a] min-h-screen p-6">
+      <div className="space-y-6 bg-black min-h-screen p-6">
         <div>
           <h1 className="text-3xl font-bold text-white">Notifications</h1>
           <p className="text-gray-400 mt-1">Loading notification data...</p>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           {[...Array(4)].map((_, i) => (
-            <Card key={i} className="bg-[#1a1a1a] border border-[#f8c017]/20">
+            <Card key={i} className="bg-black border border-[#f8c017]/20">
               <CardContent className="p-6">
                 <div className="space-y-3">
                   <div className="h-4 bg-gray-700 rounded w-1/4 animate-pulse"></div>
@@ -137,24 +149,26 @@ export default function MerchantNotificationsPage() {
   }
 
   return (
-    <div className="space-y-6 bg-[#1a1a1a] min-h-screen p-6">
+    <div className="space-y-6 bg-black min-h-screen p-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-white">Notifications</h1>
-          <p className="text-gray-400 mt-1">All notifications for your merchant account</p>
+          <p className="text-gray-400 mt-1">
+            All notifications for your merchant account
+          </p>
         </div>
         <div className="flex items-center gap-4">
           <div className="relative">
             <Bell className="h-7 w-7 text-[#f8c017]" />
             {unreadCount > 0 && (
               <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold rounded-full px-2 py-0.5">
-                {unreadCount > 9 ? '9+' : unreadCount}
+                {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             )}
           </div>
           <Button
             variant="outline"
-            className="border-[#f8c017] text-[#f8c017] hover:bg-[#f8c017]/10"
+            className="border-[#f8c017] text-[#f8c017] hover:text-[#ffff]/10"
             disabled={markingAll || unreadCount === 0}
             onClick={markAllAsRead}
           >
@@ -180,45 +194,63 @@ export default function MerchantNotificationsPage() {
         </CardContent>
       </Card>
       <div className="grid gap-4 md:grid-cols-2">
-        {notifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((notification) => {
-          const typeInfo = getTypeInfo(notification.type);
-          return (
-            <Card key={notification.id} className={`bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all ${notification.isRead ? '' : 'ring-2 ring-[#f8c017]'}`}>
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 space-y-3">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <Bell className="h-5 w-5 text-gray-400" />
-                      <h3 className="font-semibold text-white text-lg">{notification.title}</h3>
-                      <Badge className={`${typeInfo.color} border flex items-center gap-1`}>
-                        {typeInfo.icon}
-                        {typeInfo.label}
-                      </Badge>
+        {notifications
+          .sort(
+            (a, b) =>
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          )
+          .map((notification) => {
+            const typeInfo = getTypeInfo(notification.type);
+            return (
+              <Card
+                key={notification.id}
+                className={`bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all ${
+                  notification.isRead ? "" : "ring-2 ring-[#f8c017]"
+                }`}
+              >
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 space-y-3">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <Bell className="h-5 w-5 text-gray-400" />
+                        <h3 className="font-semibold text-white text-lg">
+                          {notification.title}
+                        </h3>
+                        <Badge
+                          className={`${typeInfo.color} border flex items-center gap-1`}
+                        >
+                          {typeInfo.icon}
+                          {typeInfo.label}
+                        </Badge>
+                      </div>
+                      <p className="text-gray-300 text-sm leading-relaxed">
+                        {notification.message}
+                      </p>
                     </div>
-                    <p className="text-gray-300 text-sm leading-relaxed">{notification.message}</p>
+                    {!notification.isRead && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-[#f8c017] border border-[#f8c017]"
+                        onClick={() => markAsRead(notification.id)}
+                      >
+                        Mark as read
+                      </Button>
+                    )}
                   </div>
-                  {!notification.isRead && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-[#f8c017] border border-[#f8c017]"
-                      onClick={() => markAsRead(notification.id)}
-                    >
-                      Mark as read
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+                </CardContent>
+              </Card>
+            );
+          })}
       </div>
       {notifications.length === 0 && !loading && (
         <Card className="bg-[#1a1a1a] border border-[#f8c017]/20">
           <CardContent className="p-12 text-center">
             <Bell className="h-12 w-12 text-gray-500 mx-auto mb-4" />
             <p className="text-gray-300 text-lg mb-2">No notifications found</p>
-            <p className="text-gray-500">Try adjusting your search or filter criteria</p>
+            <p className="text-gray-500">
+              Try adjusting your search or filter criteria
+            </p>
           </CardContent>
         </Card>
       )}

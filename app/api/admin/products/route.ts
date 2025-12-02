@@ -368,14 +368,15 @@ export async function POST(request: NextRequest) {
         });
         results.push({ success: true, product: { ...result.newProduct, baseCurrency: result.business.baseCurrency } });
       } catch (err: any) {
-        results.push({ success: false, error: err.message });
+        results.push({ success: false, error: err.message, product: prod });
       }
     }
+    const anyFailed = results.some(r => !r.success);
     return NextResponse.json({
-      success: true,
+      success: !anyFailed,
       results,
       message: `${results.filter(r => r.success).length} products created, ${results.filter(r => !r.success).length} errors.`
-    }, { status: 201 });
+    }, { status: anyFailed ? 400 : 201 });
 
   } catch (error) {
     if (error instanceof z.ZodError) {

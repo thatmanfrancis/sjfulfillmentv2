@@ -392,6 +392,7 @@ export async function DELETE(
     }
 
     // Implement soft delete instead of just suspending
+    // Prefix merchant email with 'deleted_' after soft delete
     const deletedMerchant = await prisma.business.update({
       where: { id },
       data: {

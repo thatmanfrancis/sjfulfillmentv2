@@ -157,7 +157,7 @@ export async function POST(request: NextRequest) {
             role: 'MERCHANT',
             isVerified: true, // Merchants are verified on creation
             businessId: business.id,
-            
+            createdAt: new Date(),
             updatedAt: new Date(),
           },
         });

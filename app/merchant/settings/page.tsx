@@ -463,7 +463,7 @@ export default function MerchantSettingsPage() {
               {/* API Key Management Section (Merchant) */}
               <div className="mt-8">
                 {/* Use merchant mode for merchant API key management */}
-                <ApiKeyManager mode="merchant" />
+                <ApiKeyManager />
               </div>
             </CardContent>
           </Card>
