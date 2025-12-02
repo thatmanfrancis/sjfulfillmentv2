@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
       where: { id: session.userId },
       select: { role: true },
     });
-    if (user?.role !== "MERCHANT_STAFF") {
+    if (user?.role !== "ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const apiKeys = await prisma.adminApiKey.findMany({
