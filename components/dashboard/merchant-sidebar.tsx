@@ -64,7 +64,7 @@ const merchantNavigation = [
   { name: "Inventory", href: "/merchant/inventory", icon: Warehouse },
   { name: "Analytics", href: "/merchant/analytics", icon: BarChart3 },
   { name: "Invoices", href: "/merchant/invoices", icon: CreditCard },
-  { name: "Reports", href: "/merchant/reports", icon: FileText },
+  // { name: "Reports", href: "/merchant/reports", icon: FileText },
   { name: "Staff", href: "/merchant/staff", icon: Users },
   { name: "Settings", href: "/merchant/settings", icon: Settings },
 ];
@@ -150,7 +150,7 @@ export function MerchantSidebar() {
             <img src="/sjflogo.png" loading="lazy" alt="SJFulfillment Logo" />
           </div>
           {/* Notification Bell Icon */}
-          <div className="relative mr-2">
+          {/* <div className="relative mr-2">
             <Button
               variant="ghost"
               size="icon"
@@ -166,7 +166,7 @@ export function MerchantSidebar() {
                 )}
               </Link>
             </Button>
-          </div>
+          </div> */}
           {/* Always show trigger, but style differently when collapsed */}
           <SidebarTrigger className="text-white hover:bg-gray-800 hover:text-[#f8c017] transition-colors duration-200 group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:top-2 group-data-[collapsible=icon]:right-2 group-data-[collapsible=icon]:z-10" />
         </div>

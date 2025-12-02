@@ -36,7 +36,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { get, put } from "@/lib/api";
-import { ApiKeyManager } from "@/components/admin/ApiKeyManager";
+import { MerchantApiKeyManager } from "./MerchantApiKeyManager";
 export default function MerchantSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -463,7 +463,7 @@ export default function MerchantSettingsPage() {
               {/* API Key Management Section (Merchant) */}
               <div className="mt-8">
                 {/* Use merchant mode for merchant API key management */}
-                <ApiKeyManager />
+                <MerchantApiKeyManager />
               </div>
             </CardContent>
           </Card>

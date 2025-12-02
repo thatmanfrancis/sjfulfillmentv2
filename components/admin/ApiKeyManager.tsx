@@ -73,7 +73,7 @@ export function ApiKeyManager({ adminId }: ApiKeyManagerProps) {
         error?: string;
         success?: boolean;
         message?: string;
-      }>(`/api/admin/api-key`, adminId ? { adminId } : undefined);
+      }>(`/api/admin/admin-api-key`, adminId ? { adminId } : undefined);
       if ((data.apiKey && !data.error) || (data.success && data.apiKey)) {
         setApiKey(data.apiKey);
         setError(null);
