@@ -37,102 +37,92 @@ import { get } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 
 interface AnalyticsData {
-  revenue: {
-    current: number;
-    previous: number;
-    change: number;
-    thisMonth: number;
-    lastMonth: number;
-    daily: Array<{ date: string; amount: number }>;
-    growth: number;
-    currency?: string;
+  summary: {
+    totalOrders: number;
+    totalRevenue: number;
+    averageOrderValue: number;
+    orderGrowth: number;
+    revenueGrowth: number;
+    period: number;
   };
-  orders: {
-    current: number;
-    previous: number;
-    change: number;
-    pending: number;
-    completed: number;
-    cancelled: number;
-    processing: number;
-    dailyAverage: number;
+  charts: {
+    dailyTrends: Array<{
+      date: string;
+      orders: number;
+      revenue: number;
+      avg_order_value: number;
+    }>;
+    statusDistribution: Array<{
+      status: string;
+      count: number;
+      percentage: number;
+    }>;
+    revenueByBusiness: Array<{
+      merchantId: string;
+      businessName: string;
+      currency: string;
+      _sum: { totalAmount: number };
+      _count: { id: number };
+    }>;
   };
-  users: {
-    current: number;
-    previous: number;
-    change: number;
-    active: number;
-    new: number;
-    returning: number;
-    engagement: number;
+  rankings: {
+    topProducts: Array<{
+      productId: string;
+      productName: string;
+      productSku: string;
+      businessName: string;
+      _sum: { quantity: number };
+      _count: { id: number };
+    }>;
+    warehousePerformance: Array<{
+      id: string;
+      name: string;
+      region: string;
+    }>;
   };
-  merchants: {
-    current: number;
-    previous: number;
-    change: number;
-    active: number;
-    pending: number;
-    verified: number;
-    topPerformer: string;
+  alerts: {
+    lowStockAllocations: Array<{
+      id: string;
+      stockLevel: number;
+      productId: string;
+      productName: string;
+      productSku: string;
+      businessName: string;
+      warehouseName: string;
+    }>;
+    totalCustomers: number;
   };
-  conversion: {
-    current: number;
-    previous: number;
-    change: number;
-    checkout: number;
-    payment: number;
-  };
-  avgOrderValue: {
-    current: number;
-    previous: number;
-    change: number;
-    trend: "up" | "down" | "stable";
-  };
-  traffic: {
-    sessions: number;
-    pageViews: number;
-    bounceRate: number;
-    avgSessionDuration: string;
-    sources: Array<{ name: string; percentage: number }>;
-  };
-  products: {
-    total: number;
-    topSelling: string;
-    categories: number;
-    lowStock: number;
-    outOfStock: number;
-    newThisMonth: number;
-  };
-  logistics: {
-    totalShipments: number;
-    delivered: number;
-    inTransit: number;
-    pending: number;
-    avgDeliveryTime: string;
-    successRate: number;
-  };
-  payments: {
-    successful: number;
-    failed: number;
-    pending: number;
-    refunds: number;
-    successRate: number;
-    popularMethod: string;
+  metadata: {
+    generatedAt: string;
+    period: string;
+    userRole: string;
+    filters: {
+      businessId: string | null;
+      warehouseId: string | null;
+    };
   };
 }
 
 interface TopPerformers {
-  topProducts: Array<{
+  businesses: Array<{
     id: string;
     name: string;
-    orders: number;
-    revenue: number;
+    totalRevenue: number;
+    orderCount: number;
   }>;
-  topMerchants: Array<{
+  products: Array<{
     id: string;
     name: string;
-    orders: number;
-    revenue: number;
+    totalSold: number;
+    totalRevenue: number;
+    orderCount: number;
+  }>;
+  customers: Array<{
+    id: string;
+    name: string;
+    email: string;
+    totalSpent: number;
+    orderCount: number;
   }>;
 }
 
@@ -157,357 +147,45 @@ export default function AdminAnalyticsPage() {
 
       const data = (await get(`/api/admin/analytics?${params}`)) as any;
 
-      // Transform API response to match our interface
       if (data?.success && data?.analytics) {
-        const apiData = data.analytics;
-
-        // Calculate previous period for comparison (mock calculation for now)
-        const currentRevenue = apiData.totalRevenue || 0;
-        const previousRevenue = currentRevenue * 0.8; // Mock 25% growth
-        const revenueChange =
-          previousRevenue > 0
-            ? ((currentRevenue - previousRevenue) / previousRevenue) * 100
-            : 0;
-
-        const currentOrders = apiData.totalOrders || 0;
-        const previousOrders = currentOrders * 0.85; // Mock 18% growth
-        const ordersChange =
-          previousOrders > 0
-            ? ((currentOrders - previousOrders) / previousOrders) * 100
-            : 0;
-
-        const currentUsers = apiData.totalCustomers || 0;
-        const previousUsers = currentUsers * 0.9; // Mock 11% growth
-        const usersChange =
-          previousUsers > 0
-            ? ((currentUsers - previousUsers) / previousUsers) * 100
-            : 0;
-
-        const currentMerchants = apiData.activeBusinesses || 0;
-        const previousMerchants = currentMerchants * 0.85; // Mock 18% growth
-        const merchantsChange =
-          previousMerchants > 0
-            ? ((currentMerchants - previousMerchants) / previousMerchants) * 100
-            : 0;
-
-        setAnalytics({
-          revenue: {
-            current: currentRevenue,
-            previous: previousRevenue,
-            change: revenueChange,
-            thisMonth: currentRevenue * 0.4,
-            lastMonth: currentRevenue * 0.3,
-            daily: [
-              { date: "2024-11-01", amount: currentRevenue * 0.05 },
-              { date: "2024-11-02", amount: currentRevenue * 0.06 },
-              { date: "2024-11-03", amount: currentRevenue * 0.04 },
-              { date: "2024-11-04", amount: currentRevenue * 0.07 },
-              { date: "2024-11-05", amount: currentRevenue * 0.08 },
-            ],
-            growth: revenueChange,
-          },
-          orders: {
-            current: currentOrders,
-            previous: previousOrders,
-            change: ordersChange,
-            pending: Math.floor(currentOrders * 0.03),
-            completed: Math.floor(currentOrders * 0.87),
-            cancelled: Math.floor(currentOrders * 0.05),
-            processing: Math.floor(currentOrders * 0.05),
-            dailyAverage: Math.floor(currentOrders / 30),
-          },
-          users: {
-            current: currentUsers,
-            previous: previousUsers,
-            change: usersChange,
-            active: Math.floor(currentUsers * 0.75),
-            new: Math.floor(currentUsers * 0.15),
-            returning: Math.floor(currentUsers * 0.6),
-            engagement: 74.5,
-          },
-          merchants: {
-            current: currentMerchants,
-            previous: previousMerchants,
-            change: merchantsChange,
-            active: Math.floor(currentMerchants * 0.9),
-            pending: Math.floor(currentMerchants * 0.05),
-            verified: Math.floor(currentMerchants * 0.85),
-            topPerformer: "Tech Solutions Ltd",
-          },
-          conversion: {
-            current: 4.8,
-            previous: 3.9,
-            change: 23.1,
-            checkout: 68.5,
-            payment: 94.2,
-          },
-          avgOrderValue: {
-            current: currentRevenue / (currentOrders || 1),
-            previous: previousRevenue / (previousOrders || 1),
-            change: 10.2,
-            trend: "up" as const,
-          },
-          traffic: {
-            sessions: currentUsers * 3,
-            pageViews: currentUsers * 8,
-            bounceRate: 32.5,
-            avgSessionDuration: "4m 32s",
-            sources: [
-              { name: "Organic Search", percentage: 45.2 },
-              { name: "Direct", percentage: 28.7 },
-              { name: "Social Media", percentage: 15.8 },
-              { name: "Email", percentage: 10.3 },
-            ],
-          },
-          products: {
-            total: currentOrders * 2, // Estimate products based on orders
-            topSelling: "Premium Wireless Headphones",
-            categories: 24,
-            lowStock: Math.floor(currentOrders * 0.05),
-            outOfStock: Math.floor(currentOrders * 0.01),
-            newThisMonth: Math.floor(currentOrders * 0.03),
-          },
-          logistics: {
-            totalShipments: Math.floor(currentOrders * 0.8),
-            delivered: Math.floor(currentOrders * 0.75),
-            inTransit: Math.floor(currentOrders * 0.03),
-            pending: Math.floor(currentOrders * 0.02),
-            avgDeliveryTime: "3.2 days",
-            successRate: 97.8,
-          },
-          payments: {
-            successful: Math.floor(currentOrders * 0.95),
-            failed: Math.floor(currentOrders * 0.03),
-            pending: Math.floor(currentOrders * 0.02),
-            refunds: Math.floor(currentOrders * 0.01),
-            successRate: 97.3,
-            popularMethod: "Bank Transfer",
-          },
-        });
+        setAnalytics(data.analytics);
       } else {
-        // Enhanced fallback data with all metrics
-        setAnalytics({
-          revenue: {
-            current: 2450000,
-            previous: 1980000,
-            change: 23.7,
-            thisMonth: 850000,
-            lastMonth: 650000,
-            daily: [
-              { date: "2024-11-01", amount: 45000 },
-              { date: "2024-11-02", amount: 52000 },
-              { date: "2024-11-03", amount: 38000 },
-              { date: "2024-11-04", amount: 65000 },
-              { date: "2024-11-05", amount: 71000 },
-            ],
-            growth: 18.5,
-          },
-          orders: {
-            current: 3247,
-            previous: 2743,
-            change: 18.4,
-            pending: 89,
-            completed: 3045,
-            cancelled: 78,
-            processing: 156,
-            dailyAverage: 108,
-          },
-          users: {
-            current: 15487,
-            previous: 13956,
-            change: 11.0,
-            active: 12892,
-            new: 1456,
-            returning: 10234,
-            engagement: 74.5,
-          },
-          merchants: {
-            current: 234,
-            previous: 198,
-            change: 18.2,
-            active: 198,
-            pending: 12,
-            verified: 186,
-            topPerformer: "Tech Solutions Ltd",
-          },
-          conversion: {
-            current: 4.8,
-            previous: 3.9,
-            change: 23.1,
-            checkout: 68.5,
-            payment: 94.2,
-          },
-          avgOrderValue: {
-            current: 755.2,
-            previous: 685.5,
-            change: 10.2,
-            trend: "up",
-          },
-          traffic: {
-            sessions: 45623,
-            pageViews: 156789,
-            bounceRate: 32.5,
-            avgSessionDuration: "4m 32s",
-            sources: [
-              { name: "Organic Search", percentage: 45.2 },
-              { name: "Direct", percentage: 28.7 },
-              { name: "Social Media", percentage: 15.8 },
-              { name: "Email", percentage: 10.3 },
-            ],
-          },
-          products: {
-            total: 8967,
-            topSelling: "Premium Wireless Headphones",
-            categories: 24,
-            lowStock: 156,
-            outOfStock: 34,
-            newThisMonth: 89,
-          },
-          logistics: {
-            totalShipments: 2845,
-            delivered: 2567,
-            inTransit: 234,
-            pending: 44,
-            avgDeliveryTime: "3.2 days",
-            successRate: 97.8,
-          },
-          payments: {
-            successful: 3156,
-            failed: 89,
-            pending: 45,
-            refunds: 23,
-            successRate: 97.3,
-            popularMethod: "Bank Transfer",
-          },
-        });
+        setAnalytics(null);
       }
     } catch (error) {
       console.error("Failed to fetch analytics:", error);
-      // Set fallback data on error
-      setAnalytics({
-        revenue: {
-          current: 2450000,
-          previous: 1980000,
-          change: 23.7,
-          thisMonth: 850000,
-          lastMonth: 650000,
-          daily: [
-            { date: "2024-11-01", amount: 45000 },
-            { date: "2024-11-02", amount: 52000 },
-            { date: "2024-11-03", amount: 38000 },
-            { date: "2024-11-04", amount: 65000 },
-            { date: "2024-11-05", amount: 71000 },
-          ],
-          growth: 18.5,
-        },
-        orders: {
-          current: 3247,
-          previous: 2743,
-          change: 18.4,
-          pending: 89,
-          completed: 3045,
-          cancelled: 78,
-          processing: 156,
-          dailyAverage: 108,
-        },
-        users: {
-          current: 15487,
-          previous: 13956,
-          change: 11.0,
-          active: 12892,
-          new: 1456,
-          returning: 10234,
-          engagement: 74.5,
-        },
-        merchants: {
-          current: 234,
-          previous: 198,
-          change: 18.2,
-          active: 198,
-          pending: 12,
-          verified: 186,
-          topPerformer: "Tech Solutions Ltd",
-        },
-        conversion: {
-          current: 4.8,
-          previous: 3.9,
-          change: 23.1,
-          checkout: 68.5,
-          payment: 94.2,
-        },
-        avgOrderValue: {
-          current: 755.2,
-          previous: 685.5,
-          change: 10.2,
-          trend: "up",
-        },
-        traffic: {
-          sessions: 45623,
-          pageViews: 156789,
-          bounceRate: 32.5,
-          avgSessionDuration: "4m 32s",
-          sources: [
-            { name: "Organic Search", percentage: 45.2 },
-            { name: "Direct", percentage: 28.7 },
-            { name: "Social Media", percentage: 15.8 },
-            { name: "Email", percentage: 10.3 },
-          ],
-        },
-        products: {
-          total: 8967,
-          topSelling: "Premium Wireless Headphones",
-          categories: 24,
-          lowStock: 156,
-          outOfStock: 34,
-          newThisMonth: 89,
-        },
-        logistics: {
-          totalShipments: 2845,
-          delivered: 2567,
-          inTransit: 234,
-          pending: 44,
-          avgDeliveryTime: "3.2 days",
-          successRate: 97.8,
-        },
-        payments: {
-          successful: 3156,
-          failed: 89,
-          pending: 45,
-          refunds: 23,
-          successRate: 97.3,
-          popularMethod: "Bank Transfer",
-        },
-      });
+      setAnalytics(null);
     }
   };
-
-  useEffect(() => {
-    fetchAnalytics();
-    fetchTopPerformers();
-  }, [timeRange, dateRange]);
 
   const fetchTopPerformers = async () => {
     try {
       const data = (await get("/api/admin/analytics/top-performers")) as any;
-      setTopPerformers(data);
+      if (data?.success) {
+        setTopPerformers(data.topPerformers);
+      } else {
+        setTopPerformers(null);
+      }
     } catch (error) {
       console.error("Failed to fetch top performers:", error);
-      setTopPerformers({
-        topProducts: [
-          { id: "1", name: "Premium Headphones", orders: 156, revenue: 23400 },
-          { id: "2", name: "Wireless Speaker", orders: 134, revenue: 20100 },
-          { id: "3", name: "Smart Watch", orders: 98, revenue: 19600 },
-        ],
-        topMerchants: [
-          { id: "1", name: "Tech Solutions Ltd", orders: 234, revenue: 45600 },
-          { id: "2", name: "Fashion Forward", orders: 189, revenue: 38900 },
-          { id: "3", name: "Electronics Hub", orders: 167, revenue: 35400 },
-        ],
-      });
+      setTopPerformers(null);
+    }
+  };
+
+  const loadAllData = async () => {
+    try {
+      setLoading(true);
+      await Promise.all([fetchAnalytics(), fetchTopPerformers()]);
+    } catch (error) {
+      console.error("Failed to load analytics data:", error);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadAllData();
+  }, [timeRange, dateRange]);
 
   const formatCurrency = (amount: number, currency = "USD") => {
     return new Intl.NumberFormat(undefined, {
@@ -547,7 +225,7 @@ export default function AdminAnalyticsPage() {
                 Analytics Dashboard
               </h1>
               <p className="text-gray-300 text-lg">
-                Loading comprehensive platform analytics...
+                Loading analytics data from backend...
               </p>
             </div>
           </div>
@@ -563,29 +241,40 @@ export default function AdminAnalyticsPage() {
               </div>
             ))}
           </div>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-6 mt-8">
-            {[...Array(6)].map((_, i) => (
-              <div
-                key={i}
-                className="bg-[#232323] border border-gray-700 rounded-lg p-4 animate-pulse"
-              >
-                <div className="h-5 w-24 bg-gray-700 rounded mb-3"></div>
-                <div className="h-8 w-20 bg-gray-700 rounded mb-2"></div>
-                <div className="h-3 w-16 bg-gray-800 rounded"></div>
-              </div>
-            ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!analytics) {
+    return (
+      <div className="bg-black p-6 min-h-screen">
+        <div className="space-y-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-4xl font-bold text-white mb-2">
+                Analytics Dashboard
+              </h1>
+              <p className="text-gray-300 text-lg">
+                Unable to load analytics data
+              </p>
+            </div>
           </div>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-8">
-            {[...Array(3)].map((_, i) => (
-              <div
-                key={i}
-                className="bg-[#232323] border border-gray-700 rounded-lg p-6 animate-pulse"
-              >
-                <div className="h-6 w-40 bg-gray-700 rounded mb-4"></div>
-                <div className="h-8 w-32 bg-gray-700 rounded mb-2"></div>
-                <div className="h-4 w-24 bg-gray-800 rounded"></div>
-              </div>
-            ))}
+          <div className="flex flex-col items-center justify-center min-h-[400px] border-2 border-gray-700 rounded-lg">
+            <BarChart3 className="h-16 w-16 text-gray-500 mb-4" />
+            <h3 className="text-xl font-semibold text-white mb-2">
+              No Analytics Data Available
+            </h3>
+            <p className="text-gray-400 text-center max-w-md">
+              Unable to retrieve analytics data from the backend. Please ensure
+              there is data in the system or try refreshing the page.
+            </p>
+            <Button
+              onClick={() => window.location.reload()}
+              className="mt-4 bg-[#f8c017] text-black hover:bg-[#f8c017]/90"
+            >
+              Refresh Page
+            </Button>
           </div>
         </div>
       </div>
@@ -659,16 +348,13 @@ export default function AdminAnalyticsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-white mb-2">
-                  {analytics?.revenue?.current
-                    ? formatCurrency(
-                        analytics.revenue.current,
-                        analytics.revenue.currency || "USD"
-                      )
-                    : "0"}
+                  {analytics?.summary?.totalRevenue
+                    ? formatCurrency(analytics.summary.totalRevenue, "USD")
+                    : "$0"}
                 </div>
                 <div className="flex items-center justify-between">
-                  {analytics?.revenue?.change !== undefined ? (
-                    formatChange(analytics.revenue.change)
+                  {analytics?.summary?.revenueGrowth !== undefined ? (
+                    formatChange(analytics.summary.revenueGrowth)
                   ) : (
                     <span className="text-gray-400">No data</span>
                   )}
@@ -677,7 +363,7 @@ export default function AdminAnalyticsPage() {
                 <div className="mt-2 text-xs text-gray-400">
                   Growth:{" "}
                   <span className="text-emerald-400 font-medium">
-                    +{analytics?.revenue?.growth || 0}%
+                    +{analytics?.summary?.revenueGrowth || 0}%
                   </span>
                 </div>
               </CardContent>
@@ -695,11 +381,11 @@ export default function AdminAnalyticsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-white mb-2">
-                  {analytics?.orders?.current?.toLocaleString() || "0"}
+                  {analytics?.summary?.totalOrders?.toLocaleString() || "0"}
                 </div>
                 <div className="flex items-center justify-between">
-                  {analytics?.orders?.change !== undefined ? (
-                    formatChange(analytics.orders.change)
+                  {analytics?.summary?.orderGrowth !== undefined ? (
+                    formatChange(analytics.summary.orderGrowth)
                   ) : (
                     <span className="text-gray-400">No data</span>
                   )}
@@ -708,7 +394,7 @@ export default function AdminAnalyticsPage() {
                 <div className="mt-2 text-xs text-gray-400">
                   Daily Avg:{" "}
                   <span className="text-blue-400 font-medium">
-                    {analytics?.orders?.dailyAverage || 0}
+                    {analytics?.summary?.averageOrderValue || 0}
                   </span>
                 </div>
               </CardContent>
@@ -726,21 +412,15 @@ export default function AdminAnalyticsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-white mb-2">
-                  {analytics?.users?.current?.toLocaleString() || "0"}
+                  {analytics?.alerts?.totalCustomers?.toLocaleString() || "0"}
                 </div>
                 <div className="flex items-center justify-between">
-                  {analytics?.users?.change !== undefined ? (
-                    formatChange(analytics.users.change)
-                  ) : (
-                    <span className="text-gray-400">No data</span>
-                  )}
+                  <span className="text-xs text-gray-400">Customer Base</span>
                   <span className="text-xs text-gray-500">vs last period</span>
                 </div>
                 <div className="mt-2 text-xs text-gray-400">
                   Engagement:{" "}
-                  <span className="text-emerald-400 font-medium">
-                    {analytics?.users?.engagement || 0}%
-                  </span>
+                  <span className="text-emerald-400 font-medium">N/A</span>
                 </div>
               </CardContent>
             </Card>
@@ -757,20 +437,18 @@ export default function AdminAnalyticsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-white mb-2">
-                  {analytics?.merchants?.current || 0}
+                  {analytics?.charts?.revenueByBusiness?.length || 0}
                 </div>
                 <div className="flex items-center justify-between">
-                  {analytics?.merchants?.change !== undefined ? (
-                    formatChange(analytics.merchants.change)
-                  ) : (
-                    <span className="text-gray-400">No data</span>
-                  )}
+                  <span className="text-xs text-gray-400">
+                    Active Businesses
+                  </span>
                   <span className="text-xs text-gray-500">vs last period</span>
                 </div>
                 <div className="mt-2 text-xs text-gray-400">
                   Verified:{" "}
                   <span className="text-purple-400 font-medium">
-                    {analytics?.merchants?.verified || 0}
+                    {analytics?.charts?.revenueByBusiness?.length || 0}
                   </span>
                 </div>
               </CardContent>
@@ -778,36 +456,14 @@ export default function AdminAnalyticsPage() {
           </div>
         )}
 
-        {/* Secondary Metrics Row */}
+        {/* Secondary Metrics Row - Only show metrics with real data */}
         {analytics && (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-6">
-            {/* Conversion Rate */}
-            <Card className="bg-linear-to-br from-[#2a2a2a] to-[#1f1f1f] border-gray-700 hover:border-orange-500/50 transition-all duration-300">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <CardTitle className="text-sm font-medium text-gray-300">
-                  Conversion
-                </CardTitle>
-                <div className="p-3 bg-orange-500/20 rounded-xl">
-                  <Target className="h-5 w-5 text-orange-400" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-white mb-2">
-                  {analytics?.conversion?.current || 0}%
-                </div>
-                {analytics?.conversion?.change !== undefined ? (
-                  formatChange(analytics.conversion.change)
-                ) : (
-                  <span className="text-gray-400">No data</span>
-                )}
-              </CardContent>
-            </Card>
-
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             {/* Avg Order Value */}
             <Card className="bg-linear-to-br from-[#2a2a2a] to-[#1f1f1f] border-gray-700 hover:border-cyan-500/50 transition-all duration-300">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                 <CardTitle className="text-sm font-medium text-gray-300">
-                  Avg Order
+                  Avg Order Value
                 </CardTitle>
                 <div className="p-3 bg-cyan-500/20 rounded-xl">
                   <Activity className="h-5 w-5 text-cyan-400" />
@@ -815,100 +471,75 @@ export default function AdminAnalyticsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-white mb-2">
-                  {analytics?.avgOrderValue?.current
-                    ? formatCurrency(
-                        analytics.avgOrderValue.current,
-                        analytics?.revenue?.currency || "USD"
-                      )
-                    : "0"}
+                  {analytics?.summary?.averageOrderValue
+                    ? formatCurrency(analytics.summary.averageOrderValue, "USD")
+                    : "$0"}
                 </div>
-                {analytics?.avgOrderValue?.change !== undefined ? (
-                  formatChange(analytics.avgOrderValue.change)
-                ) : (
-                  <span className="text-gray-400">No data</span>
-                )}
+                {/* Growth indicator can be calculated from orderGrowth */}
+                <span className="text-xs text-gray-400">Order Value Trend</span>
               </CardContent>
             </Card>
 
-            {/* Bounce Rate */}
-            <Card className="bg-linear-to-br from-[#2a2a2a] to-[#1f1f1f] border-gray-700 hover:border-pink-500/50 transition-all duration-300">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <CardTitle className="text-sm font-medium text-gray-300">
-                  Bounce Rate
-                </CardTitle>
-                <div className="p-3 bg-pink-500/20 rounded-xl">
-                  <Eye className="h-5 w-5 text-pink-400" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-white mb-2">
-                  {analytics.traffic.bounceRate}%
-                </div>
-                <p className="text-xs text-gray-400">Lower is better</p>
-              </CardContent>
-            </Card>
-
-            {/* Payment Success */}
+            {/* Total Products */}
             <Card className="bg-linear-to-br from-[#2a2a2a] to-[#1f1f1f] border-gray-700 hover:border-green-500/50 transition-all duration-300">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                 <CardTitle className="text-sm font-medium text-gray-300">
-                  Payment Success
+                  Total Products
                 </CardTitle>
                 <div className="p-3 bg-green-500/20 rounded-xl">
-                  <CreditCard className="h-5 w-5 text-green-400" />
+                  <Package className="h-5 w-5 text-green-400" />
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-white mb-2">
-                  {analytics.payments.successRate}%
+                  {analytics?.rankings?.topProducts?.length?.toLocaleString() ||
+                    "0"}
                 </div>
-                <p className="text-xs text-green-400">
-                  {analytics.payments.successful} successful
-                </p>
+                <p className="text-xs text-green-400">Across all merchants</p>
               </CardContent>
             </Card>
 
-            {/* Delivery Rate */}
+            {/* Total Warehouses */}
             <Card className="bg-linear-to-br from-[#2a2a2a] to-[#1f1f1f] border-gray-700 hover:border-blue-500/50 transition-all duration-300">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                 <CardTitle className="text-sm font-medium text-gray-300">
-                  Delivery Rate
+                  Warehouses
                 </CardTitle>
                 <div className="p-3 bg-blue-500/20 rounded-xl">
-                  <Truck className="h-5 w-5 text-blue-400" />
+                  <Building className="h-5 w-5 text-blue-400" />
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-white mb-2">
-                  {analytics.logistics.successRate}%
+                  {analytics?.rankings?.warehousePerformance?.length || 0}
                 </div>
-                <p className="text-xs text-blue-400">
-                  Avg: {analytics.logistics.avgDeliveryTime}
-                </p>
+                <p className="text-xs text-blue-400">Storage facilities</p>
               </CardContent>
             </Card>
 
-            {/* Platform Health */}
-            <Card className="bg-linear-to-br from-[#2a2a2a] to-[#1f1f1f] border-gray-700 hover:border-[#f8c017]/50 transition-all duration-300">
+            {/* Processing Orders */}
+            <Card className="bg-linear-to-br from-[#2a2a2a] to-[#1f1f1f] border-gray-700 hover:border-orange-500/50 transition-all duration-300">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                 <CardTitle className="text-sm font-medium text-gray-300">
-                  Platform Health
+                  Processing
                 </CardTitle>
-                <div className="p-3 bg-[#f8c017]/20 rounded-xl">
-                  <Shield className="h-5 w-5 text-[#f8c017]" />
+                <div className="p-3 bg-orange-500/20 rounded-xl">
+                  <Truck className="h-5 w-5 text-orange-400" />
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-white mb-2">98.9%</div>
-                <p className="text-xs text-[#f8c017]">
-                  All systems operational
-                </p>
+                <div className="text-2xl font-bold text-white mb-2">
+                  {analytics?.charts?.statusDistribution?.find(
+                    (s) => s.status === "PROCESSING"
+                  )?.count || 0}
+                </div>
+                <p className="text-xs text-orange-400">Orders in progress</p>
               </CardContent>
             </Card>
           </div>
         )}
 
-        {/* Detailed Analytics Sections */}
+        {/* Real Analytics Sections */}
         {analytics && (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {/* Order Status Breakdown */}
@@ -919,7 +550,7 @@ export default function AdminAnalyticsPage() {
                   Order Analytics
                 </CardTitle>
                 <CardDescription className="text-gray-400">
-                  Order status and performance metrics
+                  Order status breakdown from real data
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -929,7 +560,9 @@ export default function AdminAnalyticsPage() {
                     <span className="text-white font-medium">Completed</span>
                   </div>
                   <span className="text-emerald-400 font-bold">
-                    {analytics.orders.completed.toLocaleString()}
+                    {analytics?.charts?.statusDistribution
+                      ?.find((s) => s.status === "COMPLETED")
+                      ?.count?.toLocaleString() || "0"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-[#1f1f1f] rounded-lg border border-gray-700">
@@ -938,7 +571,9 @@ export default function AdminAnalyticsPage() {
                     <span className="text-white font-medium">Processing</span>
                   </div>
                   <span className="text-blue-400 font-bold">
-                    {analytics.orders.processing.toLocaleString()}
+                    {analytics?.charts?.statusDistribution
+                      ?.find((s) => s.status === "PROCESSING")
+                      ?.count?.toLocaleString() || "0"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-[#1f1f1f] rounded-lg border border-gray-700">
@@ -947,7 +582,9 @@ export default function AdminAnalyticsPage() {
                     <span className="text-white font-medium">Pending</span>
                   </div>
                   <span className="text-[#f8c017] font-bold">
-                    {analytics.orders.pending.toLocaleString()}
+                    {analytics?.charts?.statusDistribution
+                      ?.find((s) => s.status === "PENDING")
+                      ?.count?.toLocaleString() || "0"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-[#1f1f1f] rounded-lg border border-gray-700">
@@ -956,33 +593,42 @@ export default function AdminAnalyticsPage() {
                     <span className="text-white font-medium">Cancelled</span>
                   </div>
                   <span className="text-red-400 font-bold">
-                    {analytics.orders.cancelled.toLocaleString()}
+                    {analytics?.charts?.statusDistribution
+                      ?.find((s) => s.status === "CANCELLED")
+                      ?.count?.toLocaleString() || "0"}
                   </span>
                 </div>
               </CardContent>
             </Card>
 
-            {/* User Engagement */}
+            {/* User Analytics */}
             <Card className="bg-linear-to-br from-[#2a2a2a] to-[#1f1f1f] border-gray-700">
               <CardHeader>
                 <CardTitle className="text-xl font-semibold text-white flex items-center gap-2">
                   <Users className="h-5 w-5 text-[#f8c017]" />
-                  User Insights
+                  User Analytics
                 </CardTitle>
                 <CardDescription className="text-gray-400">
-                  User behavior and engagement patterns
+                  Customer and user metrics
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between p-3 bg-[#1f1f1f] rounded-lg border border-gray-700">
                   <div>
-                    <p className="text-white font-medium">Total Active</p>
-                    <p className="text-xs text-gray-400">
-                      Currently engaged users
-                    </p>
+                    <p className="text-white font-medium">Total Users</p>
+                    <p className="text-xs text-gray-400">All platform users</p>
                   </div>
                   <span className="text-emerald-400 font-bold text-xl">
-                    {analytics.users.active.toLocaleString()}
+                    {analytics?.alerts?.totalCustomers?.toLocaleString() || "0"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-[#1f1f1f] rounded-lg border border-gray-700">
+                  <div>
+                    <p className="text-white font-medium">Active Users</p>
+                    <p className="text-xs text-gray-400">Currently engaged</p>
+                  </div>
+                  <span className="text-blue-400 font-bold text-xl">
+                    {analytics?.alerts?.totalCustomers?.toLocaleString() || "0"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-[#1f1f1f] rounded-lg border border-gray-700">
@@ -990,216 +636,221 @@ export default function AdminAnalyticsPage() {
                     <p className="text-white font-medium">New Users</p>
                     <p className="text-xs text-gray-400">This period</p>
                   </div>
-                  <span className="text-blue-400 font-bold text-xl">
-                    {analytics.users.new.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-[#1f1f1f] rounded-lg border border-gray-700">
-                  <div>
-                    <p className="text-white font-medium">Returning</p>
-                    <p className="text-xs text-gray-400">Repeat visitors</p>
-                  </div>
                   <span className="text-[#f8c017] font-bold text-xl">
-                    {analytics.users.returning.toLocaleString()}
+                    {"0"}
                   </span>
-                </div>
-                <div className="p-3 bg-[#1f1f1f] rounded-lg border border-gray-700">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-white text-sm">Session Duration</span>
-                    <span className="text-purple-400 font-medium">
-                      {analytics.traffic.avgSessionDuration}
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-700 rounded-full h-2">
-                    <div
-                      className="bg-purple-500 h-2 rounded-full"
-                      style={{ width: `${analytics.users.engagement}%` }}
-                    ></div>
-                  </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Product Performance */}
+            {/* Merchant Analytics */}
             <Card className="bg-linear-to-br from-[#2a2a2a] to-[#1f1f1f] border-gray-700">
               <CardHeader>
                 <CardTitle className="text-xl font-semibold text-white flex items-center gap-2">
-                  <Package className="h-5 w-5 text-[#f8c017]" />
-                  Product Metrics
+                  <Building className="h-5 w-5 text-[#f8c017]" />
+                  Merchant Analytics
                 </CardTitle>
                 <CardDescription className="text-gray-400">
-                  Inventory and product performance
+                  Business and merchant metrics
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between p-3 bg-[#1f1f1f] rounded-lg border border-gray-700">
                   <div>
-                    <p className="text-white font-medium">Total Products</p>
-                    <p className="text-xs text-gray-400">
-                      Across all categories
-                    </p>
+                    <p className="text-white font-medium">Total Merchants</p>
+                    <p className="text-xs text-gray-400">Active businesses</p>
                   </div>
                   <span className="text-[#f8c017] font-bold text-xl">
-                    {analytics.products.total.toLocaleString()}
+                    {analytics?.charts?.revenueByBusiness?.length?.toLocaleString() ||
+                      "0"}
                   </span>
                 </div>
-                <div className="p-3 bg-[#1f1f1f] rounded-lg border border-gray-700">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-white text-sm">Top Selling</span>
-                    <Star className="h-4 w-4 text-[#f8c017]" />
+                <div className="flex items-center justify-between p-3 bg-[#1f1f1f] rounded-lg border border-gray-700">
+                  <div>
+                    <p className="text-white font-medium">Verified</p>
+                    <p className="text-xs text-gray-400">Approved merchants</p>
                   </div>
-                  <p className="text-[#f8c017] font-medium text-sm">
-                    {analytics.products.topSelling}
-                  </p>
+                  <span className="text-emerald-400 font-bold text-xl">
+                    {analytics?.charts?.revenueByBusiness?.length || 0}
+                  </span>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-2 bg-[#1f1f1f] rounded border border-gray-700 text-center">
-                    <p className="text-orange-400 font-bold text-lg">
-                      {analytics.products.lowStock}
-                    </p>
-                    <p className="text-xs text-gray-400">Low Stock</p>
+                <div className="flex items-center justify-between p-3 bg-[#1f1f1f] rounded-lg border border-gray-700">
+                  <div>
+                    <p className="text-white font-medium">Daily Avg Orders</p>
+                    <p className="text-xs text-gray-400">Per day average</p>
                   </div>
-                  <div className="p-2 bg-[#1f1f1f] rounded border border-gray-700 text-center">
-                    <p className="text-red-400 font-bold text-lg">
-                      {analytics.products.outOfStock}
-                    </p>
-                    <p className="text-xs text-gray-400">Out of Stock</p>
-                  </div>
-                </div>
-                <div className="p-3 bg-[#1f1f1f] rounded-lg border border-gray-700">
-                  <div className="flex items-center justify-between">
-                    <span className="text-white text-sm">Categories</span>
-                    <span className="text-emerald-400 font-bold">
-                      {analytics.products.categories}
-                    </span>
-                  </div>
+                  <span className="text-blue-400 font-bold text-xl">
+                    {Math.round(
+                      analytics?.summary?.totalOrders /
+                        analytics?.summary?.period || 0
+                    )}
+                  </span>
                 </div>
               </CardContent>
             </Card>
           </div>
         )}
 
-        {/* Charts Placeholder Section */}
-        <div className="grid gap-6 md:grid-cols-2">
-          <Card className="bg-linear-to-br from-[#2a2a2a] to-[#1f1f1f] border-gray-700">
-            <CardHeader>
-              <CardTitle className="text-xl font-semibold text-white flex items-center gap-2">
-                <BarChart3 className="h-5 w-5 text-[#f8c017]" />
-                Revenue Trend
-              </CardTitle>
-              <CardDescription className="text-gray-400">
-                Daily revenue over the selected period
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-64 bg-[#1f1f1f] rounded-lg flex items-center justify-center border border-gray-700">
-                <div className="text-center">
-                  <LineChart className="h-12 w-12 text-gray-500 mx-auto mb-4" />
-                  <p className="text-gray-400 mb-2">Revenue Visualization</p>
-                  <p className="text-gray-500 text-sm">
-                    Daily:{" "}
-                    {formatCurrency(
-                      analytics?.revenue?.daily?.[0]?.amount || 0,
-                      analytics?.revenue?.currency || "USD"
-                    )}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-linear-to-br from-[#2a2a2a] to-[#1f1f1f] border-gray-700">
-            <CardHeader>
-              <CardTitle className="text-xl font-semibold text-white flex items-center gap-2">
-                <PieChart className="h-5 w-5 text-[#f8c017]" />
-                Traffic Sources
-              </CardTitle>
-              <CardDescription className="text-gray-400">
-                User acquisition channels
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {analytics?.traffic?.sources?.map((source, index) => (
-                  <div
-                    key={source.name}
-                    className="flex items-center justify-between p-3 bg-[#1f1f1f] rounded-lg border border-gray-700"
-                  >
-                    <div className="flex items-center gap-3">
+        {/* Top Performers Section */}
+        {topPerformers && (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {/* Top Businesses */}
+            {topPerformers.businesses.length > 0 && (
+              <Card className="bg-linear-to-br from-[#2a2a2a] to-[#1f1f1f] border-gray-700">
+                <CardHeader>
+                  <CardTitle className="text-xl font-semibold text-white flex items-center gap-2">
+                    <Building className="h-5 w-5 text-[#f8c017]" />
+                    Top Businesses
+                  </CardTitle>
+                  <CardDescription className="text-gray-400">
+                    Highest revenue generating businesses
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {topPerformers.businesses
+                    .slice(0, 5)
+                    .map((business, index) => (
                       <div
-                        className="w-3 h-3 rounded-full"
-                        style={{
-                          backgroundColor: [
-                            "#f8c017",
-                            "#3b82f6",
-                            "#10b981",
-                            "#f59e0b",
-                          ][index % 4],
-                        }}
-                      ></div>
-                      <span className="text-white">{source.name}</span>
+                        key={business.id}
+                        className="flex items-center justify-between p-3 bg-[#1f1f1f] rounded-lg border border-gray-700"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm"
+                            style={{
+                              backgroundColor: [
+                                "#f8c017",
+                                "#3b82f6",
+                                "#10b981",
+                                "#f59e0b",
+                                "#8b5cf6",
+                              ][index % 5],
+                            }}
+                          >
+                            {index + 1}
+                          </div>
+                          <div>
+                            <p className="text-white font-medium text-sm">
+                              {business.name}
+                            </p>
+                            <p className="text-gray-400 text-xs">
+                              {business.orderCount} orders
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-[#f8c017] font-bold">
+                          {formatCurrency(business.totalRevenue, "USD")}
+                        </span>
+                      </div>
+                    ))}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Top Products */}
+            {topPerformers.products.length > 0 && (
+              <Card className="bg-linear-to-br from-[#2a2a2a] to-[#1f1f1f] border-gray-700">
+                <CardHeader>
+                  <CardTitle className="text-xl font-semibold text-white flex items-center gap-2">
+                    <Package className="h-5 w-5 text-[#f8c017]" />
+                    Top Products
+                  </CardTitle>
+                  <CardDescription className="text-gray-400">
+                    Best selling products by quantity
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {topPerformers.products.slice(0, 5).map((product, index) => (
+                    <div
+                      key={product.id}
+                      className="flex items-center justify-between p-3 bg-[#1f1f1f] rounded-lg border border-gray-700"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm"
+                          style={{
+                            backgroundColor: [
+                              "#f8c017",
+                              "#3b82f6",
+                              "#10b981",
+                              "#f59e0b",
+                              "#8b5cf6",
+                            ][index % 5],
+                          }}
+                        >
+                          {index + 1}
+                        </div>
+                        <div>
+                          <p className="text-white font-medium text-sm">
+                            {product.name}
+                          </p>
+                          <p className="text-gray-400 text-xs">
+                            {product.totalSold} sold
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-[#f8c017] font-bold">
+                        {formatCurrency(product.totalRevenue)}
+                      </span>
                     </div>
-                    <span className="text-gray-300 font-medium">
-                      {source.percentage}%
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
 
-        {/* Performance Summary */}
-        {analytics && (
-          <Card className="bg-linear-to-br from-[#2a2a2a] to-[#1f1f1f] border-gray-700">
-            <CardHeader>
-              <CardTitle className="text-xl font-semibold text-white flex items-center gap-2">
-                <Globe className="h-5 w-5 text-[#f8c017]" />
-                Platform Performance Summary
-              </CardTitle>
-              <CardDescription className="text-gray-400">
-                Key insights and recommendations
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-3">
-                <div className="p-4 bg-[#1f1f1f] rounded-lg border border-emerald-500/30">
-                  <div className="flex items-center gap-3 mb-2">
-                    <CheckCircle className="h-5 w-5 text-emerald-400" />
-                    <h4 className="font-semibold text-white">Strong Growth</h4>
-                  </div>
-                  <p className="text-sm text-gray-300">
-                    Revenue is up {analytics.revenue.change}% and user base grew
-                    by {analytics.users.change}% this period.
-                  </p>
-                </div>
-
-                <div className="p-4 bg-[#1f1f1f] rounded-lg border border-[#f8c017]/30">
-                  <div className="flex items-center gap-3 mb-2">
-                    <AlertTriangle className="h-5 w-5 text-[#f8c017]" />
-                    <h4 className="font-semibold text-white">
-                      Attention Needed
-                    </h4>
-                  </div>
-                  <p className="text-sm text-gray-300">
-                    {analytics.products.lowStock} products are low on stock and
-                    need restocking.
-                  </p>
-                </div>
-
-                <div className="p-4 bg-[#1f1f1f] rounded-lg border border-blue-500/30">
-                  <div className="flex items-center gap-3 mb-2">
-                    <Zap className="h-5 w-5 text-blue-400" />
-                    <h4 className="font-semibold text-white">Opportunity</h4>
-                  </div>
-                  <p className="text-sm text-gray-300">
-                    Conversion rate increased {analytics.conversion.change}%.
-                    Focus on user experience optimization.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+            {/* Top Customers */}
+            {topPerformers.customers.length > 0 && (
+              <Card className="bg-linear-to-br from-[#2a2a2a] to-[#1f1f1f] border-gray-700">
+                <CardHeader>
+                  <CardTitle className="text-xl font-semibold text-white flex items-center gap-2">
+                    <Users className="h-5 w-5 text-[#f8c017]" />
+                    Top Customers
+                  </CardTitle>
+                  <CardDescription className="text-gray-400">
+                    Highest value customers by total spend
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {topPerformers.customers
+                    .slice(0, 5)
+                    .map((customer, index) => (
+                      <div
+                        key={customer.id}
+                        className="flex items-center justify-between p-3 bg-[#1f1f1f] rounded-lg border border-gray-700"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm"
+                            style={{
+                              backgroundColor: [
+                                "#f8c017",
+                                "#3b82f6",
+                                "#10b981",
+                                "#f59e0b",
+                                "#8b5cf6",
+                              ][index % 5],
+                            }}
+                          >
+                            {index + 1}
+                          </div>
+                          <div>
+                            <p className="text-white font-medium text-sm">
+                              {customer.name}
+                            </p>
+                            <p className="text-gray-400 text-xs">
+                              {customer.orderCount} orders
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-[#f8c017] font-bold">
+                          {formatCurrency(customer.totalSpent, "USD")}
+                        </span>
+                      </div>
+                    ))}
+                </CardContent>
+              </Card>
+            )}
+          </div>
         )}
       </div>
     </div>

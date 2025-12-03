@@ -12,19 +12,22 @@ const createWarehouseSchema = z.object({
 const updateWarehouseSchema = createWarehouseSchema.partial();
 
 // Generate warehouse code based on region
-function generateWarehouseCode(region: string, existingCodes: string[]): string {
+function generateWarehouseCode(
+  region: string,
+  existingCodes: string[]
+): string {
   // Extract first 2 letters of region and make uppercase
   const prefix = region.slice(0, 2).toUpperCase();
-  
+
   // Find existing codes with same prefix
   const existingNumbers = existingCodes
-    .filter(code => code.startsWith(prefix))
-    .map(code => {
-      const num = parseInt(code.split('-')[1] || '0');
+    .filter((code) => code.startsWith(prefix))
+    .map((code) => {
+      const num = parseInt(code.split("-")[1] || "0");
       return isNaN(num) ? 0 : num;
     })
     .sort((a, b) => a - b);
-  
+
   // Find next available number
   let nextNumber = 1;
   for (const num of existingNumbers) {
@@ -34,8 +37,8 @@ function generateWarehouseCode(region: string, existingCodes: string[]): string 
       break;
     }
   }
-  
-  return `${prefix}-${nextNumber.toString().padStart(2, '0')}`;
+
+  return `${prefix}-${nextNumber.toString().padStart(2, "0")}`;
 }
 
 // GET /api/warehouses - List warehouses
@@ -43,10 +46,7 @@ export async function GET(request: NextRequest) {
   try {
     const authResult = await verifyAuth(request);
     if (!authResult.success || !authResult.user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -63,8 +63,8 @@ export async function GET(request: NextRequest) {
       const userRegions = await prisma.logisticsRegion.findMany({
         where: { userId: authResult.user.id },
         select: {
-          warehouseId: true
-        }
+          warehouseId: true,
+        },
       });
 
       const warehouseIds = userRegions.map((ur) => ur.warehouseId);
@@ -76,11 +76,13 @@ export async function GET(request: NextRequest) {
     const warehouses = await prisma.warehouse.findMany({
       where,
       include: {
-        StockAllocation: includeStats ? {
-          select: {
-            allocatedQuantity: true
-          }
-        } : undefined,
+        StockAllocation: includeStats
+          ? {
+              select: {
+                allocatedQuantity: true,
+              },
+            }
+          : undefined,
       },
       orderBy: { name: "asc" },
     });
@@ -91,10 +93,12 @@ export async function GET(request: NextRequest) {
         stats: includeStats
           ? {
               totalProducts: warehouse.StockAllocation?.length || 0,
-              totalStock: warehouse.StockAllocation?.reduce(
-                (sum: number, allocation: any) => sum + allocation.allocatedQuantity,
-                0
-              ) || 0,
+              totalStock:
+                warehouse.StockAllocation?.reduce(
+                  (sum: number, allocation: any) =>
+                    sum + allocation.allocatedQuantity,
+                  0
+                ) || 0,
             }
           : undefined,
       })),
@@ -113,16 +117,16 @@ export async function POST(request: NextRequest) {
   try {
     const authResult = await verifyAuth(request);
     if (!authResult.success || !authResult.user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admins can create warehouses
-    if (authResult.user.role !== "ADMIN") {
+    // Allow both admins and logistics users to create warehouses
+    if (!["ADMIN", "LOGISTICS"].includes(authResult.user.role)) {
       return NextResponse.json(
-        { error: "Insufficient permissions. Admin access required." },
+        {
+          error:
+            "Insufficient permissions. Admin or Logistics access required.",
+        },
         { status: 403 }
       );
     }
@@ -132,10 +136,15 @@ export async function POST(request: NextRequest) {
 
     // Generate unique warehouse code
     const existingWarehouses = await prisma.warehouse.findMany({
-      select: { code: true }
+      select: { code: true },
     });
-    const existingCodes = existingWarehouses.map(w => w.code).filter((code): code is string => code !== null);
-    const warehouseCode = generateWarehouseCode(validatedData.region, existingCodes);
+    const existingCodes = existingWarehouses
+      .map((w) => w.code)
+      .filter((code): code is string => code !== null);
+    const warehouseCode = generateWarehouseCode(
+      validatedData.region,
+      existingCodes
+    );
 
     // Check if warehouse with same name in same region exists
     const existingWarehouse = await prisma.warehouse.findFirst({
@@ -164,8 +173,8 @@ export async function POST(request: NextRequest) {
           select: {
             id: true,
             User: {
-              select: { id: true, firstName: true, lastName: true }
-            }
+              select: { id: true, firstName: true, lastName: true },
+            },
           },
         },
       },

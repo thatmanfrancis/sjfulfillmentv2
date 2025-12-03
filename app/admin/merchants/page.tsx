@@ -11,6 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Search,
   Filter,
@@ -43,6 +44,7 @@ interface Merchant {
   email: string;
   isActive: boolean;
   createdAt: string;
+  baseCurrency?: string;
   _count: {
     users: number;
     products: number;
@@ -73,6 +75,32 @@ export default function AdminMerchantsPage() {
   const [showAddMerchant, setShowAddMerchant] = useState(false);
   const [showAddTier, setShowAddTier] = useState(false);
   const [hasPriceTier, setHasPriceTier] = useState<boolean | null>(null);
+
+  // Utility functions
+  const formatCurrency = (amount: number, currency: string = "USD") => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency,
+    }).format(amount);
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
   // Check for price tiers on mount
   useEffect(() => {
     async function checkPriceTiers() {
@@ -92,6 +120,9 @@ export default function AdminMerchantsPage() {
     null
   );
   const [showMerchantDetail, setShowMerchantDetail] = useState(false);
+  const [activeTab, setActiveTab] = useState("business");
+  const [merchantDetails, setMerchantDetails] = useState<any>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
 
   useEffect(() => {
     fetchStats();
@@ -149,17 +180,24 @@ export default function AdminMerchantsPage() {
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
-  const handleViewMerchant = (merchant: Merchant) => {
+  const handleViewMerchant = async (merchant: Merchant) => {
     setSelectedMerchant(merchant);
+    setActiveTab("business");
+    setMerchantDetails(null);
     setShowMerchantDetail(true);
+    setDetailsLoading(true);
+
+    try {
+      const response = (await get(`/api/admin/merchants/${merchant.id}`)) as {
+        merchant: any;
+      };
+      setMerchantDetails(response.merchant);
+    } catch (error) {
+      console.error("Failed to fetch merchant details:", error);
+      toast.error("Failed to load merchant details");
+    } finally {
+      setDetailsLoading(false);
+    }
   };
 
   const handleVerifyMerchant = async (merchantId: string) => {
@@ -596,6 +634,12 @@ export default function AdminMerchantsPage() {
                         </span>
                       </div>
                       <div className="flex items-center gap-2 text-gray-400">
+                        <span className="h-4 w-4 font-bold">$</span>
+                        <span className="text-sm">
+                          Currency: {merchant.baseCurrency || "USD"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-gray-400">
                         <Calendar className="h-4 w-4" />
                         <span className="text-sm">
                           Created: {formatDate(merchant.createdAt)}
@@ -759,6 +803,10 @@ export default function AdminMerchantsPage() {
                       <span className="truncate">{merchant.email}</span>
                     </div>
                     <div className="flex items-center gap-2 text-gray-400">
+                      <span className="h-3 w-3 shrink-0 font-bold">$</span>
+                      <span>{merchant.baseCurrency || "USD"}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-400">
                       <Calendar className="h-3 w-3 shrink-0" />
                       <span>{formatDate(merchant.createdAt)}</span>
                     </div>
@@ -854,171 +902,354 @@ export default function AdminMerchantsPage() {
 
               {/* Modal Content with Tabs */}
               <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-                {/* Tab Navigation */}
-                <div className="flex space-x-4 border-b border-gray-700 mb-6">
-                  <button className="pb-2 px-1 border-b-2 border-[#f8c017] text-[#f8c017] font-medium">
-                    Business Info
-                  </button>
-                  <button className="pb-2 px-1 text-gray-400 hover:text-white">
-                    Contact Details
-                  </button>
-                  <button className="pb-2 px-1 text-gray-400 hover:text-white">
-                    Statistics
-                  </button>
-                  <button className="pb-2 px-1 text-gray-400 hover:text-white">
-                    Activity Log
-                  </button>
-                </div>
+                {detailsLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#f8c017]"></div>
+                    <span className="ml-3 text-gray-400">
+                      Loading details...
+                    </span>
+                  </div>
+                ) : (
+                  <Tabs
+                    value={activeTab}
+                    onValueChange={setActiveTab}
+                    className="w-full"
+                  >
+                    <TabsList className="grid w-full grid-cols-4 bg-[#2a2a2a] border-gray-600">
+                      <TabsTrigger
+                        value="business"
+                        className="data-[state=active]:bg-[#f8c017] data-[state=active]:text-black text-gray-300"
+                      >
+                        Business Info
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="contact"
+                        className="data-[state=active]:bg-[#f8c017] data-[state=active]:text-black text-gray-300"
+                      >
+                        Contact Details
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="statistics"
+                        className="data-[state=active]:bg-[#f8c017] data-[state=active]:text-black text-gray-300"
+                      >
+                        Statistics
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="activity"
+                        className="data-[state=active]:bg-[#f8c017] data-[state=active]:text-black text-gray-300"
+                      >
+                        Activity Log
+                      </TabsTrigger>
+                    </TabsList>
 
-                {/* Business Info Tab */}
-                <div className="space-y-6">
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <div className="space-y-4">
-                      <div>
-                        <label className="text-sm font-medium text-gray-300">
-                          Business Name
-                        </label>
-                        <p className="text-white mt-1">
-                          {selectedMerchant.name}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-gray-300">
-                          Email Address
-                        </label>
-                        <p className="text-white mt-1">
-                          {selectedMerchant.email}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-gray-300">
-                          Phone Number
-                        </label>
-                        <p className="text-white mt-1">
-                          {selectedMerchant.phone || "Not provided"}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-gray-300">
-                          Category
-                        </label>
-                        <p className="text-white mt-1">
-                          {selectedMerchant.category || "General"}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="text-sm font-medium text-gray-300">
-                          Status
-                        </label>
-                        <div className="mt-1">
-                          <Badge
-                            className={`flex items-center gap-1 w-fit ${
-                              selectedMerchant.isActive
-                                ? "bg-emerald-100 text-emerald-700 border-emerald-200"
-                                : "bg-red-100 text-red-700 border-red-200"
-                            }`}
-                          >
-                            {selectedMerchant.isActive ? (
-                              <CheckCircle className="h-3 w-3" />
-                            ) : (
-                              <XCircle className="h-3 w-3" />
-                            )}
-                            {selectedMerchant.isActive ? "Active" : "Inactive"}
-                          </Badge>
+                    {/* Business Info Tab */}
+                    <TabsContent value="business" className="mt-6 space-y-6">
+                      <div className="grid gap-6 md:grid-cols-2">
+                        <div className="space-y-4">
+                          <div>
+                            <label className="text-sm font-medium text-gray-300">
+                              Business Name
+                            </label>
+                            <p className="text-white mt-1">
+                              {merchantDetails?.name || selectedMerchant.name}
+                            </p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-gray-300">
+                              Base Currency
+                            </label>
+                            <p className="text-white mt-1">
+                              {merchantDetails?.baseCurrency ||
+                                selectedMerchant.baseCurrency ||
+                                "USD"}
+                            </p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-gray-300">
+                              Business Description
+                            </label>
+                            <p className="text-white mt-1">
+                              {merchantDetails?.description ||
+                                "No description provided"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="space-y-4">
+                          <div>
+                            <label className="text-sm font-medium text-gray-300">
+                              Status
+                            </label>
+                            <div className="mt-1">
+                              <Badge
+                                className={`flex items-center gap-1 w-fit ${
+                                  merchantDetails?.isActive ||
+                                  selectedMerchant.isActive
+                                    ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                                    : "bg-red-100 text-red-700 border-red-200"
+                                }`}
+                              >
+                                {merchantDetails?.isActive ||
+                                selectedMerchant.isActive ? (
+                                  <CheckCircle className="h-3 w-3" />
+                                ) : (
+                                  <XCircle className="h-3 w-3" />
+                                )}
+                                {merchantDetails?.isActive ||
+                                selectedMerchant.isActive
+                                  ? "Active"
+                                  : "Inactive"}
+                              </Badge>
+                            </div>
+                          </div>
+                          {/* <div>
+                            <label className="text-sm font-medium text-gray-300">
+                              Onboarding Status
+                            </label>
+                            <p className="text-white mt-1">
+                              {merchantDetails?.onboardingStatus || "N/A"}
+                            </p>
+                          </div> */}
+                          <div>
+                            <label className="text-sm font-medium text-gray-300">
+                              Account Created
+                            </label>
+                            <p className="text-white mt-1">
+                              {formatDate(
+                                merchantDetails?.createdAt ||
+                                  selectedMerchant.createdAt
+                              )}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                      <div>
-                        <label className="text-sm font-medium text-gray-300">
-                          Account Created
-                        </label>
-                        <p className="text-white mt-1">
-                          {formatDate(selectedMerchant.createdAt)}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-gray-300">
-                          Total Users
-                        </label>
-                        <p className="text-white mt-1">
-                          {selectedMerchant._count.users}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-gray-300">
-                          Total Products
-                        </label>
-                        <p className="text-white mt-1">
-                          {selectedMerchant._count.products}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
 
-                  {selectedMerchant.address && (
-                    <div>
-                      <label className="text-sm font-medium text-gray-300">
-                        Business Address
-                      </label>
-                      <p className="text-white mt-1">
-                        {selectedMerchant.address}
-                      </p>
-                    </div>
-                  )}
+                      {selectedMerchant.address && (
+                        <div>
+                          <label className="text-sm font-medium text-gray-300">
+                            Business Address
+                          </label>
+                          <p className="text-white mt-1">
+                            {selectedMerchant.address}
+                          </p>
+                        </div>
+                      )}
 
-                  {selectedMerchant.description && (
-                    <div>
-                      <label className="text-sm font-medium text-gray-300">
-                        Description
-                      </label>
-                      <p className="text-white mt-1">
-                        {selectedMerchant.description}
-                      </p>
-                    </div>
-                  )}
+                      {selectedMerchant.description && (
+                        <div>
+                          <label className="text-sm font-medium text-gray-300">
+                            Description
+                          </label>
+                          <p className="text-white mt-1">
+                            {selectedMerchant.description}
+                          </p>
+                        </div>
+                      )}
 
-                  {/* Quick Actions */}
-                  <div className="border-t border-gray-700 pt-6">
-                    <h3 className="text-lg font-medium text-white mb-4">
-                      Quick Actions
-                    </h3>
-                    <div className="flex gap-3 flex-wrap">
-                      <Button
-                        onClick={() =>
-                          handleVerifyMerchant(selectedMerchant.id)
-                        }
-                        className="bg-emerald-600 text-white hover:bg-emerald-700"
-                      >
-                        ✓ Verify Account
-                      </Button>
-                      <Button
-                        onClick={() =>
-                          handleToggleStatus(
-                            selectedMerchant.id,
-                            selectedMerchant.isActive
-                          )
-                        }
-                        variant="outline"
-                        className="border-gray-600 text-gray-300 hover:border-[#f8c017] hover:text-[#f8c017]"
-                      >
-                        {selectedMerchant.isActive
-                          ? "⏸ Deactivate"
-                          : "▶ Activate"}{" "}
-                        Account
-                      </Button>
-                      <Button
-                        onClick={() =>
-                          handleSoftDeleteMerchant(selectedMerchant.id)
-                        }
-                        variant="outline"
-                        className="border-red-600 text-red-400 hover:bg-red-600 hover:text-white"
-                      >
-                        🗑 Delete Account
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+                      {/* Quick Actions */}
+                      <div className="border-t border-gray-700 pt-6">
+                        <h3 className="text-lg font-medium text-white mb-4">
+                          Quick Actions
+                        </h3>
+                        <div className="flex gap-3 flex-wrap">
+                          <Button
+                            onClick={() =>
+                              handleVerifyMerchant(selectedMerchant.id)
+                            }
+                            className="bg-emerald-600 text-white hover:bg-emerald-700"
+                          >
+                            ✓ Verify Account
+                          </Button>
+                          <Button
+                            onClick={() =>
+                              handleToggleStatus(
+                                selectedMerchant.id,
+                                selectedMerchant.isActive
+                              )
+                            }
+                            variant="outline"
+                            className="border-gray-600 text-gray-300 hover:border-[#f8c017] hover:text-[#f8c017]"
+                          >
+                            {selectedMerchant.isActive
+                              ? "⏸ Deactivate"
+                              : "▶ Activate"}{" "}
+                            Account
+                          </Button>
+                          <Button
+                            onClick={() =>
+                              handleSoftDeleteMerchant(selectedMerchant.id)
+                            }
+                            variant="outline"
+                            className="border-red-600 text-red-400 hover:bg-red-600 hover:text-white"
+                          >
+                            🗑 Delete Account
+                          </Button>
+                        </div>
+                      </div>
+                    </TabsContent>
+
+                    {/* Contact Details Tab */}
+                    <TabsContent value="contact" className="mt-6 space-y-6">
+                      <div className="grid gap-6 md:grid-cols-2">
+                        <div className="space-y-4">
+                          <div>
+                            <label className="text-sm font-medium text-gray-300">
+                              Primary Contact Email
+                            </label>
+                            <p className="text-white mt-1">
+                              {merchantDetails?.contactEmail ||
+                                selectedMerchant.email}
+                            </p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-gray-300">
+                              Business Phone
+                            </label>
+                            <p className="text-white mt-1">
+                              {merchantDetails?.contactPhone ||
+                                selectedMerchant.phone ||
+                                "Not provided"}
+                            </p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-gray-300">
+                              Business Address
+                            </label>
+                            <p className="text-white mt-1">
+                              {merchantDetails?.address || "Not provided"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="space-y-4">
+                          <div>
+                            <label className="text-sm font-medium text-gray-300">
+                              City
+                            </label>
+                            <p className="text-white mt-1">
+                              {merchantDetails?.city || "Not provided"}
+                            </p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-gray-300">
+                              State/Province
+                            </label>
+                            <p className="text-white mt-1">
+                              {merchantDetails?.state || "Not provided"}
+                            </p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-gray-300">
+                              Country
+                            </label>
+                            <p className="text-white mt-1">
+                              {merchantDetails?.country || "Not provided"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </TabsContent>
+
+                    {/* Statistics Tab */}
+                    <TabsContent value="statistics" className="mt-6 space-y-6">
+                      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                        <Card className="bg-[#2a2a2a] border-gray-600">
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium text-gray-300">
+                              Total Orders
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="text-2xl font-bold text-white">
+                              {merchantDetails?.stats?.totalOrders || 0}
+                            </div>
+                            <div className="text-xs text-gray-400">
+                              All time orders
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        <Card className="bg-[#2a2a2a] border-gray-600">
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium text-gray-300">
+                              Total Revenue
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="text-2xl font-bold text-white">
+                              {merchantDetails?.stats
+                                ? formatCurrency(
+                                    merchantDetails.stats.totalRevenue,
+                                    merchantDetails.baseCurrency
+                                  )
+                                : formatCurrency(0)}
+                            </div>
+                            <div className="text-xs text-gray-400">
+                              All time revenue
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        <Card className="bg-[#2a2a2a] border-gray-600">
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium text-gray-300">
+                              Total Products
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="text-2xl font-bold text-white">
+                              {merchantDetails?.stats?.totalProducts ||
+                                selectedMerchant._count.products}
+                            </div>
+                            <div className="text-xs text-gray-400">
+                              Active products
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </TabsContent>
+
+                    {/* Activity Log Tab */}
+                    <TabsContent value="activity" className="mt-6 space-y-6">
+                      {merchantDetails?.activityLogs &&
+                      merchantDetails.activityLogs.length > 0 ? (
+                        <div className="space-y-3">
+                          <h3 className="text-lg font-medium text-white">
+                            Recent Activity
+                          </h3>
+                          <div className="space-y-2 max-h-96 overflow-y-auto">
+                            {merchantDetails.activityLogs.map((log: any) => (
+                              <div
+                                key={log.id}
+                                className="p-3 bg-[#2a2a2a] rounded-lg"
+                              >
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <p className="text-white font-medium">
+                                      {log.action
+                                        .replace(/_/g, " ")
+                                        .toLowerCase()
+                                        .replace(/^\w/, (c: string) =>
+                                          c.toUpperCase()
+                                        )}
+                                    </p>
+                                    <p className="text-gray-400 text-sm">
+                                      {log.entityType} - {log.entityId}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-8">
+                          <p className="text-gray-400">
+                            No activity logs found for this merchant.
+                          </p>
+                        </div>
+                      )}
+                    </TabsContent>
+                  </Tabs>
+                )}
               </div>
             </div>
           </div>

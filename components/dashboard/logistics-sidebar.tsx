@@ -1,21 +1,21 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import Image from "next/image";
-import { 
-  LayoutDashboard, 
-  Truck, 
-  ShoppingCart, 
-  Warehouse, 
-  BarChart3, 
-  FileText, 
-  Settings, 
+import {
+  LayoutDashboard,
+  Truck,
+  ShoppingCart,
+  Warehouse,
+  BarChart3,
+  FileText,
+  Settings,
   User,
-  LogOut
-} from 'lucide-react';
-import { get, post } from '@/lib/api';
+  LogOut,
+} from "lucide-react";
+import { get, post } from "@/lib/api";
 import {
   Sidebar,
   SidebarContent,
@@ -28,8 +28,8 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
-} from '@/components/ui/sidebar';
-import { Button } from '@/components/ui/button';
+} from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -38,7 +38,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 
 interface UserProfile {
   id: string;
@@ -50,13 +50,13 @@ interface UserProfile {
 }
 
 const logisticsNavigation = [
-  { name: 'Dashboard', href: '/logistics/dashboard', icon: LayoutDashboard },
-  { name: 'Shipments', href: '/logistics/shipments', icon: Truck },
-  { name: 'Orders', href: '/logistics/orders', icon: ShoppingCart },
-  { name: 'Analytics', href: '/logistics/analytics', icon: BarChart3 },
-  { name: 'Warehouses', href: '/logistics/warehouses', icon: Warehouse },
-  { name: 'Reports', href: '/logistics/reports', icon: FileText },
-  { name: 'Settings', href: '/logistics/settings', icon: Settings },
+  { name: "Dashboard", href: "/logistics/dashboard", icon: LayoutDashboard },
+  { name: "Shipments", href: "/logistics/shipments", icon: Truck },
+  // { name: 'Orders', href: '/logistics/orders', icon: ShoppingCart },
+  { name: "Analytics", href: "/logistics/analytics", icon: BarChart3 },
+  { name: "Warehouses", href: "/logistics/warehouses", icon: Warehouse },
+  { name: "Reports", href: "/logistics/reports", icon: FileText },
+  { name: "Settings", href: "/logistics/settings", icon: Settings },
 ];
 
 export function LogisticsSidebar() {
@@ -74,15 +74,15 @@ export function LogisticsSidebar() {
       setLoading(true);
       // Mock user data - replace with actual API call
       const mockUser: UserProfile = {
-        id: '1',
-        firstName: 'Mike',
-        lastName: 'Logistics',
-        email: 'mike@logistics.com',
-        role: 'LOGISTICS'
+        id: "1",
+        firstName: "Mike",
+        lastName: "Logistics",
+        email: "mike@logistics.com",
+        role: "LOGISTICS",
       };
       setUser(mockUser);
     } catch (error) {
-      console.error('Failed to fetch user profile:', error);
+      console.error("Failed to fetch user profile:", error);
     } finally {
       setLoading(false);
     }
@@ -90,35 +90,39 @@ export function LogisticsSidebar() {
 
   const handleLogout = async () => {
     setIsLogoutDialogOpen(false);
-    
+
     try {
       // Call logout API to clear session
-      await post('/api/auth/logout');
+      await post("/api/auth/logout");
     } catch (error) {
-      console.error('Logout API call failed:', error);
+      console.error("Logout API call failed:", error);
     }
-    
+
     // Clear any stored tokens/session data
-    localStorage.removeItem('authToken');
+    localStorage.removeItem("authToken");
     sessionStorage.clear();
     // Redirect to login
-    window.location.href = '/auth/login';
+    window.location.href = "/auth/login";
   };
 
   return (
-    <Sidebar collapsible="icon" className="bg-[#1a1a1a] border-r border-gray-800">
+    <Sidebar
+      collapsible="icon"
+      className="bg-[#1a1a1a] border-r border-gray-800"
+    >
       {/* Header */}
       <SidebarHeader className="border-b border-gray-800 p-6 group-data-[collapsible=icon]:p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3 group-data-[collapsible=icon]:justify-center">
-            <div className="w-10 h-10 bg-linear-to-r from-[#f8c017] to-[#ffd700] rounded-xl flex items-center justify-center shadow-lg">
-              
-            </div>
+            <div className="w-10 h-10 bg-linear-to-r from-[#f8c017] to-[#ffd700] rounded-xl flex items-center justify-center shadow-lg"></div>
             <div className="group-data-[collapsible=icon]:hidden">
-                <Image src="/sjflogo.png" alt="SJFulfillment Logo" width={100} height={100} />
-              <span className="text-sm text-gray-400">
-                Logistics Portal
-              </span>
+              <Image
+                src="/sjflogo.png"
+                alt="SJFulfillment Logo"
+                width={100}
+                height={100}
+              />
+              <span className="text-sm text-gray-400">Logistics Portal</span>
             </div>
           </div>
           {/* Always show trigger, but style differently when collapsed */}
@@ -148,15 +152,21 @@ export function LogisticsSidebar() {
                       tooltip={item.name}
                       className={`
                         h-12 text-base font-medium rounded-lg transition-all duration-200
-                        ${isActive 
-                          ? 'bg-[#f8c017]/10 text-[#f8c017] border border-[#f8c017]/20 shadow-sm' 
-                          : 'text-gray-300 hover:text-white hover:bg-gray-800/50 hover:border-gray-700'
+                        ${
+                          isActive
+                            ? "bg-[#f8c017]/10 text-[#f8c017] border border-[#f8c017]/20 shadow-sm"
+                            : "text-gray-300 hover:text-white hover:bg-gray-800/50 hover:border-gray-700"
                         }
                       `}
                     >
-                      <Link href={item.href} className="flex items-center gap-4 px-4">
+                      <Link
+                        href={item.href}
+                        className="flex items-center gap-4 px-4"
+                      >
                         <item.icon className="h-5 w-5 shrink-0" />
-                        <span className="group-data-[collapsible=icon]:sr-only">{item.name}</span>
+                        <span className="group-data-[collapsible=icon]:sr-only">
+                          {item.name}
+                        </span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -171,7 +181,10 @@ export function LogisticsSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <Dialog open={isLogoutDialogOpen} onOpenChange={setIsLogoutDialogOpen}>
+                <Dialog
+                  open={isLogoutDialogOpen}
+                  onOpenChange={setIsLogoutDialogOpen}
+                >
                   <DialogTrigger asChild>
                     <SidebarMenuButton
                       tooltip="Logout"
@@ -179,15 +192,20 @@ export function LogisticsSidebar() {
                     >
                       <div className="flex items-center gap-4 px-4">
                         <LogOut className="h-5 w-5 shrink-0" />
-                        <span className="group-data-[collapsible=icon]:sr-only">Logout</span>
+                        <span className="group-data-[collapsible=icon]:sr-only">
+                          Logout
+                        </span>
                       </div>
                     </SidebarMenuButton>
                   </DialogTrigger>
                   <DialogContent className="bg-[#1a1a1a] border-gray-700">
                     <DialogHeader>
-                      <DialogTitle className="text-white">Confirm Logout</DialogTitle>
+                      <DialogTitle className="text-white">
+                        Confirm Logout
+                      </DialogTitle>
                       <DialogDescription className="text-gray-400">
-                        Are you sure you want to logout? You will need to sign in again to access your logistics account.
+                        Are you sure you want to logout? You will need to sign
+                        in again to access your logistics account.
                       </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
@@ -217,8 +235,8 @@ export function LogisticsSidebar() {
       <SidebarFooter className="border-t border-gray-800 p-6 group-data-[collapsible=icon]:p-4">
         <div className="flex items-center space-x-3 group-data-[collapsible=icon]:justify-center">
           {user?.profileImage ? (
-            <img 
-              src={user.profileImage} 
+            <img
+              src={user.profileImage}
               alt={`${user.firstName} ${user.lastName}`}
               className="w-10 h-10 rounded-full object-cover shrink-0"
             />
@@ -229,14 +247,17 @@ export function LogisticsSidebar() {
           )}
           <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
             <p className="text-base font-medium text-white truncate">
-              {loading ? 'Loading...' : user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User' : 'Guest'}
+              {loading
+                ? "Loading..."
+                : user
+                ? `${user.firstName || ""} ${user.lastName || ""}`.trim() ||
+                  "User"
+                : "Guest"}
             </p>
             <p className="text-xs text-gray-400 truncate">
-              {loading ? '...' : user?.email || 'user@example.com'}
+              {loading ? "..." : user?.email || "user@example.com"}
             </p>
-            <p className="text-xs text-gray-500 truncate">
-              Logistics Team
-            </p>
+            <p className="text-xs text-gray-500 truncate">Logistics Team</p>
           </div>
         </div>
       </SidebarFooter>

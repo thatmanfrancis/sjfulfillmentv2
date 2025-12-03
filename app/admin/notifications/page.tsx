@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import { get } from "@/lib/api";
+import { format, formatDistanceToNow } from "date-fns";
 import AddNotificationModal from "@/components/admin/AddNotificationModal";
 
 interface Notification {
@@ -200,13 +201,13 @@ export default function AdminNotificationsPage() {
           </div>
         </div>
 
-        {/* Notifications Table */}
+        {/* Notifications Cards */}
         {loading ? (
           <div className="w-full flex flex-col gap-4 mt-8">
             {[...Array(6)].map((_, i) => (
               <div
                 key={i}
-                className="h-10 bg-gray-700 rounded animate-pulse w-full"
+                className="h-24 bg-gray-700 rounded-lg animate-pulse w-full"
               />
             ))}
           </div>
@@ -222,68 +223,85 @@ export default function AdminNotificationsPage() {
             </p>
           </div>
         ) : (
-          <div className="w-full mt-8">
-            <table className="w-full text-sm text-left border border-[#f08c17] rounded-lg overflow-hidden">
-              <thead>
-                <tr className="bg-[#222] text-[#f8c017]">
-                  <th className="p-2 whitespace-nowrap">Type</th>
-                  <th className="p-2 whitespace-nowrap">Message</th>
-                  <th className="p-2 whitespace-nowrap">Status</th>
-                  <th className="p-2 whitespace-nowrap">Recipient</th>
-                  <th className="p-2 whitespace-nowrap">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredNotifications.map((notification) => {
-                  const typeInfo = getTypeInfo(notification.type);
-                  const statusInfo = getStatusInfo(notification.status);
+          <div className="w-full mt-8 space-y-4">
+            {filteredNotifications.map((notification) => {
+              const typeInfo = getTypeInfo(notification.type);
+              const statusInfo = getStatusInfo(notification.status);
+              const isUnread = !notification.isRead;
 
-                  return (
-                    <tr
-                      key={notification.id}
-                      className="border-b border-[#f08c17]/10 hover:bg-[#222] transition"
-                    >
-                      <td className="p-2 text-white whitespace-nowrap">
-                        <span
-                          className={`px-2 py-1 rounded text-xs ${typeInfo.color}`}
-                        >
-                          {typeInfo.label}
+              return (
+                <div
+                  key={notification.id}
+                  className={`
+                    relative bg-[#181818] border-2 rounded-lg p-6 transition-all duration-200 hover:bg-[#222] group
+                    ${
+                      isUnread
+                        ? "border-[#f08c17] shadow-lg shadow-[#f08c17]/10"
+                        : "border-gray-600 opacity-75 hover:opacity-100"
+                    }
+                  `}
+                >
+                  {/* Unread indicator */}
+                  {isUnread && (
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#f08c17] rounded-full animate-pulse"></div>
+                  )}
+
+                  <div className="flex items-start justify-between gap-4">
+                    {/* Left Content */}
+                    <div className="flex-1 min-w-0">
+                      {/* Title */}
+                      <h3 className="text-white font-semibold mb-2 line-clamp-1">
+                        {notification.title}
+                      </h3>
+
+                      {/* Message */}
+                      <p className="text-gray-300 text-sm leading-relaxed line-clamp-2 mb-3">
+                        {notification.message}
+                      </p>
+
+                      {/* Footer info */}
+                      <div className="flex items-center gap-4 text-xs text-gray-400">
+                        <span>
+                          {notification.createdBy === "System"
+                            ? "System notification"
+                            : `Created by ${notification.createdBy}`}
                         </span>
-                      </td>
-                      <td className="p-2 text-white max-w-[400px]">
-                        <div className="truncate" title={notification.message}>
-                          {notification.message}
-                        </div>
-                      </td>
-                      <td className="p-2 text-white whitespace-nowrap">
+                        <span>•</span>
                         <span
-                          className={`px-2 py-1 rounded text-xs ${statusInfo.color}`}
+                          title={format(
+                            new Date(notification.createdAt),
+                            "PPpp"
+                          )}
                         >
-                          {statusInfo.label}
+                          {formatDistanceToNow(
+                            new Date(notification.createdAt),
+                            { addSuffix: true }
+                          )}
                         </span>
-                      </td>
-                      <td className="p-2 text-white whitespace-nowrap">
-                        {notification.recipient.toLowerCase()}
-                      </td>
-                      <td className="p-2 text-center">
-                        {!notification.isRead ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleMarkAsRead(notification.id)}
-                            className="border-[#f8c017] text-[#f8c017] hover:bg-[#f8c017] hover:text-black"
-                          >
-                            Mark as Read
-                          </Button>
-                        ) : (
-                          <span className="text-gray-400 text-sm">Read</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      </div>
+                    </div>
+
+                    {/* Right Actions */}
+                    <div className="flex flex-col items-end gap-2">
+                      {isUnread ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleMarkAsRead(notification.id)}
+                          className="border-[#f08c17] text-[#f08c17] hover:bg-[#f08c17] hover:text-black transition-all"
+                        >
+                          Mark as Read
+                        </Button>
+                      ) : (
+                        <span className="text-green-400 text-xs font-medium px-2 py-1 bg-green-400/10 rounded">
+                          ✓ Read
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
