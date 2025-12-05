@@ -32,7 +32,7 @@ import {
   Phone,
   MapPin,
 } from "lucide-react";
-import { get } from "@/lib/api";
+import { get, patch, del } from "@/lib/api";
 import AddMerchantModal from "@/components/admin/AddMerchantModal";
 import CreateTierModal from "@/components/admin/CreateTierModal";
 import { toast, ToastContainer } from "react-toastify";
@@ -202,38 +202,28 @@ export default function AdminMerchantsPage() {
 
   const handleVerifyMerchant = async (merchantId: string) => {
     try {
-      const response = await fetch(
-        `/api/admin/merchants/${merchantId}/verify`,
+      await patch(`/api/admin/merchants/${merchantId}/verify`, {});
+      toast.success("Merchant account verified successfully!", {
+        position: "top-right",
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      });
+      fetchMerchants();
+      fetchStats();
+      setShowMerchantDetail(false);
+    } catch (error: any) {
+      console.error("Failed to verify merchant:", error);
+      toast.error(
+        error.message ||
+          "An unexpected error occurred while verifying the account",
         {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-      if (response.ok) {
-        toast.success("Merchant account verified successfully!", {
-          position: "top-right",
-          autoClose: 3000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-        });
-        fetchMerchants();
-        fetchStats();
-        setShowMerchantDetail(false);
-      } else {
-        const errorData = await response.json();
-        toast.error(errorData.error || "Failed to verify merchant account", {
           position: "top-right",
           autoClose: 5000,
-        });
-      }
-    } catch (error) {
-      console.error("Failed to verify merchant:", error);
-      toast.error("An unexpected error occurred while verifying the account", {
-        position: "top-right",
-        autoClose: 5000,
-      });
+        }
+      );
     }
   };
 
@@ -251,38 +241,18 @@ export default function AdminMerchantsPage() {
               onClick={async () => {
                 closeToast();
                 try {
-                  const response = await fetch(
-                    `/api/admin/merchants/${merchantId}`,
-                    {
-                      method: "DELETE",
-                    }
-                  );
-                  if (response.ok) {
-                    toast.success(
-                      "Merchant account deactivated successfully!",
-                      {
-                        position: "top-right",
-                        autoClose: 3000,
-                      }
-                    );
-                    fetchMerchants();
-                    fetchStats();
-                    setShowMerchantDetail(false);
-                  } else {
-                    const errorData = await response.json();
-                    toast.error(
-                      errorData.error ||
-                        "Failed to deactivate merchant account",
-                      {
-                        position: "top-right",
-                        autoClose: 5000,
-                      }
-                    );
-                  }
-                } catch (error) {
+                  await del(`/api/admin/merchants/${merchantId}`);
+                  toast.success("Merchant account deactivated successfully!", {
+                    position: "top-right",
+                    autoClose: 3000,
+                  });
+                  fetchMerchants();
+                  fetchStats();
+                  setShowMerchantDetail(false);
+                } catch (error: any) {
                   console.error("Failed to delete merchant:", error);
                   toast.error(
-                    "An unexpected error occurred while deactivating the account",
+                    error.message || "Failed to deactivate merchant account",
                     {
                       position: "top-right",
                       autoClose: 5000,
@@ -319,40 +289,31 @@ export default function AdminMerchantsPage() {
     currentStatus: boolean
   ) => {
     try {
-      const response = await fetch(
-        `/api/admin/merchants/${merchantId}/status`,
+      await patch(`/api/admin/merchants/${merchantId}/status`, {
+        isActive: !currentStatus,
+      });
+      const action = !currentStatus ? "activated" : "deactivated";
+      toast.success(`Merchant account ${action} successfully!`, {
+        position: "top-right",
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      });
+      fetchMerchants();
+      fetchStats();
+      setShowMerchantDetail(false);
+    } catch (error: any) {
+      console.error("Failed to toggle merchant status:", error);
+      toast.error(
+        error.message ||
+          "An unexpected error occurred while updating the status",
         {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ isActive: !currentStatus }),
-        }
-      );
-      if (response.ok) {
-        const action = !currentStatus ? "activated" : "deactivated";
-        toast.success(`Merchant account ${action} successfully!`, {
-          position: "top-right",
-          autoClose: 3000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-        });
-        fetchMerchants();
-        fetchStats();
-        setShowMerchantDetail(false);
-      } else {
-        const errorData = await response.json();
-        toast.error(errorData.error || "Failed to update merchant status", {
           position: "top-right",
           autoClose: 5000,
-        });
-      }
-    } catch (error) {
-      console.error("Failed to toggle merchant status:", error);
-      toast.error("An unexpected error occurred while updating the status", {
-        position: "top-right",
-        autoClose: 5000,
-      });
+        }
+      );
     }
   };
 

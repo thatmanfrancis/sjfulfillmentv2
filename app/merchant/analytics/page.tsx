@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { get } from "@/lib/api";
 import {
   Card,
   CardContent,
@@ -64,10 +65,8 @@ export default function MerchantAnalyticsPage() {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch(`/api/merchant/analytics?range=${timeRange}`);
-      if (!res.ok) throw new Error("Failed to fetch analytics");
-      const data = await res.json();
-      setAnalytics(data);
+      const data = await get(`/api/merchant/analytics?range=${timeRange}`);
+      setAnalytics(data as MerchantAnalytics);
     } catch (error: any) {
       setError(error.message || "Failed to fetch analytics");
       setAnalytics(null);

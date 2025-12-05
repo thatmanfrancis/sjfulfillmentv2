@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Avatar } from "@/components/ui/avatar";
+import { get, del, post, patch } from "@/lib/api";
 // Custom modal for profile/actions tabs
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -31,9 +32,9 @@ function ProfileActionsModal({ open, onClose, person }: any) {
   useEffect(() => {
     if (open && person?.id) {
       setLoadingShipments(true);
-      fetch(`/api/admin/shipments/logistics/${person.id}`)
-        .then((res) => res.json())
-        .then((data) => setShipments(data.shipments || []))
+      get(`/api/admin/shipments/logistics/${person.id}`)
+        .then((data: any) => setShipments(data.shipments || []))
+        .catch(() => setShipments([]))
         .finally(() => setLoadingShipments(false));
     }
   }, [open, person]);
@@ -42,18 +43,11 @@ function ProfileActionsModal({ open, onClose, person }: any) {
     setActionLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/admin/logistics/${person.id}`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        onClose();
-        window.location.reload();
-      } else {
-        const data = await res.json();
-        setError(data.error || "Failed to delete");
-      }
-    } catch (err) {
-      setError("Network error");
+      await del(`/api/admin/logistics/${person.id}`);
+      onClose();
+      window.location.reload();
+    } catch (error: any) {
+      setError(error.message || "Failed to delete");
     } finally {
       setActionLoading(false);
     }
@@ -63,23 +57,13 @@ function ProfileActionsModal({ open, onClose, person }: any) {
     setActionLoading(true);
     setError("");
     try {
-      const res = await fetch(
-        `/api/admin/logistics/${person.id}/change-password`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ newPassword: password }),
-        }
-      );
-      if (res.ok) {
-        setShowPasswordModal(false);
-        setPassword("");
-      } else {
-        const data = await res.json();
-        setError(data.error || "Failed to change password");
-      }
-    } catch (err) {
-      setError("Network error");
+      await post(`/api/admin/logistics/${person.id}/change-password`, {
+        newPassword: password,
+      });
+      setShowPasswordModal(false);
+      setPassword("");
+    } catch (error: any) {
+      setError(error.message || "Failed to change password");
     } finally {
       setActionLoading(false);
     }
@@ -89,21 +73,12 @@ function ProfileActionsModal({ open, onClose, person }: any) {
     setActionLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/admin/logistics/${person.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editForm),
-      });
-      if (res.ok) {
-        setShowEditModal(false);
-        onClose();
-        window.location.reload();
-      } else {
-        const data = await res.json();
-        setError(data.error || "Failed to update");
-      }
-    } catch (err) {
-      setError("Network error");
+      await patch(`/api/admin/logistics/${person.id}`, editForm);
+      setShowEditModal(false);
+      onClose();
+      window.location.reload();
+    } catch (error: any) {
+      setError(error.message || "Failed to update");
     } finally {
       setActionLoading(false);
     }
@@ -386,11 +361,12 @@ export default function AdminLogisticsPage() {
   const [searchTerm, setSearchTerm] = useState("");
 
   const fetchLogistics = async () => {
-    const res = await fetch("/api/admin/logistics");
-    if (res.ok) {
-      // Support both array and { users: [] } API responses
-      const data = await res.json();
+    try {
+      const data: any = await get("/api/admin/logistics");
       setLogistics(Array.isArray(data) ? data : data.users || []);
+    } catch (error) {
+      console.error("Failed to fetch logistics:", error);
+      setLogistics([]);
     }
   };
 

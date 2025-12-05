@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { get } from "@/lib/api";
 import {
   Card,
   CardContent,
@@ -42,8 +43,7 @@ export default function MerchantInventoryPage() {
   useEffect(() => {
     const fetchInventory = async () => {
       try {
-        const res = await fetch("/api/merchant/inventory");
-        const data = await res.json();
+        const data: any = await get("/api/merchant/inventory");
         if (data.inventory) {
           // Map backend data to InventoryItem shape
           const mappedInventory: InventoryItem[] = data.inventory.map(

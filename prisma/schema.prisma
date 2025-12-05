@@ -166,6 +166,7 @@ model Order {
   fulfillmentWarehouseId String?
   assignedLogisticsId    String?
   notes                  String?
+  Note                   Note[]
   User                   User?                @relation(fields: [assignedLogisticsId], references: [id])
   Warehouse              Warehouse?           @relation(fields: [fulfillmentWarehouseId], references: [id])
   Business               Business             @relation(fields: [merchantId], references: [id])
@@ -318,6 +319,7 @@ model Shipment {
   deliveryAttempts   Int      @default(1)
   lastStatusUpdate   DateTime
   notes              String?
+  Note               Note[]
   price              Float? // Shipment price (sum of price tier breakdown + order cost/amount)
   currency           String? // Currency for shipment price
   priceTierBreakdown Json? // Price tier breakdown for shipment
@@ -402,6 +404,7 @@ model User {
   Business_User_businessIdToBusiness            Business?           @relation("User_businessIdToBusiness", fields: [businessId], references: [id])
   VerificationToken                             VerificationToken[]
   adminApiKeys                                  AdminApiKey[]
+  notes                                         Note[]
 
   @@index([businessId])
 }
@@ -507,4 +510,21 @@ enum UserRole {
   MERCHANT
   MERCHANT_STAFF
   LOGISTICS
+}
+
+model Note {
+  id         String    @id @default(uuid())
+  content    String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  authorId   String
+  orderId    String?
+  shipmentId String?
+  Author     User      @relation(fields: [authorId], references: [id])
+  Order      Order?    @relation(fields: [orderId], references: [id])
+  Shipment   Shipment? @relation(fields: [shipmentId], references: [id])
+
+  @@index([orderId])
+  @@index([shipmentId])
+  @@index([authorId])
 }

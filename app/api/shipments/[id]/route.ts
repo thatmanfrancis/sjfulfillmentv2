@@ -10,6 +10,92 @@ const updateShipmentSchema = z.object({
   deliveryAttempts: z.number().int().min(1).max(3).optional(),
 });
 
+// GET /api/shipments/[id] - Get shipment details
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const authResult = await verifyAuth(request);
+    if (!authResult.success) {
+      return NextResponse.json({ error: authResult.error }, { status: 401 });
+    }
+
+    const { id } = await params;
+
+    const shipment = await prisma.shipment.findUnique({
+      where: { id },
+      include: {
+        Order: {
+          include: {
+            Business: { select: { id: true, name: true, baseCurrency: true } },
+            Warehouse: { select: { id: true, name: true, region: true } },
+            User: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+            },
+            OrderItem: {
+              include: {
+                Product: {
+                  select: { id: true, name: true, sku: true, weightKg: true },
+                },
+              },
+            },
+          },
+        },
+        Note: {
+          include: {
+            Author: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+        },
+      },
+    });
+
+    if (!shipment) {
+      return NextResponse.json(
+        { error: "Shipment not found" },
+        { status: 404 }
+      );
+    }
+
+    // Check permissions
+    if (
+      authResult.user.role === "MERCHANT" ||
+      authResult.user.role === "MERCHANT_STAFF"
+    ) {
+      if (shipment.Order.merchantId !== authResult.user.businessId) {
+        return NextResponse.json({ error: "Access denied" }, { status: 403 });
+      }
+    } else if (authResult.user.role === "LOGISTICS") {
+      if (shipment.Order.assignedLogisticsId !== authResult.user.id) {
+        return NextResponse.json({ error: "Access denied" }, { status: 403 });
+      }
+    }
+
+    return NextResponse.json(shipment);
+  } catch (error) {
+    console.error("Error fetching shipment:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -46,7 +132,10 @@ export async function PUT(
     }
 
     // Check if logistics user is assigned to this order
-    if (authResult.user.role === "LOGISTICS" && existingShipment.Order.assignedLogisticsId !== authResult.user.id) {
+    if (
+      authResult.user.role === "LOGISTICS" &&
+      existingShipment.Order.assignedLogisticsId !== authResult.user.id
+    ) {
       return NextResponse.json(
         { error: "You are not assigned to this order" },
         { status: 403 }
@@ -61,7 +150,14 @@ export async function PUT(
           include: {
             Business: { select: { id: true, name: true, baseCurrency: true } },
             Warehouse: { select: { id: true, name: true, region: true } },
-            User: { select: { id: true, firstName: true, lastName: true, email: true } },
+            User: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+            },
             OrderItem: {
               include: {
                 Product: { select: { name: true, sku: true, weightKg: true } },
@@ -105,12 +201,21 @@ export async function PUT(
     return NextResponse.json({
       shipment: {
         ...updatedShipment,
-        totalItems: updatedShipment.Order?.OrderItem?.reduce((sum: number, item: any) => sum + item.quantity, 0) || 0,
-        totalWeight: updatedShipment.Order?.OrderItem?.reduce(
-          (sum: number, item: any) => sum + (item.Product.weightKg * item.quantity),
-          0
-        ) || 0,
-        daysInTransit: Math.ceil((new Date().getTime() - updatedShipment.lastStatusUpdate.getTime()) / (1000 * 3600 * 24)),
+        totalItems:
+          updatedShipment.Order?.OrderItem?.reduce(
+            (sum: number, item: any) => sum + item.quantity,
+            0
+          ) || 0,
+        totalWeight:
+          updatedShipment.Order?.OrderItem?.reduce(
+            (sum: number, item: any) =>
+              sum + item.Product.weightKg * item.quantity,
+            0
+          ) || 0,
+        daysInTransit: Math.ceil(
+          (new Date().getTime() - updatedShipment.lastStatusUpdate.getTime()) /
+            (1000 * 3600 * 24)
+        ),
         canRetry: updatedShipment.deliveryAttempts < 3,
         orderStatusUpdated: orderStatus !== existingShipment.Order.status,
       },

@@ -35,7 +35,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { useState, useEffect } from "react";
-import { get, put } from "@/lib/api";
+import { get, put, post } from "@/lib/api";
 import { MerchantApiKeyManager } from "./MerchantApiKeyManager";
 export default function MerchantSettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -85,30 +85,17 @@ export default function MerchantSettingsPage() {
   const handleChangePassword = async () => {
     setPasswordError("");
     try {
-      const res = await fetch("/api/auth/change-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(passwordForm),
+      await post("/api/auth/change-password", passwordForm);
+      setPasswordError("");
+      setPasswordModal(false);
+      setPasswordForm({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
       });
-      const data = await res.json();
-      if (!res.ok) {
-        let errorMsg = data.error || "Failed to change password";
-        if (data.details && Array.isArray(data.details)) {
-          errorMsg += "\n" + data.details.map((d: any) => d.message).join("\n");
-        }
-        setPasswordError(errorMsg);
-      } else {
-        setPasswordError("");
-        setPasswordModal(false);
-        setPasswordForm({
-          currentPassword: "",
-          newPassword: "",
-          confirmPassword: "",
-        });
-        alert("Password changed successfully");
-      }
-    } catch {
-      setPasswordError("Server error. Please try again.");
+      alert("Password changed successfully");
+    } catch (error: any) {
+      setPasswordError(error.message || "Server error. Please try again.");
     }
   };
   // Security tab state

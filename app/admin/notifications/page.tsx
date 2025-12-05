@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
-import { get } from "@/lib/api";
+import { get, post } from "@/lib/api";
 import { format, formatDistanceToNow } from "date-fns";
 import AddNotificationModal from "@/components/admin/AddNotificationModal";
 
@@ -94,23 +94,15 @@ export default function AdminNotificationsPage() {
 
   const handleMarkAsRead = async (notificationId: string) => {
     try {
-      const response = await fetch(
-        `/api/admin/notifications/${notificationId}/read`,
-        {
-          method: "POST",
-        }
+      await post(`/api/admin/notifications/${notificationId}/read`, {});
+      // Update the specific notification in the current state immediately
+      setNotifications((prev) =>
+        prev.map((notification) =>
+          notification.id === notificationId
+            ? { ...notification, isRead: true }
+            : notification
+        )
       );
-
-      if (response.ok) {
-        // Update the specific notification in the current state immediately
-        setNotifications((prev) =>
-          prev.map((notification) =>
-            notification.id === notificationId
-              ? { ...notification, isRead: true }
-              : notification
-          )
-        );
-      }
     } catch (error) {
       console.error("Failed to mark notification as read:", error);
     }

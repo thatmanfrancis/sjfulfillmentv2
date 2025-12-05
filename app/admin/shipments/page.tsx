@@ -1,16 +1,35 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { useState, useEffect } from "react";
 import {
-  Search, Filter, Download, Eye, Package, Truck,
-  MapPin, Clock, CheckCircle, XCircle, AlertCircle,
-  Calendar, Building, User, MoreHorizontal, Box
-} from 'lucide-react';
-import { get } from '@/lib/api';
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Search,
+  Filter,
+  Download,
+  Eye,
+  Package,
+  Truck,
+  MapPin,
+  Clock,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Calendar,
+  Building,
+  User,
+  MoreHorizontal,
+  Box,
+} from "lucide-react";
+import { get, patch } from "@/lib/api";
 
 type Product = { name: string; sku: string };
 type Logistics = { id: string; name: string; email: string } | null;
@@ -35,33 +54,31 @@ type Shipment = {
   };
 };
 
-
 export default function AdminShipmentsPage() {
-    // Logistics analytics state
-    const [logisticsPeople, setLogisticsPeople] = useState<any[]>([]);
+  // Logistics analytics state
+  const [logisticsPeople, setLogisticsPeople] = useState<any[]>([]);
 
-    useEffect(() => {
-      fetchLogistics();
-    }, []);
+  useEffect(() => {
+    fetchLogistics();
+  }, []);
 
-    const fetchLogistics = async () => {
-      try {
-        const res = await fetch('/api/admin/logistics');
-        if (res.ok) {
-          const data = await res.json();
-          setLogisticsPeople(Array.isArray(data) ? data : data.users || []);
-        }
-      } catch (err) {
-        setLogisticsPeople([]);
-      }
-    };
+  const fetchLogistics = async () => {
+    try {
+      const data = (await get("/api/admin/logistics")) as any;
+      setLogisticsPeople(Array.isArray(data) ? data : data.users || []);
+    } catch (err) {
+      setLogisticsPeople([]);
+    }
+  };
   // State hooks at the top level
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [tab, setTab] = useState<'all'|'delivered'|'returned'|'inprocess'>('all');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [tab, setTab] = useState<
+    "all" | "delivered" | "returned" | "inprocess"
+  >("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   // Modal/menu state hooks
@@ -82,31 +99,31 @@ export default function AdminShipmentsPage() {
       setMoreMenuOpen(null);
     };
     if (moreMenuOpen) {
-      document.addEventListener('mousedown', handler);
-      return () => document.removeEventListener('mousedown', handler);
+      document.addEventListener("mousedown", handler);
+      return () => document.removeEventListener("mousedown", handler);
     }
   }, [moreMenuOpen]);
 
   const fetchStats = async () => {
     try {
-      const data = await get('/api/admin/shipments/stats') as any;
+      const data = (await get("/api/admin/shipments/stats")) as any;
       setStats({
         totalShipments: data?.totalShipments || 0,
         pendingShipments: data?.pendingShipments || 0,
         inTransitShipments: data?.inTransitShipments || 0,
         deliveredShipments: data?.deliveredShipments || 0,
         returnedShipments: data?.returnedShipments || 0,
-        avgDeliveryTime: data?.avgDeliveryTime || 0
+        avgDeliveryTime: data?.avgDeliveryTime || 0,
       });
     } catch (error) {
-      console.error('Failed to fetch shipment stats:', error);
+      console.error("Failed to fetch shipment stats:", error);
       setStats({
         totalShipments: 0,
         pendingShipments: 0,
         inTransitShipments: 0,
         deliveredShipments: 0,
         returnedShipments: 0,
-        avgDeliveryTime: 0
+        avgDeliveryTime: 0,
       });
     }
   };
@@ -115,19 +132,20 @@ export default function AdminShipmentsPage() {
     try {
       setLoading(true);
       const params = new URLSearchParams();
-      if (searchTerm) params.append('search', searchTerm);
+      if (searchTerm) params.append("search", searchTerm);
       // Tab logic overrides statusFilter
-      if (tab === 'delivered') params.append('status', 'DELIVERED');
-      else if (tab === 'returned') params.append('status', 'RETURNED');
-      else if (tab === 'inprocess') params.append('status', 'PICKED_UP,DELIVERING,GOING_TO_PICKUP');
-      else if (statusFilter !== 'all') params.append('status', statusFilter);
-      params.append('page', page.toString());
-      params.append('limit', '20');
-      const data = await get(`/api/admin/shipments?${params}`) as any;
+      if (tab === "delivered") params.append("status", "DELIVERED");
+      else if (tab === "returned") params.append("status", "RETURNED");
+      else if (tab === "inprocess")
+        params.append("status", "PICKED_UP,DELIVERING,GOING_TO_PICKUP");
+      else if (statusFilter !== "all") params.append("status", statusFilter);
+      params.append("page", page.toString());
+      params.append("limit", "20");
+      const data = (await get(`/api/admin/shipments?${params}`)) as any;
       setShipments(data?.shipments || []);
       setTotalPages(data?.pagination?.pages || 1);
     } catch (error) {
-      console.error('Failed to fetch shipments:', error);
+      console.error("Failed to fetch shipments:", error);
       setShipments([]);
     } finally {
       setLoading(false);
@@ -136,64 +154,64 @@ export default function AdminShipmentsPage() {
 
   const getStatusInfo = (status: string) => {
     switch (status) {
-      case 'PENDING':
-        return { 
-          color: 'bg-yellow-100 text-yellow-700 border-yellow-200', 
+      case "PENDING":
+        return {
+          color: "bg-yellow-100 text-yellow-700 border-yellow-200",
           icon: <Clock className="h-3 w-3" />,
-          label: 'Pending'
+          label: "Pending",
         };
-      case 'DISPATCHED':
-        return { 
-          color: 'bg-blue-100 text-blue-700 border-blue-200', 
+      case "DISPATCHED":
+        return {
+          color: "bg-blue-100 text-blue-700 border-blue-200",
           icon: <Package className="h-3 w-3" />,
-          label: 'Dispatched'
+          label: "Dispatched",
         };
-      case 'PICKED_UP':
-        return { 
-          color: 'bg-indigo-100 text-indigo-700 border-indigo-200', 
+      case "PICKED_UP":
+        return {
+          color: "bg-indigo-100 text-indigo-700 border-indigo-200",
           icon: <Truck className="h-3 w-3" />,
-          label: 'Picked Up'
+          label: "Picked Up",
         };
-      case 'DELIVERING':
-        return { 
-          color: 'bg-purple-100 text-purple-700 border-purple-200', 
+      case "DELIVERING":
+        return {
+          color: "bg-purple-100 text-purple-700 border-purple-200",
           icon: <Truck className="h-3 w-3" />,
-          label: 'Delivering'
+          label: "Delivering",
         };
-      case 'DELIVERED':
-        return { 
-          color: 'bg-emerald-100 text-emerald-700 border-emerald-200', 
+      case "DELIVERED":
+        return {
+          color: "bg-emerald-100 text-emerald-700 border-emerald-200",
           icon: <CheckCircle className="h-3 w-3" />,
-          label: 'Delivered'
+          label: "Delivered",
         };
-      case 'RETURNED':
-        return { 
-          color: 'bg-orange-100 text-orange-700 border-orange-200', 
+      case "RETURNED":
+        return {
+          color: "bg-orange-100 text-orange-700 border-orange-200",
           icon: <AlertCircle className="h-3 w-3" />,
-          label: 'Returned'
+          label: "Returned",
         };
-      case 'CANCELED':
-        return { 
-          color: 'bg-red-100 text-red-700 border-red-200', 
+      case "CANCELED":
+        return {
+          color: "bg-red-100 text-red-700 border-red-200",
           icon: <XCircle className="h-3 w-3" />,
-          label: 'Canceled'
+          label: "Canceled",
         };
       default:
-        return { 
-          color: 'bg-gray-100 text-gray-700 border-gray-200', 
+        return {
+          color: "bg-gray-100 text-gray-700 border-gray-200",
           icon: <Clock className="h-3 w-3" />,
-          label: status
+          label: status,
         };
     }
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
@@ -201,7 +219,9 @@ export default function AdminShipmentsPage() {
     return (
       <div className="space-y-6 black min-h-screen p-6">
         <div>
-          <h1 className="text-3xl font-bold text-white">Shipments Management</h1>
+          <h1 className="text-3xl font-bold text-white">
+            Shipments Management
+          </h1>
           <p className="text-gray-400 mt-1">Loading shipment data...</p>
         </div>
         <div className="grid gap-4">
@@ -223,419 +243,632 @@ export default function AdminShipmentsPage() {
 
   return (
     <>
-    <div className="space-y-6 bg-black min-h-screen p-6">
-      {/* Logistics Analytics Section */}
-      <div className="mb-6">
-        <h2 className="text-xl font-bold text-white mb-2">Logistics Personnel Status</h2>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {logisticsPeople.length === 0 && (
-            <div className="text-gray-400">No logistics personnel found.</div>
-          )}
-          {logisticsPeople.map((person: any) => {
-            let status = 'Inactive';
-            let color = 'bg-gray-700 text-gray-300';
-            if (person.isActive) {
-              if (person.activeOrders && person.activeOrders.length > 0) {
-                status = 'Working';
-                color = 'bg-yellow-900 text-yellow-300';
-              } else {
-                status = 'Free';
-                color = 'bg-emerald-900 text-emerald-300';
+      <div className="space-y-6 bg-black min-h-screen p-6">
+        {/* Logistics Analytics Section */}
+        <div className="mb-6">
+          <h2 className="text-xl font-bold text-white mb-2">
+            Logistics Personnel Status
+          </h2>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {logisticsPeople.length === 0 && (
+              <div className="text-gray-400">No logistics personnel found.</div>
+            )}
+            {logisticsPeople.map((person: any) => {
+              let status = "Inactive";
+              let color = "bg-gray-700 text-gray-300";
+              if (person.isActive) {
+                if (person.activeOrders && person.activeOrders.length > 0) {
+                  status = "Working";
+                  color = "bg-yellow-900 text-yellow-300";
+                } else {
+                  status = "Free";
+                  color = "bg-emerald-900 text-emerald-300";
+                }
               }
-            }
+              return (
+                <Card
+                  key={person.id}
+                  className="bg-[#181818] border border-[#f8c017]/20"
+                >
+                  <CardContent className="p-4 flex flex-col gap-2">
+                    <div className="font-semibold text-white">
+                      {person.name}
+                    </div>
+                    <div className="text-sm text-gray-400">{person.email}</div>
+                    <div
+                      className={`inline-block px-3 py-1 rounded ${color} text-xs font-bold`}
+                    >
+                      {status}
+                    </div>
+                    {status === "Working" && (
+                      <div className="text-xs text-yellow-300 mt-1">
+                        Active Orders: {person.activeOrders.length}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-white">
+              Shipments Management
+            </h1>
+            <p className="text-gray-400 mt-1">
+              Track and monitor all shipments across the platform
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              className="border-gray-600 text-gray-300 hover:border-[#f8c017] hover:text-[#f8c017]"
+            >
+              <Filter className="h-4 w-4 mr-2" />
+              Advanced Filters
+            </Button>
+            <Button className="bg-[#f8c017] text-black hover:bg-[#f8c017]/90">
+              <Download className="h-4 w-4 mr-2" />
+              Export Shipments
+            </Button>
+          </div>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
+          <Card className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-400">
+                Total Shipments
+              </CardTitle>
+              <div className="p-2 bg-[#f8c017]/10 rounded-lg">
+                <Package className="h-4 w-4 text-[#f8c017]" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-white">
+                {stats?.totalShipments || 0}
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-400">
+                Delivered
+              </CardTitle>
+              <div className="p-2 bg-emerald-100 rounded-lg">
+                <CheckCircle className="h-4 w-4 text-emerald-600" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-white">
+                {stats?.deliveredShipments || 0}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-400">
+                Returned
+              </CardTitle>
+              <div className="p-2 bg-orange-100 rounded-lg">
+                <AlertCircle className="h-4 w-4 text-orange-600" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-white">
+                {stats?.returnedShipments || 0}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-400">
+                Avg Delivery
+              </CardTitle>
+              <div className="p-2 bg-purple-100 rounded-lg">
+                <Calendar className="h-4 w-4 text-purple-600" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl font-bold text-white">
+                {stats?.avgDeliveryTime || 0} days
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Search and Filters */}
+        <Card className="bg-[#1a1a1a] border border-[#f8c017]/20">
+          <CardContent className="p-6">
+            <div className="flex gap-4 flex-wrap">
+              <div className="flex-1 min-w-80">
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <Input
+                    placeholder="Search by tracking number, order ID, or customer..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 bg-[#1a1a1a] border-gray-600 text-white focus:border-[#f8c017] focus:ring-[#f8c017]"
+                  />
+                </div>
+              </div>
+              <div className="min-w-48">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full h-10 px-3 border border-gray-600 rounded-md bg-[#1a1a1a] text-white focus:border-[#f8c017] focus:ring-[#f8c017]"
+                >
+                  <option value="all">All Status</option>
+                  <option value="PENDING">Pending</option>
+                  <option value="DISPATCHED">Dispatched</option>
+                  <option value="PICKED_UP">Picked Up</option>
+                  <option value="DELIVERING">Delivering</option>
+                  <option value="DELIVERED">Delivered</option>
+                  <option value="RETURNED">Returned</option>
+                  <option value="CANCELED">Canceled</option>
+                </select>
+              </div>
+            </div>
+            {/* Tabs for shipment status below search/filter */}
+            <div className="flex gap-2 mt-6">
+              <Button
+                variant={tab === "all" ? "default" : "outline"}
+                onClick={() => {
+                  setTab("all");
+                  setPage(1);
+                }}
+              >
+                All
+              </Button>
+              <Button
+                variant={tab === "delivered" ? "default" : "outline"}
+                onClick={() => {
+                  setTab("delivered");
+                  setPage(1);
+                }}
+              >
+                Delivered
+              </Button>
+              <Button
+                variant={tab === "returned" ? "default" : "outline"}
+                onClick={() => {
+                  setTab("returned");
+                  setPage(1);
+                }}
+              >
+                Returned
+              </Button>
+              <Button
+                variant={tab === "inprocess" ? "default" : "outline"}
+                onClick={() => {
+                  setTab("inprocess");
+                  setPage(1);
+                }}
+              >
+                In Process
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Shipments List */}
+        <div className="space-y-4">
+          {shipments.map((shipment: any) => {
+            const statusInfo = getStatusInfo(shipment.order.status);
             return (
-              <Card key={person.id} className="bg-[#181818] border border-[#f8c017]/20">
-                <CardContent className="p-4 flex flex-col gap-2">
-                  <div className="font-semibold text-white">{person.name}</div>
-                  <div className="text-sm text-gray-400">{person.email}</div>
-                  <div className={`inline-block px-3 py-1 rounded ${color} text-xs font-bold`}>{status}</div>
-                  {status === 'Working' && (
-                    <div className="text-xs text-yellow-300 mt-1">Active Orders: {person.activeOrders.length}</div>
-                  )}
+              <Card
+                key={shipment.id}
+                className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all"
+              >
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 space-y-3">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <h3 className="font-semibold text-white text-lg">
+                          {shipment.trackingNumber ||
+                            `Shipment #${shipment.id.slice(0, 8)}`}
+                        </h3>
+                        <Badge
+                          className={`${statusInfo.color} border flex items-center gap-1`}
+                        >
+                          {statusInfo.icon}
+                          {statusInfo.label}
+                        </Badge>
+                        <Badge
+                          variant="outline"
+                          className="text-[#f8c017] border-[#f8c017]/20 bg-[#f8c017]/5"
+                        >
+                          {shipment.order.id}
+                        </Badge>
+                      </div>
+                      <div className="grid gap-2 md:grid-cols-2">
+                        <div className="flex items-center gap-2 text-gray-400">
+                          <User className="h-4 w-4" />
+                          <span className="text-sm">
+                            Customer: {shipment.order.customerName}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-gray-400">
+                          <Building className="h-4 w-4" />
+                          <span className="text-sm">
+                            Business: {shipment.order.business || "N/A"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-gray-400">
+                          <Calendar className="h-4 w-4" />
+                          <span className="text-sm">
+                            Last Update:{" "}
+                            {shipment.lastStatusUpdate
+                              ? formatDate(shipment.lastStatusUpdate)
+                              : "N/A"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-gray-400">
+                          <MapPin className="h-4 w-4" />
+                          <span className="text-sm">
+                            Destination: {shipment.order.customerAddress}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-sm text-gray-500 mt-2 space-y-1">
+                        {shipment.order.logistics && (
+                          <p>
+                            Assigned to:{" "}
+                            <span className="text-white">
+                              {shipment.order.logistics.name}
+                            </span>{" "}
+                            (
+                            <span className="text-[#f8c017]">
+                              {shipment.order.logistics.email}
+                            </span>
+                            )
+                          </p>
+                        )}
+                        {shipment.carrierName && (
+                          <p>
+                            Carrier:{" "}
+                            <span className="text-white">
+                              {shipment.carrierName}
+                            </span>
+                          </p>
+                        )}
+                        <div className="flex flex-wrap gap-2 items-center mt-1">
+                          <span className="font-semibold text-gray-400">
+                            Products:
+                          </span>
+                          {shipment.order.items.length === 0 && (
+                            <span className="text-gray-400">None</span>
+                          )}
+                          {shipment.order.items.map((item: any) => (
+                            <span
+                              key={item.id}
+                              className="inline-flex items-center gap-1 px-2 py-1 bg-gray-800 rounded text-xs text-gray-200 border border-gray-700"
+                            >
+                              <Box className="h-3 w-3 text-[#f8c017]" />
+                              {item.product?.name || "Unknown"}
+                              <span className="text-gray-400">
+                                x{item.quantity}
+                              </span>
+                              <span className="text-gray-500">
+                                ({item.product?.sku})
+                              </span>
+                            </span>
+                          ))}
+                        </div>
+                        {/* Notes Section */}
+                        {(shipment.notes || shipment.order.notes) && (
+                          <div className="mt-2 p-2 rounded bg-[#23232b] border border-[#f8c017]/30">
+                            <span className="font-semibold text-[#f8c017]">
+                              Note:
+                            </span>
+                            <span className="text-white ml-2">
+                              {shipment.notes || shipment.order.notes}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-gray-600 text-gray-300 hover:border-[#f8c017] hover:text-[#f8c017]"
+                        onClick={() => setTrackModal(shipment)}
+                      >
+                        <Eye className="h-4 w-4 mr-1" />
+                        Track
+                      </Button>
+                      <div className="relative">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-gray-600 text-gray-300 hover:border-gray-500"
+                          onClick={() => setMoreMenuOpen(shipment.id)}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                        {moreMenuOpen === shipment.id && (
+                          <div className="absolute right-0 mt-2 w-40 bg-[#232323] border border-gray-700 rounded shadow-lg z-50">
+                            <button
+                              className="w-full text-left px-4 py-2 hover:bg-[#2a2a2a] text-gray-200"
+                              onClick={() => {
+                                setEditModal(shipment);
+                                setMoreMenuOpen(null);
+                              }}
+                            >
+                              Edit Shipment
+                            </button>
+                            <button
+                              className="w-full text-left px-4 py-2 hover:bg-[#2a2a2a] text-gray-200"
+                              onClick={() => {
+                                setCancelModal(shipment);
+                                setMoreMenuOpen(null);
+                              }}
+                            >
+                              Cancel Shipment
+                            </button>
+                            <button
+                              className="w-full text-left px-4 py-2 hover:bg-[#2a2a2a] text-gray-200"
+                              onClick={() => {
+                                setPrintModal(shipment);
+                                setMoreMenuOpen(null);
+                              }}
+                            >
+                              Print Label
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             );
           })}
         </div>
+
+        {/* Empty State */}
+        {shipments.length === 0 && !loading && (
+          <Card className="bg-[#1a1a1a] border border-[#f8c017]/20">
+            <CardContent className="p-12 text-center">
+              <Truck className="h-12 w-12 text-gray-500 mx-auto mb-4" />
+              <p className="text-gray-300 text-lg mb-2">No shipments found</p>
+              <p className="text-gray-500">
+                Try adjusting your search or filter criteria
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2">
+            <Button
+              variant="outline"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="border-gray-600 text-gray-300 hover:border-[#f8c017] hover:text-[#f8c017]"
+            >
+              Previous
+            </Button>
+            <span className="px-4 py-2 text-gray-300">
+              Page {page} of {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="border-gray-600 text-gray-300 hover:border-[#f8c017] hover:text-[#f8c017]"
+            >
+              Next
+            </Button>
+          </div>
+        )}
       </div>
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Shipments Management</h1>
-          <p className="text-gray-400 mt-1">
-            Track and monitor all shipments across the platform
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" className="border-gray-600 text-gray-300 hover:border-[#f8c017] hover:text-[#f8c017]">
-            <Filter className="h-4 w-4 mr-2" />
-            Advanced Filters
-          </Button>
-          <Button className="bg-[#f8c017] text-black hover:bg-[#f8c017]/90">
-            <Download className="h-4 w-4 mr-2" />
-            Export Shipments
-          </Button>
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
-        <Card className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-400">Total Shipments</CardTitle>
-            <div className="p-2 bg-[#f8c017]/10 rounded-lg">
-              <Package className="h-4 w-4 text-[#f8c017]" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-white">{stats?.totalShipments || 0}</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-400">Delivered</CardTitle>
-            <div className="p-2 bg-emerald-100 rounded-lg">
-              <CheckCircle className="h-4 w-4 text-emerald-600" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-white">{stats?.deliveredShipments || 0}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-400">Returned</CardTitle>
-            <div className="p-2 bg-orange-100 rounded-lg">
-              <AlertCircle className="h-4 w-4 text-orange-600" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-white">{stats?.returnedShipments || 0}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-400">Avg Delivery</CardTitle>
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <Calendar className="h-4 w-4 text-purple-600" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold text-white">{stats?.avgDeliveryTime || 0} days</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Search and Filters */}
-      <Card className="bg-[#1a1a1a] border border-[#f8c017]/20">
-        <CardContent className="p-6">
-          <div className="flex gap-4 flex-wrap">
-            <div className="flex-1 min-w-80">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Search by tracking number, order ID, or customer..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 bg-[#1a1a1a] border-gray-600 text-white focus:border-[#f8c017] focus:ring-[#f8c017]"
-                />
+      {trackModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          onClick={() => setTrackModal(null)}
+        >
+          <div
+            className="bg-[#181818] rounded-lg p-8 w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-xl font-bold mb-4 text-white">
+              Track Shipment
+            </h2>
+            <div className="mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-gray-400">Tracking #:</span>
+                <span className="font-mono text-white">
+                  {trackModal.trackingNumber || trackModal.id.slice(0, 8)}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-gray-400">Status:</span>
+                <span className="font-semibold text-white">
+                  {trackModal.order.status}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-gray-400">Customer:</span>
+                <span className="text-white">
+                  {trackModal.order.customerName}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-gray-400">Destination:</span>
+                <span className="text-white">
+                  {trackModal.order.customerAddress}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-gray-400">Last Update:</span>
+                <span className="text-white">
+                  {trackModal.lastStatusUpdate
+                    ? formatDate(trackModal.lastStatusUpdate)
+                    : "N/A"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-gray-400">Carrier:</span>
+                <span className="text-white">
+                  {trackModal.carrierName || "N/A"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-gray-400">Products:</span>
+                <span className="text-white">
+                  {trackModal.order.items
+                    .map((i) => i.product?.name)
+                    .filter(Boolean)
+                    .join(", ") || "None"}
+                </span>
               </div>
             </div>
-            <div className="min-w-48">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full h-10 px-3 border border-gray-600 rounded-md bg-[#1a1a1a] text-white focus:border-[#f8c017] focus:ring-[#f8c017]"
-              >
-                <option value="all">All Status</option>
-                <option value="PENDING">Pending</option>
-                <option value="DISPATCHED">Dispatched</option>
-                <option value="PICKED_UP">Picked Up</option>
-                <option value="DELIVERING">Delivering</option>
-                <option value="DELIVERED">Delivered</option>
-                <option value="RETURNED">Returned</option>
-                <option value="CANCELED">Canceled</option>
-              </select>
+            <div className="border-t border-gray-700 pt-4">
+              <div className="text-gray-400 mb-2 font-semibold">
+                Status History
+              </div>
+              <div className="text-gray-300 text-sm">
+                (Status history not implemented - backend needed)
+              </div>
             </div>
+            <Button
+              onClick={() => setTrackModal(null)}
+              className="bg-[#f8c017] text-black w-full mt-4"
+            >
+              Close
+            </Button>
           </div>
-          {/* Tabs for shipment status below search/filter */}
-          <div className="flex gap-2 mt-6">
-            <Button variant={tab==='all'?'default':'outline'} onClick={()=>{setTab('all');setPage(1);}}>All</Button>
-            <Button variant={tab==='delivered'?'default':'outline'} onClick={()=>{setTab('delivered');setPage(1);}}>Delivered</Button>
-            <Button variant={tab==='returned'?'default':'outline'} onClick={()=>{setTab('returned');setPage(1);}}>Returned</Button>
-            <Button variant={tab==='inprocess'?'default':'outline'} onClick={()=>{setTab('inprocess');setPage(1);}}>In Process</Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Shipments List */}
-      <div className="space-y-4">
-        {shipments.map((shipment: any) => {
-          const statusInfo = getStatusInfo(shipment.order.status);
-          return (
-            <Card key={shipment.id} className="bg-[#1a1a1a] border border-[#f8c017]/20 hover:shadow-lg hover:shadow-[#f8c017]/10 transition-all">
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 space-y-3">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <h3 className="font-semibold text-white text-lg">
-                        {shipment.trackingNumber || `Shipment #${shipment.id.slice(0, 8)}`}
-                      </h3>
-                      <Badge className={`${statusInfo.color} border flex items-center gap-1`}>
-                        {statusInfo.icon}
-                        {statusInfo.label}
-                      </Badge>
-                      <Badge variant="outline" className="text-[#f8c017] border-[#f8c017]/20 bg-[#f8c017]/5">
-                        {shipment.order.id}
-                      </Badge>
-                    </div>
-                    <div className="grid gap-2 md:grid-cols-2">
-                      <div className="flex items-center gap-2 text-gray-400">
-                        <User className="h-4 w-4" />
-                        <span className="text-sm">Customer: {shipment.order.customerName}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-400">
-                        <Building className="h-4 w-4" />
-                        <span className="text-sm">Business: {shipment.order.business || 'N/A'}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-400">
-                        <Calendar className="h-4 w-4" />
-                        <span className="text-sm">Last Update: {shipment.lastStatusUpdate ? formatDate(shipment.lastStatusUpdate) : 'N/A'}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-400">
-                        <MapPin className="h-4 w-4" />
-                        <span className="text-sm">Destination: {shipment.order.customerAddress}</span>
-                      </div>
-                    </div>
-                    <div className="text-sm text-gray-500 mt-2 space-y-1">
-                      {shipment.order.logistics && (
-                        <p>Assigned to: <span className="text-white">{shipment.order.logistics.name}</span> (<span className="text-[#f8c017]">{shipment.order.logistics.email}</span>)</p>
-                      )}
-                      {shipment.carrierName && (
-                        <p>Carrier: <span className="text-white">{shipment.carrierName}</span></p>
-                      )}
-                      <div className="flex flex-wrap gap-2 items-center mt-1">
-                        <span className="font-semibold text-gray-400">Products:</span>
-                        {shipment.order.items.length === 0 && <span className="text-gray-400">None</span>}
-                        {shipment.order.items.map((item: any) => (
-                          <span key={item.id} className="inline-flex items-center gap-1 px-2 py-1 bg-gray-800 rounded text-xs text-gray-200 border border-gray-700">
-                            <Box className="h-3 w-3 text-[#f8c017]" />
-                            {item.product?.name || 'Unknown'}
-                            <span className="text-gray-400">x{item.quantity}</span>
-                            <span className="text-gray-500">({item.product?.sku})</span>
-                          </span>
-                        ))}
-                      </div>
-                      {/* Notes Section */}
-                      {(shipment.notes || shipment.order.notes) && (
-                        <div className="mt-2 p-2 rounded bg-[#23232b] border border-[#f8c017]/30">
-                          <span className="font-semibold text-[#f8c017]">Note:</span>
-                          <span className="text-white ml-2">{shipment.notes || shipment.order.notes}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-gray-600 text-gray-300 hover:border-[#f8c017] hover:text-[#f8c017]"
-                      onClick={() => setTrackModal(shipment)}
-                    >
-                      <Eye className="h-4 w-4 mr-1" />
-                      Track
-                    </Button>
-                    <div className="relative">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-gray-600 text-gray-300 hover:border-gray-500"
-                        onClick={() => setMoreMenuOpen(shipment.id)}
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                      {moreMenuOpen === shipment.id && (
-                        <div className="absolute right-0 mt-2 w-40 bg-[#232323] border border-gray-700 rounded shadow-lg z-50">
-                          <button
-                            className="w-full text-left px-4 py-2 hover:bg-[#2a2a2a] text-gray-200"
-                            onClick={() => { setEditModal(shipment); setMoreMenuOpen(null); }}
-                          >Edit Shipment</button>
-                          <button
-                            className="w-full text-left px-4 py-2 hover:bg-[#2a2a2a] text-gray-200"
-                            onClick={() => { setCancelModal(shipment); setMoreMenuOpen(null); }}
-                          >Cancel Shipment</button>
-                          <button
-                            className="w-full text-left px-4 py-2 hover:bg-[#2a2a2a] text-gray-200"
-                            onClick={() => { setPrintModal(shipment); setMoreMenuOpen(null); }}
-                          >Print Label</button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* Empty State */}
-      {shipments.length === 0 && !loading && (
-        <Card className="bg-[#1a1a1a] border border-[#f8c017]/20">
-          <CardContent className="p-12 text-center">
-            <Truck className="h-12 w-12 text-gray-500 mx-auto mb-4" />
-            <p className="text-gray-300 text-lg mb-2">No shipments found</p>
-            <p className="text-gray-500">Try adjusting your search or filter criteria</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2">
-          <Button
-            variant="outline"
-            disabled={page <= 1}
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            className="border-gray-600 text-gray-300 hover:border-[#f8c017] hover:text-[#f8c017]"
-          >
-            Previous
-          </Button>
-          <span className="px-4 py-2 text-gray-300">
-            Page {page} of {totalPages}
-          </span>
-          <Button
-            variant="outline"
-            disabled={page >= totalPages}
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            className="border-gray-600 text-gray-300 hover:border-[#f8c017] hover:text-[#f8c017]"
-          >
-            Next
-          </Button>
         </div>
       )}
-    </div>
-    {trackModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setTrackModal(null)}>
-        <div className="bg-[#181818] rounded-lg p-8 w-full max-w-md" onClick={e => e.stopPropagation()}>
-          <h2 className="text-xl font-bold mb-4 text-white">Track Shipment</h2>
-          <div className="mb-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-gray-400">Tracking #:</span>
-              <span className="font-mono text-white">{trackModal.trackingNumber || trackModal.id.slice(0,8)}</span>
-            </div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-gray-400">Status:</span>
-              <span className="font-semibold text-white">{trackModal.order.status}</span>
-            </div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-gray-400">Customer:</span>
-              <span className="text-white">{trackModal.order.customerName}</span>
-            </div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-gray-400">Destination:</span>
-              <span className="text-white">{trackModal.order.customerAddress}</span>
-            </div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-gray-400">Last Update:</span>
-              <span className="text-white">{trackModal.lastStatusUpdate ? formatDate(trackModal.lastStatusUpdate) : 'N/A'}</span>
-            </div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-gray-400">Carrier:</span>
-              <span className="text-white">{trackModal.carrierName || 'N/A'}</span>
-            </div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-gray-400">Products:</span>
-              <span className="text-white">{trackModal.order.items.map(i => i.product?.name).filter(Boolean).join(', ') || 'None'}</span>
-            </div>
-          </div>
-          <div className="border-t border-gray-700 pt-4">
-            <div className="text-gray-400 mb-2 font-semibold">Status History</div>
-            <div className="text-gray-300 text-sm">(Status history not implemented - backend needed)</div>
-          </div>
-          <Button onClick={() => setTrackModal(null)} className="bg-[#f8c017] text-black w-full mt-4">Close</Button>
-        </div>
-      </div>
-    )}
-    {editModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-        <div className="bg-[#181818] rounded-lg p-8 w-full max-w-md">
-          <h2 className="text-xl font-bold mb-4 text-white">Edit Shipment</h2>
-          <form
-            className="space-y-4"
-            onSubmit={e => {
-              e.preventDefault();
-              const form = e.target as HTMLFormElement;
-              const trackingNumber = (form.elements.namedItem('trackingNumber') as HTMLInputElement).value;
-              const carrierName = (form.elements.namedItem('carrierName') as HTMLInputElement).value;
-              (async () => {
-                try {
-                  const res = await fetch('/api/admin/shipments/update', {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
+      {editModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-[#181818] rounded-lg p-8 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4 text-white">Edit Shipment</h2>
+            <form
+              className="space-y-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const form = e.target as HTMLFormElement;
+                const trackingNumber = (
+                  form.elements.namedItem("trackingNumber") as HTMLInputElement
+                ).value;
+                const carrierName = (
+                  form.elements.namedItem("carrierName") as HTMLInputElement
+                ).value;
+                (async () => {
+                  try {
+                    await patch("/api/admin/shipments/update", {
                       shipmentId: editModal.id,
                       trackingNumber,
-                      carrierName
-                    })
-                  });
-                  if (!res.ok) throw new Error('Failed to update shipment');
-                  setEditModal(null);
-                  fetchShipments();
-                } catch (err) {
-                  alert('Failed to update shipment');
-                }
-              })();
-            }}
-          >
-            <div>
-              <label className="block text-gray-300 mb-1">Tracking Number</label>
-              <Input
-                name="trackingNumber"
-                defaultValue={editModal.trackingNumber || ''}
-                className="bg-[#232323] border-gray-700 text-white"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-gray-300 mb-1">Carrier Name</label>
-              <Input
-                name="carrierName"
-                defaultValue={editModal.carrierName || ''}
-                className="bg-[#232323] border-gray-700 text-white"
-              />
-            </div>
-            <div className="flex gap-2 mt-4">
-              <Button type="button" onClick={() => setEditModal(null)} variant="outline" className="flex-1">Cancel</Button>
-              <Button type="submit" className="bg-[#f8c017] text-black flex-1">Save</Button>
-            </div>
-          </form>
-        </div>
-      </div>
-    )}
-    {cancelModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-        <div className="bg-[#181818] rounded-lg p-8 w-full max-w-md">
-          <h2 className="text-xl font-bold mb-4 text-white">Cancel Shipment</h2>
-          <p className="text-gray-300 mb-4">Are you sure you want to cancel <span className="font-mono">{cancelModal.trackingNumber || cancelModal.id.slice(0,8)}</span>?</p>
-          <div className="flex gap-2 mt-4">
-            <Button onClick={() => setCancelModal(null)} variant="outline" className="flex-1">No</Button>
-            <Button onClick={() => { setCancelModal(null); }} className="bg-red-600 text-white flex-1">Yes, Cancel</Button>
+                      carrierName,
+                    });
+                    setEditModal(null);
+                    fetchShipments();
+                  } catch (err) {
+                    alert("Failed to update shipment");
+                  }
+                })();
+              }}
+            >
+              <div>
+                <label className="block text-gray-300 mb-1">
+                  Tracking Number
+                </label>
+                <Input
+                  name="trackingNumber"
+                  defaultValue={editModal.trackingNumber || ""}
+                  className="bg-[#232323] border-gray-700 text-white"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-gray-300 mb-1">Carrier Name</label>
+                <Input
+                  name="carrierName"
+                  defaultValue={editModal.carrierName || ""}
+                  className="bg-[#232323] border-gray-700 text-white"
+                />
+              </div>
+              <div className="flex gap-2 mt-4">
+                <Button
+                  type="button"
+                  onClick={() => setEditModal(null)}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  className="bg-[#f8c017] text-black flex-1"
+                >
+                  Save
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
-      </div>
-    )}
-    {printModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-        <div className="bg-[#181818] rounded-lg p-8 w-full max-w-md">
-          <h2 className="text-xl font-bold mb-4 text-white">Print Label</h2>
-          <p className="text-gray-300 mb-4">Printing label for <span className="font-mono">{printModal.trackingNumber || printModal.id.slice(0,8)}</span></p>
-          <Button onClick={() => setPrintModal(null)} className="bg-[#f8c017] text-black w-full mt-4">Close</Button>
+      )}
+      {cancelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-[#181818] rounded-lg p-8 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4 text-white">
+              Cancel Shipment
+            </h2>
+            <p className="text-gray-300 mb-4">
+              Are you sure you want to cancel{" "}
+              <span className="font-mono">
+                {cancelModal.trackingNumber || cancelModal.id.slice(0, 8)}
+              </span>
+              ?
+            </p>
+            <div className="flex gap-2 mt-4">
+              <Button
+                onClick={() => setCancelModal(null)}
+                variant="outline"
+                className="flex-1"
+              >
+                No
+              </Button>
+              <Button
+                onClick={() => {
+                  setCancelModal(null);
+                }}
+                className="bg-red-600 text-white flex-1"
+              >
+                Yes, Cancel
+              </Button>
+            </div>
+          </div>
         </div>
-      </div>
-    )}
+      )}
+      {printModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-[#181818] rounded-lg p-8 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4 text-white">Print Label</h2>
+            <p className="text-gray-300 mb-4">
+              Printing label for{" "}
+              <span className="font-mono">
+                {printModal.trackingNumber || printModal.id.slice(0, 8)}
+              </span>
+            </p>
+            <Button
+              onClick={() => setPrintModal(null)}
+              className="bg-[#f8c017] text-black w-full mt-4"
+            >
+              Close
+            </Button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

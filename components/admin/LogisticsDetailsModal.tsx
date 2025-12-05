@@ -1,7 +1,12 @@
-import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Card, CardContent } from '@/components/ui/card';
-import { BarChart3, Package, Truck } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Card, CardContent } from "@/components/ui/card";
+import { BarChart3, Truck } from "lucide-react";
+import { CallContactAction } from "@/components/call/CallContactAction";
 
 interface LogisticsDetailsModalProps {
   open: boolean;
@@ -9,7 +14,11 @@ interface LogisticsDetailsModalProps {
   person: any | null;
 }
 
-export default function LogisticsDetailsModal({ open, onClose, person }: LogisticsDetailsModalProps) {
+export default function LogisticsDetailsModal({
+  open,
+  onClose,
+  person,
+}: LogisticsDetailsModalProps) {
   if (!person) return null;
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -24,7 +33,16 @@ export default function LogisticsDetailsModal({ open, onClose, person }: Logisti
             </div>
             <div className="text-gray-400 text-sm">
               <div>Email: {person.email}</div>
-              <div>Phone: {person.phone}</div>
+              <div className="flex items-center gap-2">
+                <span>Phone: {person.phone}</span>
+                {person.phone ? (
+                  <CallContactAction
+                    contactNumber={person.phone}
+                    contactName={`${person.firstName} ${person.lastName}`}
+                    size="icon-sm"
+                  />
+                ) : null}
+              </div>
               <div>Status: {person.status}</div>
             </div>
             <div className="mt-4">

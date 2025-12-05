@@ -1,16 +1,39 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
+import { useState, useEffect } from "react";
 import {
-  MapPin, Package, Users, Truck, Calendar, Phone, Mail, 
-  Building, BarChart3, TrendingUp, AlertTriangle, CheckCircle2
-} from 'lucide-react';
-import { get } from '@/lib/api';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { CallContactAction } from "@/components/call/CallContactAction";
+import {
+  MapPin,
+  Package,
+  Users,
+  Truck,
+  Calendar,
+  Phone,
+  Mail,
+  Building,
+  BarChart3,
+  TrendingUp,
+  AlertTriangle,
+  CheckCircle2,
+} from "lucide-react";
+import { get } from "@/lib/api";
 
 interface Warehouse {
   id: string;
@@ -26,8 +49,8 @@ interface Warehouse {
   manager?: string;
   contactEmail?: string;
   contactPhone?: string;
-  status: 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE' | 'UNDER_CONSTRUCTION';
-  type: 'FULFILLMENT' | 'STORAGE' | 'DISTRIBUTION' | 'CROSS_DOCK';
+  status: "ACTIVE" | "INACTIVE" | "MAINTENANCE" | "UNDER_CONSTRUCTION";
+  type: "FULFILLMENT" | "STORAGE" | "DISTRIBUTION" | "CROSS_DOCK";
   description?: string;
   createdAt: string;
   updatedAt: string;
@@ -48,7 +71,7 @@ interface WarehouseStats {
   }>;
   recentActivity: Array<{
     id: string;
-    type: 'STOCK_IN' | 'STOCK_OUT' | 'TRANSFER' | 'ORDER';
+    type: "STOCK_IN" | "STOCK_OUT" | "TRANSFER" | "ORDER";
     description: string;
     timestamp: string;
   }>;
@@ -61,10 +84,17 @@ interface WarehouseViewModalProps {
   onEdit?: () => void;
 }
 
-export default function WarehouseViewModal({ isOpen, onClose, warehouse, onEdit }: WarehouseViewModalProps) {
+export default function WarehouseViewModal({
+  isOpen,
+  onClose,
+  warehouse,
+  onEdit,
+}: WarehouseViewModalProps) {
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState<WarehouseStats | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'activity'>('overview');
+  const [activeTab, setActiveTab] = useState<
+    "overview" | "products" | "activity"
+  >("overview");
 
   useEffect(() => {
     if (isOpen && warehouse) {
@@ -74,13 +104,15 @@ export default function WarehouseViewModal({ isOpen, onClose, warehouse, onEdit 
 
   const fetchWarehouseStats = async () => {
     if (!warehouse) return;
-    
+
     try {
       setLoading(true);
-      const data = await get(`/api/admin/warehouses/${warehouse.id}/stats`) as WarehouseStats;
+      const data = (await get(
+        `/api/admin/warehouses/${warehouse.id}/stats`
+      )) as WarehouseStats;
       setStats(data);
     } catch (error) {
-      console.error('Failed to fetch warehouse stats:', error);
+      console.error("Failed to fetch warehouse stats:", error);
       // Set default stats
       setStats({
         totalProducts: 0,
@@ -90,7 +122,7 @@ export default function WarehouseViewModal({ isOpen, onClose, warehouse, onEdit 
         pendingShipments: 0,
         utilizationRate: 0,
         topProducts: [],
-        recentActivity: []
+        recentActivity: [],
       });
     } finally {
       setLoading(false);
@@ -99,61 +131,76 @@ export default function WarehouseViewModal({ isOpen, onClose, warehouse, onEdit 
 
   const getStatusInfo = (status: string) => {
     switch (status) {
-      case 'ACTIVE':
-        return { 
-          color: 'bg-emerald-100 text-emerald-700 border-emerald-200', 
+      case "ACTIVE":
+        return {
+          color: "bg-emerald-100 text-emerald-700 border-emerald-200",
           icon: <CheckCircle2 className="h-3 w-3" />,
-          label: 'Active'
+          label: "Active",
         };
-      case 'INACTIVE':
-        return { 
-          color: 'bg-gray-100 text-gray-700 border-gray-200', 
+      case "INACTIVE":
+        return {
+          color: "bg-gray-100 text-gray-700 border-gray-200",
           icon: <Building className="h-3 w-3" />,
-          label: 'Inactive'
+          label: "Inactive",
         };
-      case 'MAINTENANCE':
-        return { 
-          color: 'bg-yellow-100 text-yellow-700 border-yellow-200', 
+      case "MAINTENANCE":
+        return {
+          color: "bg-yellow-100 text-yellow-700 border-yellow-200",
           icon: <AlertTriangle className="h-3 w-3" />,
-          label: 'Maintenance'
+          label: "Maintenance",
         };
-      case 'UNDER_CONSTRUCTION':
-        return { 
-          color: 'bg-blue-100 text-blue-700 border-blue-200', 
+      case "UNDER_CONSTRUCTION":
+        return {
+          color: "bg-blue-100 text-blue-700 border-blue-200",
           icon: <Building className="h-3 w-3" />,
-          label: 'Under Construction'
+          label: "Under Construction",
         };
       default:
-        return { 
-          color: 'bg-gray-100 text-gray-700 border-gray-200', 
+        return {
+          color: "bg-gray-100 text-gray-700 border-gray-200",
           icon: <Building className="h-3 w-3" />,
-          label: status
+          label: status,
         };
     }
   };
 
   const getTypeInfo = (type: string) => {
     switch (type) {
-      case 'FULFILLMENT':
-        return { color: 'bg-blue-100 text-blue-700 border-blue-200', label: 'Fulfillment' };
-      case 'STORAGE':
-        return { color: 'bg-purple-100 text-purple-700 border-purple-200', label: 'Storage' };
-      case 'DISTRIBUTION':
-        return { color: 'bg-orange-100 text-orange-700 border-orange-200', label: 'Distribution' };
-      case 'CROSS_DOCK':
-        return { color: 'bg-cyan-100 text-cyan-700 border-cyan-200', label: 'Cross Dock' };
+      case "FULFILLMENT":
+        return {
+          color: "bg-blue-100 text-blue-700 border-blue-200",
+          label: "Fulfillment",
+        };
+      case "STORAGE":
+        return {
+          color: "bg-purple-100 text-purple-700 border-purple-200",
+          label: "Storage",
+        };
+      case "DISTRIBUTION":
+        return {
+          color: "bg-orange-100 text-orange-700 border-orange-200",
+          label: "Distribution",
+        };
+      case "CROSS_DOCK":
+        return {
+          color: "bg-cyan-100 text-cyan-700 border-cyan-200",
+          label: "Cross Dock",
+        };
       default:
-        return { color: 'bg-gray-100 text-gray-700 border-gray-200', label: type };
+        return {
+          color: "bg-gray-100 text-gray-700 border-gray-200",
+          label: type,
+        };
     }
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
@@ -161,7 +208,10 @@ export default function WarehouseViewModal({ isOpen, onClose, warehouse, onEdit 
 
   const statusInfo = getStatusInfo(warehouse.status);
   const typeInfo = getTypeInfo(warehouse.type);
-  const utilizationPercentage = warehouse.capacity > 0 ? Math.round((warehouse.currentStock / warehouse.capacity) * 100) : 0;
+  const utilizationPercentage =
+    warehouse.capacity > 0
+      ? Math.round((warehouse.currentStock / warehouse.capacity) * 100)
+      : 0;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -169,13 +219,17 @@ export default function WarehouseViewModal({ isOpen, onClose, warehouse, onEdit 
         <DialogHeader>
           <div className="flex items-start justify-between">
             <div>
-              <DialogTitle className="text-xl font-bold text-white">{warehouse.name}</DialogTitle>
+              <DialogTitle className="text-xl font-bold text-white">
+                {warehouse.name}
+              </DialogTitle>
               <DialogDescription className="text-gray-400 mt-1">
                 {warehouse.city}, {warehouse.state || warehouse.region}
               </DialogDescription>
             </div>
             <div className="flex items-center gap-2">
-              <Badge className={`${statusInfo.color} border flex items-center gap-1`}>
+              <Badge
+                className={`${statusInfo.color} border flex items-center gap-1`}
+              >
                 {statusInfo.icon}
                 {statusInfo.label}
               </Badge>
@@ -188,14 +242,14 @@ export default function WarehouseViewModal({ isOpen, onClose, warehouse, onEdit 
 
         {/* Tab Navigation */}
         <div className="flex border-b border-gray-600 mb-4">
-          {['overview', 'products', 'activity'].map((tab) => (
+          {["overview", "products", "activity"].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as typeof activeTab)}
               className={`px-4 py-2 text-sm font-medium capitalize transition-colors ${
-                activeTab === tab 
-                  ? 'text-[#f8c017] border-b-2 border-[#f8c017]' 
-                  : 'text-gray-400 hover:text-gray-300'
+                activeTab === tab
+                  ? "text-[#f8c017] border-b-2 border-[#f8c017]"
+                  : "text-gray-400 hover:text-gray-300"
               }`}
             >
               {tab}
@@ -203,7 +257,7 @@ export default function WarehouseViewModal({ isOpen, onClose, warehouse, onEdit 
           ))}
         </div>
 
-        {activeTab === 'overview' && (
+        {activeTab === "overview" && (
           <div className="space-y-6">
             {/* Basic Information */}
             <div className="grid gap-4 md:grid-cols-2">
@@ -217,7 +271,9 @@ export default function WarehouseViewModal({ isOpen, onClose, warehouse, onEdit 
                 <CardContent className="space-y-2">
                   <div className="text-sm">
                     <span className="text-gray-400">Address:</span>
-                    <span className="ml-2 text-white">{warehouse.address || 'Not provided'}</span>
+                    <span className="ml-2 text-white">
+                      {warehouse.address || "Not provided"}
+                    </span>
                   </div>
                   <div className="text-sm">
                     <span className="text-gray-400">Region:</span>
@@ -225,11 +281,15 @@ export default function WarehouseViewModal({ isOpen, onClose, warehouse, onEdit 
                   </div>
                   <div className="text-sm">
                     <span className="text-gray-400">Zip Code:</span>
-                    <span className="ml-2 text-white">{warehouse.zipCode || 'N/A'}</span>
+                    <span className="ml-2 text-white">
+                      {warehouse.zipCode || "N/A"}
+                    </span>
                   </div>
                   <div className="text-sm">
                     <span className="text-gray-400">Country:</span>
-                    <span className="ml-2 text-white">{warehouse.country || 'Not specified'}</span>
+                    <span className="ml-2 text-white">
+                      {warehouse.country || "Not specified"}
+                    </span>
                   </div>
                 </CardContent>
               </Card>
@@ -244,19 +304,34 @@ export default function WarehouseViewModal({ isOpen, onClose, warehouse, onEdit 
                 <CardContent className="space-y-2">
                   <div className="text-sm">
                     <span className="text-gray-400">Manager:</span>
-                    <span className="ml-2 text-white">{warehouse.manager || 'Unassigned'}</span>
+                    <span className="ml-2 text-white">
+                      {warehouse.manager || "Unassigned"}
+                    </span>
                   </div>
                   <div className="text-sm">
                     <span className="text-gray-400">Contact Email:</span>
-                    <span className="ml-2 text-white">{warehouse.contactEmail || 'Not provided'}</span>
+                    <span className="ml-2 text-white">
+                      {warehouse.contactEmail || "Not provided"}
+                    </span>
                   </div>
                   <div className="text-sm">
                     <span className="text-gray-400">Contact Phone:</span>
-                    <span className="ml-2 text-white">{warehouse.contactPhone || 'Not provided'}</span>
+                    <span className="ml-2 text-white flex items-center gap-2">
+                      {warehouse.contactPhone || "Not provided"}
+                      {warehouse.contactPhone ? (
+                        <CallContactAction
+                          contactNumber={warehouse.contactPhone}
+                          contactName={warehouse.manager || warehouse.name}
+                          size="icon-sm"
+                        />
+                      ) : null}
+                    </span>
                   </div>
                   <div className="text-sm">
                     <span className="text-gray-400">Created:</span>
-                    <span className="ml-2 text-white">{formatDate(warehouse.createdAt)}</span>
+                    <span className="ml-2 text-white">
+                      {formatDate(warehouse.createdAt)}
+                    </span>
                   </div>
                 </CardContent>
               </Card>
@@ -273,18 +348,27 @@ export default function WarehouseViewModal({ isOpen, onClose, warehouse, onEdit 
               <CardContent className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-3">
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-white">{warehouse.capacity.toLocaleString()}</div>
+                    <div className="text-2xl font-bold text-white">
+                      {warehouse.capacity.toLocaleString()}
+                    </div>
                     <div className="text-sm text-gray-400">Total Capacity</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-white">{warehouse.currentStock.toLocaleString()}</div>
+                    <div className="text-2xl font-bold text-white">
+                      {warehouse.currentStock.toLocaleString()}
+                    </div>
                     <div className="text-sm text-gray-400">Current Stock</div>
                   </div>
                   <div className="text-center">
-                    <div className={`text-2xl font-bold ${
-                      utilizationPercentage > 90 ? 'text-red-400' : 
-                      utilizationPercentage > 75 ? 'text-[#f8c017]' : 'text-emerald-400'
-                    }`}>
+                    <div
+                      className={`text-2xl font-bold ${
+                        utilizationPercentage > 90
+                          ? "text-red-400"
+                          : utilizationPercentage > 75
+                          ? "text-[#f8c017]"
+                          : "text-emerald-400"
+                      }`}
+                    >
                       {utilizationPercentage}%
                     </div>
                     <div className="text-sm text-gray-400">Utilization</div>
@@ -293,17 +377,19 @@ export default function WarehouseViewModal({ isOpen, onClose, warehouse, onEdit 
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Capacity Utilization</span>
-                    <span className={`font-medium ${
-                      utilizationPercentage > 90 ? 'text-red-400' : 
-                      utilizationPercentage > 75 ? 'text-[#f8c017]' : 'text-emerald-400'
-                    }`}>
+                    <span
+                      className={`font-medium ${
+                        utilizationPercentage > 90
+                          ? "text-red-400"
+                          : utilizationPercentage > 75
+                          ? "text-[#f8c017]"
+                          : "text-emerald-400"
+                      }`}
+                    >
                       {utilizationPercentage}%
                     </span>
                   </div>
-                  <Progress 
-                    value={utilizationPercentage} 
-                    className="h-2"
-                  />
+                  <Progress value={utilizationPercentage} className="h-2" />
                 </div>
               </CardContent>
             </Card>
@@ -315,8 +401,12 @@ export default function WarehouseViewModal({ isOpen, onClose, warehouse, onEdit 
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-xl font-bold text-white">{stats.totalProducts}</div>
-                        <div className="text-xs text-gray-400">Total Products</div>
+                        <div className="text-xl font-bold text-white">
+                          {stats.totalProducts}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          Total Products
+                        </div>
                       </div>
                       <Package className="h-8 w-8 text-[#f8c017]" />
                     </div>
@@ -327,8 +417,12 @@ export default function WarehouseViewModal({ isOpen, onClose, warehouse, onEdit 
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-xl font-bold text-white">{stats.totalOrders}</div>
-                        <div className="text-xs text-gray-400">Total Orders</div>
+                        <div className="text-xl font-bold text-white">
+                          {stats.totalOrders}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          Total Orders
+                        </div>
                       </div>
                       <Truck className="h-8 w-8 text-blue-400" />
                     </div>
@@ -339,8 +433,12 @@ export default function WarehouseViewModal({ isOpen, onClose, warehouse, onEdit 
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-xl font-bold text-white">{stats.lowStockItems}</div>
-                        <div className="text-xs text-gray-400">Low Stock Items</div>
+                        <div className="text-xl font-bold text-white">
+                          {stats.lowStockItems}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          Low Stock Items
+                        </div>
                       </div>
                       <AlertTriangle className="h-8 w-8 text-yellow-400" />
                     </div>
@@ -351,8 +449,12 @@ export default function WarehouseViewModal({ isOpen, onClose, warehouse, onEdit 
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-xl font-bold text-white">{stats.pendingShipments}</div>
-                        <div className="text-xs text-gray-400">Pending Shipments</div>
+                        <div className="text-xl font-bold text-white">
+                          {stats.pendingShipments}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          Pending Shipments
+                        </div>
                       </div>
                       <Calendar className="h-8 w-8 text-purple-400" />
                     </div>
@@ -363,7 +465,7 @@ export default function WarehouseViewModal({ isOpen, onClose, warehouse, onEdit 
           </div>
         )}
 
-        {activeTab === 'products' && (
+        {activeTab === "products" && (
           <div className="space-y-4">
             {loading ? (
               <div className="text-center py-8">
@@ -373,15 +475,24 @@ export default function WarehouseViewModal({ isOpen, onClose, warehouse, onEdit 
             ) : stats?.topProducts?.length ? (
               <div className="space-y-3">
                 {stats.topProducts.map((product) => (
-                  <Card key={product.id} className="bg-[#2a2a2a] border border-gray-600">
+                  <Card
+                    key={product.id}
+                    className="bg-[#2a2a2a] border border-gray-600"
+                  >
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <h3 className="font-medium text-white">{product.name}</h3>
-                          <p className="text-sm text-gray-400">SKU: {product.sku}</p>
+                          <h3 className="font-medium text-white">
+                            {product.name}
+                          </h3>
+                          <p className="text-sm text-gray-400">
+                            SKU: {product.sku}
+                          </p>
                         </div>
                         <div className="text-right">
-                          <div className="text-lg font-bold text-white">{product.quantity}</div>
+                          <div className="text-lg font-bold text-white">
+                            {product.quantity}
+                          </div>
                           <div className="text-xs text-gray-400">units</div>
                         </div>
                       </div>
@@ -392,13 +503,15 @@ export default function WarehouseViewModal({ isOpen, onClose, warehouse, onEdit 
             ) : (
               <div className="text-center py-8">
                 <Package className="h-12 w-12 text-gray-500 mx-auto mb-4" />
-                <p className="text-gray-400">No products found in this warehouse</p>
+                <p className="text-gray-400">
+                  No products found in this warehouse
+                </p>
               </div>
             )}
           </div>
         )}
 
-        {activeTab === 'activity' && (
+        {activeTab === "activity" && (
           <div className="space-y-4">
             {loading ? (
               <div className="text-center py-8">
@@ -408,15 +521,22 @@ export default function WarehouseViewModal({ isOpen, onClose, warehouse, onEdit 
             ) : stats?.recentActivity?.length ? (
               <div className="space-y-3">
                 {stats.recentActivity.map((activity) => (
-                  <Card key={activity.id} className="bg-[#2a2a2a] border border-gray-600">
+                  <Card
+                    key={activity.id}
+                    className="bg-[#2a2a2a] border border-gray-600"
+                  >
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <div className="text-sm text-white">{activity.description}</div>
-                          <div className="text-xs text-gray-400 mt-1">{formatDate(activity.timestamp)}</div>
+                          <div className="text-sm text-white">
+                            {activity.description}
+                          </div>
+                          <div className="text-xs text-gray-400 mt-1">
+                            {formatDate(activity.timestamp)}
+                          </div>
                         </div>
                         <Badge variant="outline" className="ml-2 text-xs">
-                          {activity.type.replace('_', ' ')}
+                          {activity.type.replace("_", " ")}
                         </Badge>
                       </div>
                     </CardContent>

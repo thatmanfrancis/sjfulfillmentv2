@@ -18,7 +18,7 @@ export interface User {
   email: string;
   firstName: string;
   lastName: string;
-  role: 'ADMIN' | 'MERCHANT' | 'MERCHANT_STAFF' | 'LOGISTICS';
+  role: "ADMIN" | "MERCHANT" | "MERCHANT_STAFF" | "LOGISTICS";
   businessId?: string;
   isVerified: boolean;
   mfaEnabled: boolean;
@@ -91,7 +91,13 @@ export interface Order {
   businessId: string;
   customerId: string;
   orderNumber: string;
-  status: 'PENDING' | 'CONFIRMED' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED';
+  status:
+    | "PENDING"
+    | "CONFIRMED"
+    | "PROCESSING"
+    | "SHIPPED"
+    | "DELIVERED"
+    | "CANCELLED";
   totalAmount: number;
   subtotal: number;
   shippingCost: number;
@@ -143,7 +149,14 @@ export interface Shipment {
   warehouseId: string;
   carrierId?: string;
   trackingNumber: string;
-  status: 'PENDING' | 'PICKED_UP' | 'IN_TRANSIT' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'FAILED' | 'RETURNED';
+  status:
+    | "PENDING"
+    | "PICKED_UP"
+    | "IN_TRANSIT"
+    | "OUT_FOR_DELIVERY"
+    | "DELIVERED"
+    | "FAILED"
+    | "RETURNED";
   estimatedDelivery?: Date;
   actualDelivery?: Date;
   shippingCost: number;
@@ -195,7 +208,7 @@ export interface StockTransfer {
   toWarehouseId: string;
   productId: string;
   quantity: number;
-  status: 'PENDING' | 'IN_TRANSIT' | 'COMPLETED' | 'CANCELLED';
+  status: "PENDING" | "IN_TRANSIT" | "COMPLETED" | "CANCELLED";
   requestedBy: string;
   approvedBy?: string;
   transferDate?: Date;
@@ -228,7 +241,7 @@ export interface Invoice {
   businessId: string;
   orderId?: string;
   invoiceNumber: string;
-  status: 'DRAFT' | 'SENT' | 'PAID' | 'OVERDUE' | 'CANCELLED';
+  status: "DRAFT" | "SENT" | "PAID" | "OVERDUE" | "CANCELLED";
   subtotal: number;
   taxAmount: number;
   discountAmount?: number;
@@ -248,13 +261,13 @@ export interface Invoice {
 export interface Notification {
   id: string;
   userId: string;
-  type: 'ORDER' | 'PAYMENT' | 'SHIPMENT' | 'STOCK' | 'SYSTEM' | 'PROMOTION';
+  type: "ORDER" | "PAYMENT" | "SHIPMENT" | "STOCK" | "SYSTEM" | "PROMOTION";
   title: string;
   message: string;
   data?: any;
   linkUrl?: string;
   isRead: boolean;
-  priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
+  priority: "LOW" | "NORMAL" | "HIGH" | "URGENT";
   createdAt: Date;
   readAt?: Date;
   user?: User;
@@ -387,7 +400,7 @@ export interface RegionPerformance {
   deliveries: number;
   onTimeRate: number;
   avgDeliveryTime: string;
-  status: 'excellent' | 'good' | 'needs_improvement';
+  status: "excellent" | "good" | "needs_improvement";
 }
 
 // Chart Data Types
@@ -524,26 +537,59 @@ export interface TableProps<T> {
   loading?: boolean;
   pagination?: PaginationMeta;
   onPageChange?: (page: number) => void;
-  onSort?: (key: keyof T, direction: 'asc' | 'desc') => void;
+  onSort?: (key: keyof T, direction: "asc" | "desc") => void;
 }
 
 // Utility Types
-export type Role = 'ADMIN' | 'MERCHANT' | 'MERCHANT_STAFF' | 'LOGISTICS';
-export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED';
-export type ShipmentStatus = 'PENDING' | 'PICKED_UP' | 'IN_TRANSIT' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'FAILED' | 'RETURNED';
-export type NotificationType = 'ORDER' | 'PAYMENT' | 'SHIPMENT' | 'STOCK' | 'SYSTEM' | 'PROMOTION';
-export type Priority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
+export type Role = "ADMIN" | "MERCHANT" | "MERCHANT_STAFF" | "LOGISTICS";
+export type OrderStatus =
+  | "PENDING"
+  | "CONFIRMED"
+  | "PROCESSING"
+  | "SHIPPED"
+  | "DELIVERED"
+  | "CANCELLED";
+export type ShipmentStatus =
+  | "PENDING"
+  | "PICKED_UP"
+  | "IN_TRANSIT"
+  | "OUT_FOR_DELIVERY"
+  | "DELIVERED"
+  | "FAILED"
+  | "RETURNED";
+export type NotificationType =
+  | "ORDER"
+  | "PAYMENT"
+  | "SHIPMENT"
+  | "STOCK"
+  | "SYSTEM"
+  | "PROMOTION";
+export type Priority = "LOW" | "NORMAL" | "HIGH" | "URGENT";
 
 // Time Range Types
-export type TimeRange = '7d' | '30d' | '90d' | '1y';
+export type TimeRange = "7d" | "30d" | "90d" | "1y";
 
 // Export utility functions type
 export interface ExportOptions {
-  format: 'csv' | 'xlsx' | 'pdf';
+  format: "csv" | "xlsx" | "pdf";
   filename?: string;
   fields?: string[];
   dateRange?: {
     from: Date;
     to: Date;
   };
+}
+
+export interface SonetelCallRequest {
+  call1: string; // First phone to call (your phone)
+  call2: string; // Second phone to call (destination)
+  show_1?: string; // Caller ID for call1
+  show_2?: string; // Caller ID for call2
+  app_id?: string; // Your app identifier
+}
+
+export interface SonetelCallResponse {
+  success: boolean;
+  data?: any;
+  error?: string;
 }

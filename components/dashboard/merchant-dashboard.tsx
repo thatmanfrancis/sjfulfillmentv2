@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { CallContactAction } from "@/components/call/CallContactAction";
 import {
   Package,
   ShoppingCart,
@@ -351,9 +352,18 @@ export function MerchantDashboard() {
                           {order.itemCount} items • {currencySymbol}
                           {order.totalAmount?.toLocaleString()}
                         </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {order.customerName} ({order.customerPhone})
-                        </p>
+                        <div className="text-xs text-gray-500 mt-1 flex items-center gap-2">
+                          <span>
+                            {order.customerName} ({order.customerPhone})
+                          </span>
+                          {order.customerPhone ? (
+                            <CallContactAction
+                              contactNumber={order.customerPhone}
+                              contactName={order.customerName}
+                              size="icon-sm"
+                            />
+                          ) : null}
+                        </div>
                         <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800 mt-1">
                           {order.status}
                         </span>

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Search, Plus } from "lucide-react";
 import CreateTierModal from "@/components/admin/CreateTierModal";
 import EditTierModal from "@/components/admin/EditTierModal";
-import { get } from "@/lib/api";
+import { get, del } from "@/lib/api";
 import { DialogContent } from "@/components/ui/dialog";
 import {
   Dialog,
@@ -312,24 +312,11 @@ export default function PriceTiersPage() {
                       onClick={async () => {
                         setDeleting(true);
                         try {
-                          const res = await fetch(
-                            `/api/admin/price-tiers/${deleteTier.id}`,
-                            {
-                              method: "DELETE",
-                            }
-                          );
-                          if (!res.ok)
-                            throw new Error("Failed to delete tier group");
+                          await del(`/api/admin/price-tiers/${deleteTier.id}`);
                           setDeleteTier(null);
                           fetchPriceTierGroups();
-                        } catch (err) {
-                          throw new Error(
-                            typeof err === "string"
-                              ? err
-                              : err instanceof Error
-                              ? err.message
-                              : JSON.stringify(err)
-                          );
+                        } catch (error: any) {
+                          console.error("Failed to delete tier:", error);
                           // Optionally show error
                         } finally {
                           setDeleting(false);

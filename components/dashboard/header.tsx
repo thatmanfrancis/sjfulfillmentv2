@@ -1,11 +1,10 @@
+"use client";
 
-'use client';
-
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,7 +12,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -21,26 +20,26 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { 
-  Search, 
-  Bell, 
-  User, 
-  Settings, 
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Search,
+  Bell,
+  User,
+  Settings,
   LogOut,
   ChevronDown,
-  Plus
-} from 'lucide-react';
-import { get, post } from '@/lib/api';
+  Plus,
+} from "lucide-react";
+import { get, post, patch } from "@/lib/api";
 
 interface UserProfile {
   id: string;
@@ -72,7 +71,7 @@ interface NotificationResponse {
 }
 
 export function Header() {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [user, setUser] = useState<UserProfile | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -87,10 +86,12 @@ export function Header() {
 
   const fetchUserProfile = async () => {
     try {
-      const response = await get<{success: boolean; user: UserProfile}>('/api/auth/me');
+      const response = await get<{ success: boolean; user: UserProfile }>(
+        "/api/auth/me"
+      );
       setUser(response.user);
     } catch (error: any) {
-      console.error('Failed to fetch user profile:', error);
+      console.error("Failed to fetch user profile:", error);
       // Don't set loading to false here if it's an auth error - let redirect handle it
       if (error?.status === 401) {
         return; // Redirect will happen automatically from api.ts
@@ -102,11 +103,13 @@ export function Header() {
 
   const fetchNotifications = async () => {
     try {
-      const data = await get<NotificationResponse>('/api/notifications?limit=5');
+      const data = await get<NotificationResponse>(
+        "/api/notifications?limit=5"
+      );
       setNotifications(data.notifications || []);
       setUnreadCount(data.unreadCount || 0);
     } catch (error: any) {
-      console.error('Failed to fetch notifications:', error);
+      console.error("Failed to fetch notifications:", error);
       // Silently fail for notifications on auth errors
       if (error?.status === 401) {
         return;
@@ -116,26 +119,20 @@ export function Header() {
 
   const markNotificationAsRead = async (notificationId: string) => {
     try {
-      await fetch('/api/notifications', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          notificationIds: [notificationId],
-          markAsRead: true
-        })
+      await patch("/api/notifications", {
+        notificationIds: [notificationId],
+        markAsRead: true,
       });
-      
+
       // Update local state
-      setNotifications(prev => 
-        prev.map(notif => 
-          notif.id === notificationId 
-            ? { ...notif, isRead: true }
-            : notif
+      setNotifications((prev) =>
+        prev.map((notif) =>
+          notif.id === notificationId ? { ...notif, isRead: true } : notif
         )
       );
-      setUnreadCount(prev => Math.max(0, prev - 1));
+      setUnreadCount((prev) => Math.max(0, prev - 1));
     } catch (error) {
-      console.error('Failed to mark notification as read:', error);
+      console.error("Failed to mark notification as read:", error);
     }
   };
 
@@ -143,16 +140,18 @@ export function Header() {
     // Helper function to get appropriate icon for notification type
     const iconClass = "w-3 h-3";
     switch (type) {
-      case 'ORDER_CREATED':
-      case 'ORDER_STATUS_UPDATED':
+      case "ORDER_CREATED":
+      case "ORDER_STATUS_UPDATED":
         return <div className={`${iconClass} bg-blue-400 rounded-full`}></div>;
-      case 'STOCK_LOW':
-      case 'STOCK_ALERT':
+      case "STOCK_LOW":
+      case "STOCK_ALERT":
         return <div className={`${iconClass} bg-red-400 rounded-full`}></div>;
-      case 'PAYMENT_RECEIVED':
+      case "PAYMENT_RECEIVED":
         return <div className={`${iconClass} bg-green-400 rounded-full`}></div>;
       default:
-        return <div className={`${iconClass} bg-brand-gold rounded-full`}></div>;
+        return (
+          <div className={`${iconClass} bg-brand-gold rounded-full`}></div>
+        );
     }
   };
 
@@ -161,8 +160,8 @@ export function Header() {
     const date = new Date(dateString);
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
-    
-    if (diffMins < 1) return 'Just now';
+
+    if (diffMins < 1) return "Just now";
     if (diffMins < 60) return `${diffMins} minutes ago`;
     if (diffMins < 1440) return `${Math.floor(diffMins / 60)} hours ago`;
     return `${Math.floor(diffMins / 1440)} days ago`;
@@ -170,16 +169,12 @@ export function Header() {
 
   const handleLogout = async () => {
     try {
-      const response = await fetch('/api/auth/logout', {
-        method: 'POST',
-      });
-      
-      if (response.ok) {
-        document.cookie = 'session-token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
-        router.push('/auth/login');
-      }
+      await post("/api/auth/logout", {});
+      document.cookie =
+        "session-token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+      router.push("/auth/login");
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error("Logout error:", error);
     }
   };
 
@@ -194,11 +189,11 @@ export function Header() {
   };
 
   const handleProfile = () => {
-    router.push('/profile');
+    router.push("/profile");
   };
 
   const handleSettings = () => {
-    router.push('/settings');
+    router.push("/settings");
   };
 
   const handleSearch = (e: React.FormEvent) => {
@@ -228,8 +223,8 @@ export function Header() {
         {/* Actions */}
         <div className="flex items-center space-x-4">
           {/* Quick Actions */}
-          <Button 
-            size="sm" 
+          <Button
+            size="sm"
             onClick={handleNewOrder}
             className="hidden md:flex gradient-gold text-black hover:shadow-gold-lg font-semibold"
           >
@@ -240,20 +235,29 @@ export function Header() {
           {/* Notifications */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="relative hover:bg-brand-black/40 hover:border-brand-gold/20 border border-transparent">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="relative hover:bg-brand-black/40 hover:border-brand-gold/20 border border-transparent"
+              >
                 <Bell className="h-5 w-5 text-brand-gold" />
                 {unreadCount > 0 && (
-                  <Badge 
-                    variant="destructive" 
+                  <Badge
+                    variant="destructive"
                     className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs bg-brand-gold text-black font-bold"
                   >
-                    {unreadCount > 9 ? '9+' : unreadCount}
+                    {unreadCount > 9 ? "9+" : unreadCount}
                   </Badge>
                 )}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80 bg-white border border-gray-200 shadow-lg text-gray-900">
-              <DropdownMenuLabel className="text-brand-gold">Notifications</DropdownMenuLabel>
+            <DropdownMenuContent
+              align="end"
+              className="w-80 bg-white border border-gray-200 shadow-lg text-gray-900"
+            >
+              <DropdownMenuLabel className="text-brand-gold">
+                Notifications
+              </DropdownMenuLabel>
               <DropdownMenuSeparator className="border-brand-black/20" />
               <div className="space-y-2 p-2 max-h-96 overflow-y-auto">
                 {notifications.length === 0 ? (
@@ -262,22 +266,35 @@ export function Header() {
                   </div>
                 ) : (
                   notifications.map((notification) => (
-                    <div 
+                    <div
                       key={notification.id}
                       className={`flex items-start space-x-3 p-2 hover:bg-gray-50 rounded-md cursor-pointer ${
-                        !notification.isRead ? 'bg-blue-50' : ''
+                        !notification.isRead ? "bg-blue-50" : ""
                       }`}
-                      onClick={() => !notification.isRead && markNotificationAsRead(notification.id)}
+                      onClick={() =>
+                        !notification.isRead &&
+                        markNotificationAsRead(notification.id)
+                      }
                     >
                       {getNotificationIcon(notification.type)}
                       <div className="flex-1">
-                        <p className={`text-sm font-medium ${
-                          !notification.isRead ? 'text-gray-900' : 'text-gray-600'
-                        }`}>
-                          {notification.title || notification.message.slice(0, 30)}...
+                        <p
+                          className={`text-sm font-medium ${
+                            !notification.isRead
+                              ? "text-gray-900"
+                              : "text-gray-600"
+                          }`}
+                        >
+                          {notification.title ||
+                            notification.message.slice(0, 30)}
+                          ...
                         </p>
-                        <p className="text-xs text-gray-600">{notification.message}</p>
-                        <p className="text-xs text-gray-400">{formatTimeAgo(notification.createdAt)}</p>
+                        <p className="text-xs text-gray-600">
+                          {notification.message}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          {formatTimeAgo(notification.createdAt)}
+                        </p>
                       </div>
                       {!notification.isRead && (
                         <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
@@ -296,44 +313,62 @@ export function Header() {
           {/* User Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="flex items-center space-x-2 px-3 hover:bg-brand-black/40 text-white">
+              <Button
+                variant="ghost"
+                className="flex items-center space-x-2 px-3 hover:bg-brand-black/40 text-white"
+              >
                 {user?.profileImage ? (
-                  <img 
-                    src={user.profileImage} 
+                  <img
+                    src={user.profileImage}
                     alt={`${user.firstName} ${user.lastName}`}
                     className="w-8 h-8 rounded-full object-cover"
                   />
                 ) : (
                   <div className="w-8 h-8 gradient-gold rounded-full flex items-center justify-center shadow-gold">
                     <span className="text-black text-sm font-medium">
-                      {loading ? '...' : user ? `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}` : 'U'}
+                      {loading
+                        ? "..."
+                        : user
+                        ? `${user.firstName?.[0] || ""}${
+                            user.lastName?.[0] || ""
+                          }`
+                        : "U"}
                     </span>
                   </div>
                 )}
                 <div className="hidden md:block text-left">
                   <p className="text-sm font-medium">
-                    {loading ? 'Loading...' : user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User' : 'Guest'}
+                    {loading
+                      ? "Loading..."
+                      : user
+                      ? `${user.firstName || ""} ${
+                          user.lastName || ""
+                        }`.trim() || "User"
+                      : "Guest"}
                   </p>
                   <p className="text-xs text-gray-400">
-                    {loading ? '...' : user?.role || 'User'}
+                    {loading ? "..." : user?.role || "User"}
                   </p>
                 </div>
                 <ChevronDown className="h-4 w-4 text-gray-400" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 bg-white border border-gray-200 shadow-lg">
+            <DropdownMenuContent
+              align="end"
+              className="w-56 bg-white border border-gray-200 shadow-lg"
+            >
               <DropdownMenuLabel className="text-blue-600">
-                {user?.business?.name || 'My Account'}
+                {user?.business?.name || "My Account"}
               </DropdownMenuLabel>
               <DropdownMenuSeparator className="border-gray-200" />
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 onClick={handleProfile}
                 className="text-gray-700 hover:bg-gray-50 focus:bg-gray-50"
               >
                 <User className="mr-2 h-4 w-4 text-blue-600" />
                 <span>Profile</span>
               </DropdownMenuItem>
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 onClick={handleSettings}
                 className="text-gray-700 hover:bg-gray-50 focus:bg-gray-50"
               >
@@ -341,7 +376,7 @@ export function Header() {
                 <span>Settings</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator className="border-gray-200" />
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 onClick={handleLogoutClick}
                 className="text-red-600 hover:bg-red-50 focus:bg-red-50"
               >
@@ -357,7 +392,9 @@ export function Header() {
       <Dialog open={showOrderModal} onOpenChange={setShowOrderModal}>
         <DialogContent className="bg-white border border-gray-200 text-gray-900 max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="text-gray-900">Create New Order</DialogTitle>
+            <DialogTitle className="text-gray-900">
+              Create New Order
+            </DialogTitle>
             <DialogDescription className="text-gray-600">
               Fill in the order details below to create a new order
             </DialogDescription>
@@ -366,14 +403,14 @@ export function Header() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label className="text-gray-700">Customer Name</Label>
-                <Input 
+                <Input
                   placeholder="Enter customer name"
                   className="bg-white border-gray-200 text-gray-900 placeholder-gray-400"
                 />
               </div>
               <div>
                 <Label className="text-gray-700">Customer Phone</Label>
-                <Input 
+                <Input
                   placeholder="Enter phone number"
                   className="bg-white border-gray-200 text-gray-900 placeholder-gray-400"
                 />
@@ -381,7 +418,7 @@ export function Header() {
             </div>
             <div>
               <Label className="text-gray-700">Customer Address</Label>
-              <Textarea 
+              <Textarea
                 placeholder="Enter delivery address"
                 className="bg-white border-gray-200 text-gray-900 placeholder-gray-400"
                 rows={3}
@@ -390,7 +427,7 @@ export function Header() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label className="text-gray-700">Total Amount</Label>
-                <Input 
+                <Input
                   type="number"
                   placeholder="0.00"
                   className="bg-white border-gray-200 text-gray-900 placeholder-gray-400"
@@ -404,7 +441,9 @@ export function Header() {
                   </SelectTrigger>
                   <SelectContent className="bg-white border-gray-200">
                     <SelectItem value="NEW">New</SelectItem>
-                    <SelectItem value="AWAITING_ALLOC">Awaiting Allocation</SelectItem>
+                    <SelectItem value="AWAITING_ALLOC">
+                      Awaiting Allocation
+                    </SelectItem>
                     <SelectItem value="DISPATCHED">Dispatched</SelectItem>
                   </SelectContent>
                 </Select>
@@ -412,14 +451,14 @@ export function Header() {
             </div>
           </div>
           <DialogFooter className="pt-6">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setShowOrderModal(false)}
               className="border-gray-200 text-gray-700 hover:bg-gray-50"
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={() => {
                 // TODO: Implement order creation
                 setShowOrderModal(false);
@@ -438,18 +477,19 @@ export function Header() {
           <DialogHeader>
             <DialogTitle className="text-gray-900">Confirm Logout</DialogTitle>
             <DialogDescription className="text-gray-600">
-              Are you sure you want to log out? You will need to sign in again to access your account.
+              Are you sure you want to log out? You will need to sign in again
+              to access your account.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="pt-6">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setShowLogoutConfirm(false)}
               className="border-gray-200 text-gray-700 hover:bg-gray-50"
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={() => {
                 setShowLogoutConfirm(false);
                 handleLogout();
