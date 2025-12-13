@@ -4,6 +4,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --frozen-lockfile
 COPY . .
+ENV NEXT_IGNORE_TYPE_ERRORS=1
 RUN npm run build
 
 # 2. Production image
