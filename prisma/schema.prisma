@@ -8,6 +8,23 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model CallLog {
+  id         String    @id @default(uuid())
+  userId     String?
+  role       UserRole?
+  fromNumber String
+  toNumber   String
+  callId     String?
+  status     String // e.g., 'success', 'error'
+  message    String?
+  error      String?
+  createdAt  DateTime  @default(now())
+  User       User?     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
 model AuditLog {
   id          String   @id
   entityType  String
@@ -405,6 +422,7 @@ model User {
   VerificationToken                             VerificationToken[]
   adminApiKeys                                  AdminApiKey[]
   notes                                         Note[]
+  callLogs                                      CallLog[]
 
   @@index([businessId])
 }

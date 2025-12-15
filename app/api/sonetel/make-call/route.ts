@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
+import prisma from "@/lib/prisma";
+import jwt from "jsonwebtoken";
 
 interface SonetelAuthResponse {
   access_token: string;
@@ -67,7 +69,22 @@ async function getSonetelAccessToken(): Promise<string> {
 }
 
 export async function POST(req: NextRequest) {
+  let userId = null;
+  let userRole = null;
   try {
+    // Try to extract user from session cookie (JWT)
+    const sessionToken = req.cookies.get("session")?.value;
+    if (sessionToken) {
+      try {
+        const JWT_SECRET = process.env.JWT_SECRET || "your-jwt-secret";
+        const session = jwt.verify(sessionToken, JWT_SECRET) as any;
+        userId = session.userId;
+        userRole = session.role;
+      } catch (e) {
+        // Ignore, treat as unauthenticated
+      }
+    }
+
     const body: MakeCallRequest = await req.json();
     const { phoneNumber, recipientNumber, callerId } = body;
 
@@ -80,6 +97,16 @@ export async function POST(req: NextRequest) {
 
     // Validate required fields
     if (!callerNumber || !recipientNumber) {
+      await prisma.callLog.create({
+        data: {
+          userId,
+          role: userRole,
+          fromNumber: callerNumber || "",
+          toNumber: recipientNumber || "",
+          status: "error",
+          message: "Caller number and recipient number are required",
+        },
+      });
       return NextResponse.json(
         { error: "Caller number and recipient number are required" },
         { status: 400 }
@@ -87,6 +114,16 @@ export async function POST(req: NextRequest) {
     }
 
     if (!appId) {
+      await prisma.callLog.create({
+        data: {
+          userId,
+          role: userRole,
+          fromNumber: callerNumber,
+          toNumber: recipientNumber,
+          status: "error",
+          message: "Missing SONETEL_APP_ID environment variable",
+        },
+      });
       return NextResponse.json(
         { error: "Missing SONETEL_APP_ID environment variable" },
         { status: 500 }
@@ -95,8 +132,6 @@ export async function POST(req: NextRequest) {
 
     // Get access token
     const accessToken = await getSonetelAccessToken();
-
-    console.log(`Token:, ${accessToken}`);
 
     // Make the call via Sonetel Callback API. Try env override first, then beta, then public.
     const callUrls = [
@@ -107,6 +142,10 @@ export async function POST(req: NextRequest) {
 
     let callResponse;
     let lastError: any;
+    let callId: string | undefined = undefined;
+    let callStatus = "error";
+    let callMessage = "";
+    let callError = "";
 
     for (const callUrl of callUrls) {
       try {
@@ -127,51 +166,61 @@ export async function POST(req: NextRequest) {
             },
           }
         );
-
-        // Log which URL succeeded for debugging
-        console.log(`Sonetel call succeeded via ${callUrl}`);
+        callId = callResponse.data.id;
+        callStatus = "success";
+        callMessage = "Call initiated successfully";
         break;
       } catch (err: any) {
         lastError = err;
-        if (err.response) {
-          console.error(
-            `Sonetel call failed via ${callUrl}:`,
-            err.response.status,
-            err.response.statusText,
-            err.response.data
-          );
-        } else {
-          console.error(`Sonetel call failed via ${callUrl}:`, err);
-        }
+        callError =
+          err?.response?.data?.message || err?.message || "Unknown error";
       }
     }
 
-    if (!callResponse) {
+    // Log the call attempt
+    await prisma.callLog.create({
+      data: {
+        userId,
+        role: userRole,
+        fromNumber: callerNumber,
+        toNumber: recipientNumber,
+        callId,
+        status: callStatus,
+        message: callStatus === "success" ? callMessage : undefined,
+        error: callStatus === "error" ? callError : undefined,
+      },
+    });
+
+    if (callStatus !== "success") {
       throw lastError || new Error("Failed to initiate call (no response)");
     }
 
     return NextResponse.json(
       {
         success: true,
-        callId: callResponse.data.id,
-        message: "Call initiated successfully",
+        callId,
+        message: callMessage,
         data: callResponse.data,
       },
       { status: 200 }
     );
   } catch (error: any) {
-    // Surface Sonetel's response body when available for easier debugging
-    if (error.response) {
-      console.error(
-        "Error initiating Sonetel call:",
-        error.response.status,
-        error.response.statusText,
-        error.response.data
-      );
-    } else {
-      console.error("Error initiating Sonetel call:", error);
+    // Log failed call if not already logged
+    if (req) {
+      try {
+        const body = req.body ? await req.json() : {};
+        await prisma.callLog.create({
+          data: {
+            userId,
+            role: userRole,
+            fromNumber: body?.phoneNumber || "",
+            toNumber: body?.recipientNumber || "",
+            status: "error",
+            error: error?.message || "Failed to initiate call",
+          },
+        });
+      } catch (e) {}
     }
-
     return NextResponse.json(
       {
         error:

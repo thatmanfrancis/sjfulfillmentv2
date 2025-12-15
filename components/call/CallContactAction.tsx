@@ -24,6 +24,7 @@ interface CallContactActionProps {
   size?: "icon" | "icon-sm" | "icon-lg" | "default" | "sm";
   label?: string;
   disabled?: boolean;
+  onCallComplete?: () => void;
 }
 
 const DEFAULT_CALLER =
@@ -37,6 +38,7 @@ export function CallContactAction({
   size = "icon-sm",
   label,
   disabled,
+  onCallComplete,
 }: CallContactActionProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -77,6 +79,7 @@ export function CallContactAction({
         title: "Call initiated",
         description: response.message || "Sonetel accepted the call request.",
       });
+      if (onCallComplete) onCallComplete();
     } catch (error: any) {
       setStatus("error");
       setMessage(error?.message || "Failed to initiate call.");
@@ -85,6 +88,7 @@ export function CallContactAction({
         description: error?.message || "Could not start the call.",
         variant: "destructive",
       });
+      if (onCallComplete) onCallComplete();
     } finally {
       setLoading(false);
     }
